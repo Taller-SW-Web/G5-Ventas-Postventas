@@ -487,6 +487,9 @@ Los campos `tipoDocumento` y `numeroDocumento` son **estrictamente obligatorios*
 #### 2.6 Registrar Reclamo (Libro de Reclamaciones)
 - **Endpoint:** `POST /api/v2/reclamos`
 - **Descripción:** Registra un reclamo formal según normativa Indecopi con plazo de respuesta de 15 días hábiles.
+- **Headers:**
+  - `Authorization: Bearer <token_canal_o_cliente>`
+  - `Content-Type: application/json`
 - **Request Body:**
 ```json
 {
@@ -516,12 +519,75 @@ Los campos `tipoDocumento` y `numeroDocumento` son **estrictamente obligatorios*
   "respuestaVisibleCliente": null
 }
 ```
+  - **`400 Bad Request`**: Datos incompletos del consumidor o motivo no tipificado.
 
 ---
 
-#### 2.7 Responder y Resolver Reclamo
+#### 2.7 Consultar Reclamo por Código de Seguimiento (Consulta para Chatbot / Web)
+- **Endpoint:** `GET /api/v2/reclamos/{codigoSeguimiento}`
+- **Descripción:** Permite al cliente (desde Chatbot o Web) o al Gestor consultar el estado actual y la respuesta formal de un reclamo específico mediante su código.
+- **Headers:** `Authorization: Bearer <token>`
+- **Parámetros Path:** `codigoSeguimiento` (string, ej. `REC-2026-0015`)
+- **Respuestas:**
+  - **`200 OK`**
+```json
+{
+  "reclamoId": "REC-2026-0015",
+  "codigoSeguimiento": "REC-2026-0015",
+  "pedidoId": "PED-2026-00981",
+  "tipo": "RECLAMO",
+  "canal": "CHATBOT",
+  "motivo": "INCUMPLIMIENTO_PLAZO_ENTREGA",
+  "detalle": "El pedido no llegó en la fecha programada",
+  "estado": "ATENDIDO",
+  "plazoDiasHabiles": 15,
+  "fechaLimiteSLA": "2026-10-14T23:59:59Z",
+  "fechaRegistro": "2026-09-23T00:10:00Z",
+  "fechaAtencion": "2026-09-23T08:30:00Z",
+  "respuestaVisibleCliente": "Estimado Juan, su reclamo fue atendido. Se coordinó la entrega prioritaria y se emitió una bonificación a su cuenta."
+}
+```
+  - **`401 Unauthorized`**: Token ausente o inválido.
+  - **`404 Not Found`**: Reclamo no encontrado con ese código de seguimiento.
+
+---
+
+#### 2.8 Listar Reclamos por Cliente / Consumidor
+- **Endpoint:** `GET /api/v2/reclamos`
+- **Descripción:** Permite obtener el listado histórico de reclamos asociados a un cliente o número de documento de identidad.
+- **Headers:** `Authorization: Bearer <token>`
+- **Query Params:**
+  - `documento` (opcional): Número de documento de identidad del reclamante.
+  - `clienteId` (opcional): Identificador del cliente.
+  - `estado` (opcional): `REGISTRADO | EN_PROCESO | ATENDIDO | DERIVADO`
+  - `pagina` (opcional, default: `0`)
+  - `tamano` (opcional, default: `10`)
+- **Respuestas:**
+  - **`200 OK`**
+```json
+{
+  "contenido": [
+    {
+      "reclamoId": "REC-2026-0015",
+      "codigoSeguimiento": "REC-2026-0015",
+      "tipo": "RECLAMO",
+      "motivo": "INCUMPLIMIENTO_PLAZO_ENTREGA",
+      "estado": "ATENDIDO",
+      "fechaRegistro": "2026-09-23T00:10:00Z",
+      "fechaLimiteSLA": "2026-10-14T23:59:59Z"
+    }
+  ],
+  "pagina": 0,
+  "totalPaginas": 1,
+  "totalElementos": 1
+}
+```
+
+---
+
+#### 2.9 Responder y Resolver Reclamo
 - **Endpoint:** `PATCH /api/v2/reclamos/{reclamoId}/respuesta`
-- **Descripción:** El Gestor emite la respuesta formal que será visible para el cliente.
+- **Descripción:** El Gestor emite la respuesta formal que será visible para el cliente (Requisito A10).
 - **Headers:** `Authorization: Bearer <token_gestor>`
 - **Request Body:**
 ```json
@@ -541,10 +607,11 @@ Los campos `tipoDocumento` y `numeroDocumento` son **estrictamente obligatorios*
   "respuestaVisibleCliente": "Estimado Juan, lamentamos la demora. Se ha coordinado la entrega prioritaria y se ha aplicado una bonificación a su cuenta."
 }
 ```
+  - **`400 Bad Request`**: Campo `respuestaVisibleCliente` vacío o nulo.
 
 ---
 
-#### 2.8 Consultar Métricas del Dashboard
+#### 2.10 Consultar Métricas del Dashboard
 - **Endpoint:** `GET /api/v2/dashboard/metricas`
 - **Query Params:**
   - `desde`: 2026-09-01
@@ -571,4 +638,7 @@ Los campos `tipoDocumento` y `numeroDocumento` son **estrictamente obligatorios*
     "reclamosPendientesSLA": 3
   }
 }
+```
+
+
 ```
