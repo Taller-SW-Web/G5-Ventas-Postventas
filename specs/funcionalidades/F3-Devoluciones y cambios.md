@@ -1,4 +1,4 @@
-# Funcionalidad 3: Devoluciones y cambios
+# FUNCIONALIDAD 3: Devoluciones y cambios
 
 **Responsable:** Joseph
 **Estado:** En especificación
