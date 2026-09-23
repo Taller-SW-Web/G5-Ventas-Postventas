@@ -1,4 +1,4 @@
-# Funcionalidad 2: Anulación de pedidos
+# FUNCIONALIDAD 2: Anulación de pedidos
 
 **Responsable:** Luis Arroyo  
 **Estado:** En especificación  
