@@ -349,15 +349,17 @@ Los campos `tipoDocumento` y `numeroDocumento` son **estrictamente obligatorios*
 
 #### 2.1 Registrar Expediente de Devolución / Cambio
 - **Endpoint:** `POST /api/v2/devoluciones`
-- **Descripción:** Crea expediente tras la entrega. Valida contra F1 que el pedido esté en estado `ENTREGADO`.
-- **Headers:** `Authorization: Bearer <token>`
+- **Descripción:** Crea un expediente de devolución o cambio tras la entrega. Valida contra F1 que el pedido exista y esté en estado `ENTREGADO`.
+- **Headers:**
+  - `Authorization: Bearer <token_canal_o_cliente>`
+  - `Content-Type: application/json`
 - **Request Body:**
 ```json
 {
   "pedidoId": "PED-2026-00981",
-  "tipo": "CAMBIO",
+  "tipo": "DEVOLUCION_DINERO",
   "motivo": "PRODUCTO_DEFECTUOSO",
-  "descripcion": "El botón de encendido no responde",
+  "descripcion": "El auricular izquierdo no emite sonido y no carga en el estuche",
   "items": [
     {
       "productoId": "PROD-101",
@@ -378,49 +380,123 @@ Los campos `tipoDocumento` y `numeroDocumento` son **estrictamente obligatorios*
 {
   "devolucionId": "DEV-2026-0042",
   "pedidoId": "PED-2026-00981",
+  "tipo": "DEVOLUCION_DINERO",
   "estado": "SOLICITADA",
   "fechaRegistro": "2026-09-23T00:12:00Z"
 }
 ```
-  - **`400 Bad Request`**: Falta de evidencias visuales obligatorias en defectos o plazo excedido.
+  - **`400 Bad Request`**: Falta de evidencias visuales obligatorias en defectos o plazo de devolución excedido (más de 7 días naturales post-entrega).
   - **`409 Conflict`**: El pedido no se encuentra en estado `ENTREGADO`.
 
 ---
 
-#### 2.2 Consultar Expediente de Devolución por ID
+#### 2.2 Consultar Expediente de Devolución por ID (Detalle con Estado de Reembolso)
 - **Endpoint:** `GET /api/v2/devoluciones/{devolucionId}`
+- **Descripción:** Permite al cliente (Chatbot / Web) o Gestor consultar el detalle, estado del expediente y, en caso de resolución con extorno monetario, la trazabilidad del reembolso generado en F4.
+- **Headers:** `Authorization: Bearer <token>`
+- **Parámetros Path:** `devolucionId` (string, ej. `DEV-2026-0042`)
 - **Respuestas:**
-  - **`200 OK`**
+  - **`200 OK` (Ejemplo con resolución aprobada y reembolso de dinero vinculado):**
 ```json
 {
   "devolucionId": "DEV-2026-0042",
   "pedidoId": "PED-2026-00981",
-  "tipo": "CAMBIO",
+  "clienteId": "CLI-8841",
+  "tipo": "DEVOLUCION_DINERO",
+  "estado": "APROBADA",
+  "motivo": "PRODUCTO_DEFECTUOSO",
+  "descripcion": "El auricular izquierdo no emite sonido",
+  "resolucion": {
+    "decision": "APROBADA",
+    "fundamento": "Falla de fábrica confirmada en control de calidad",
+    "autorizadorId": "GESTOR-03",
+    "fechaResolucion": "2026-09-23T04:15:00Z",
+    "reembolso": {
+      "reembolsoId": "REEM-90812",
+      "estado": "EXITOSO",
+      "monto": 129.90,
+      "moneda": "PEN",
+      "transaccionPasarelaId": "TX-SIM-871239",
+      "fechaEjecucion": "2026-09-23T04:16:10Z"
+    }
+  },
+  "evidencias": [
+    {
+      "tipo": "IMAGEN",
+      "url": "[https://storage.empresa.com/evidencias/ev-981-foto1.jpg](https://storage.empresa.com/evidencias/ev-981-foto1.jpg)"
+    }
+  ],
+  "fechaRegistro": "2026-09-23T00:12:00Z"
+}
+```
+  - **`200 OK` (Ejemplo cuando aún está en evaluación o sin reembolso generado):**
+```json
+{
+  "devolucionId": "DEV-2026-0042",
+  "pedidoId": "PED-2026-00981",
+  "clienteId": "CLI-8841",
+  "tipo": "DEVOLUCION_DINERO",
   "estado": "EN_EVALUACION",
   "motivo": "PRODUCTO_DEFECTUOSO",
+  "descripcion": "El auricular izquierdo no emite sonido",
   "resolucion": null,
   "fechaRegistro": "2026-09-23T00:12:00Z"
 }
 ```
-  - **`404 Not Found`**: Expediente no encontrado.
+  - **`404 Not Found`**: El expediente solicitado no existe.
 
 ---
 
-#### 2.3 Resolver Expediente de Devolución
+#### 2.3 Listar Devoluciones por Cliente (Requisito para Chatbot / Frontends)
+- **Endpoint:** `GET /api/v2/devoluciones`
+- **Descripción:** Permite obtener el listado histórico paginado de expedientes de devolución o cambio asociados a un cliente específico.
+- **Headers:** `Authorization: Bearer <token>`
+- **Query Params:**
+  - `clienteId` (requerido para clientes): Identificador del cliente.
+  - `estado` (opcional): `SOLICITADA | EN_EVALUACION | APROBADA | RECHAZADA | COMPLETADA`
+  - `tipo` (opcional): `CAMBIO | DEVOLUCION_DINERO`
+  - `pagina` (opcional, default: `0`)
+  - `tamano` (opcional, default: `10`)
+- **Respuestas:**
+  - **`200 OK`**
+```json
+{
+  "clienteId": "CLI-8841",
+  "contenido": [
+    {
+      "devolucionId": "DEV-2026-0042",
+      "pedidoId": "PED-2026-00981",
+      "tipo": "DEVOLUCION_DINERO",
+      "estado": "APROBADA",
+      "motivo": "PRODUCTO_DEFECTUOSO",
+      "estadoReembolso": "EXITOSO",
+      "fechaRegistro": "2026-09-23T00:12:00Z"
+    }
+  ],
+  "pagina": 0,
+  "totalPaginas": 1,
+  "totalElementos": 1
+}
+```
+
+---
+
+#### 2.4 Resolver Expediente de Devolución
 - **Endpoint:** `PATCH /api/v2/devoluciones/{devolucionId}/resolucion`
-- **Descripción:** El Gestor aprueba o rechaza. Si es rechazo, exige fundamento no vacío.
+- **Descripción:** El Gestor aprueba o rechaza el expediente. Si es rechazo, exige fundamento no vacío. Si se aprueba con `tipo: DEVOLUCION_DINERO`, F3 orquesta automáticamente el registro del reembolso hacia F4.
 - **Headers:** `Authorization: Bearer <token_gestor>`
 - **Request Body:**
 ```json
 {
   "decision": "RECHAZADA",
-  "fundamento": "El equipo presenta signos de manipulación y daño por agua",
+  "fundamento": "El equipo presenta signos evidentes de manipulación interna y sulfatación por agua",
   "autorizadorId": "GESTOR-03"
 }
 ```
 - **Respuestas:**
   - **`200 OK`**: Actualizado a `APROBADA` o `RECHAZADA`.
   - **`400 Bad Request`**: Rechazo sin fundamento explicativo.
+  - **`404 Not Found`**: Expediente no encontrado.
 
 ---
 
