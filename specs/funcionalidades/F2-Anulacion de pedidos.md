@@ -1,4 +1,4 @@
-# Especificación F2: Anulación de pedidos
+# Funcionalidad 2: Anulación de pedidos
 
 **Responsable:** Luis Arroyo  
 **Estado:** En especificación  
