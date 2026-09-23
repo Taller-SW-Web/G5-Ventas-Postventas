@@ -1,6 +1,6 @@
 # Contrato de API (OpenAPI / REST) — Módulo D: Ventas y Postventa
 
-**Versión:** 1.1.0  
+**Versión:** 1.2.0  
 **Fecha:** Septiembre 2026  
 **Servicios:** M1 (Ventas / Pedidos) y M2 (Postventa)  
 **Convenciones generales:**
@@ -25,7 +25,7 @@
 
 #### 1.1 Crear Pedido
 - **Endpoint:** `POST /api/v1/pedidos`
-- **Descripción:** Registra un nuevo pedido proveniente de Canales A (Marketplace), B (Chatbot) o C (Retail). Inicializa en estado `CREADO`.
+- **Descripción:** Registra un nuevo pedido proveniente de Canales A (Marketplace), B (Chatbot) o C (Retail). Incluye obligatoriamente los bloques de `canal`, `cupon`, `envio`, `contacto` y `pago`. Inicializa en estado `CREADO`.
 - **Headers:**
   - `Authorization: Bearer <token_canal>`
   - `Content-Type: application/json`
@@ -33,12 +33,13 @@
 ```json
 {
   "canal": "CHATBOT",
-  "cliente": {
-    "id": "CLI-8841",
-    "nombre": "Juan Pérez",
-    "email": "juan.perez@example.com",
-    "documentoTipo": "DNI",
-    "documentoNumero": "72458912"
+  "contacto": {
+    "clienteId": "CLI-8841",
+    "nombreCompleto": "Juan Pérez Rodríguez",
+    "tipoDocumento": "DNI",
+    "numeroDocumento": "72458912",
+    "telefono": "+51999888777",
+    "email": "juan.perez@example.com"
   },
   "items": [
     {
@@ -49,14 +50,28 @@
       "precioUnitario": 129.90
     }
   ],
-  "moneda": "PEN",
-  "subtotal": 129.90,
-  "costoEnvio": 10.00,
-  "total": 139.90,
-  "direccionEntrega": {
+  "cupon": {
+    "codigo": "CYBER2026",
+    "descuento": 10.00,
+    "aplicado": true
+  },
+  "envio": {
+    "modalidad": "DELIVERY",
+    "costo": 10.00,
+    "destinatario": "Juan Pérez",
     "departamento": "Lima",
+    "provincia": "Lima",
     "distrito": "San Miguel",
-    "direccion": "Av. La Marina 1234, Dpto 401"
+    "direccion": "Av. La Marina 1234, Dpto 401",
+    "referencia": "Frente al centro comercial"
+  },
+  "pago": {
+    "metodoPago": "TARJETA_CREDITO",
+    "moneda": "PEN",
+    "subtotal": 129.90,
+    "descuentoCupon": 10.00,
+    "costoEnvio": 10.00,
+    "total": 129.90
   }
 }
 ```
@@ -66,17 +81,54 @@
 {
   "pedidoId": "PED-2026-00981",
   "estado": "CREADO",
-  "total": 139.90,
+  "total": 129.90,
   "moneda": "PEN",
+  "canal": "CHATBOT",
   "fechaCreacion": "2026-09-22T21:40:00Z"
 }
 ```
-  - **`400 Bad Request`**: Datos incompletos o tipos inválidos.
-  - **`409 Conflict`**: Fallo de validación de stock o catálogo con el módulo de Productos (F).
+  - **`400 Bad Request`**: Datos faltantes o tipos inválidos.
+  - **`409 Conflict`**: Fallo de validación de catálogo/stock con el módulo de Productos (F).
 
 ---
 
-#### 1.2 Consultar Pedido por ID (Endpoint de consulta para Chatbot)
+#### 1.2 Notificación de Pago (Webhook / Callback de Pasarela)
+- **Endpoint:** `POST /api/v1/pedidos/{pedidoId}/pagos/notificacion`
+- **Descripción:** Recibe la confirmación o el rechazo de la transacción desde la pasarela externa de pagos. Si es exitoso, avanza el pedido de `CREADO` a `PAGADO`. Si falla, permite al canal anularlo o reintentar el cobro.
+- **Headers:**
+  - `Authorization: Bearer <token_pasarela_o_servicio>`
+  - `Content-Type: application/json`
+- **Request Body:**
+```json
+{
+  "transaccionId": "TX-PASARELA-778120",
+  "resultado": "APROBADO",
+  "monto": 129.90,
+  "moneda": "PEN",
+  "metodo": "TARJETA_CREDITO",
+  "marcaTarjeta": "VISA",
+  "ultimosCuatroDigitos": "4321",
+  "fechaPago": "2026-09-22T21:41:00Z",
+  "codigoAutorizacion": "AUTH-99021"
+}
+```
+- **Respuestas:**
+  - **`200 OK`**
+```json
+{
+  "pedidoId": "PED-2026-00981",
+  "nuevoEstado": "PAGADO",
+  "transaccionId": "TX-PASARELA-778120",
+  "fechaTransicion": "2026-09-22T21:41:00Z"
+}
+```
+  - **`400 Bad Request`**: Inconsistencia de montos o datos de transacción.
+  - **`404 Not Found`**: El pedido indicado no existe.
+  - **`409 Conflict`**: El pedido no se encuentra en estado `CREADO`.
+
+---
+
+#### 1.3 Consultar Pedido por ID (Endpoint clave para Chatbot)
 - **Endpoint:** `GET /api/v1/pedidos/{pedidoId}`
 - **Descripción:** Permite a clientes, canales (Chatbot/Marketplace) y administradores consultar el estado y detalle del pedido.
 - **Headers:** `Authorization: Bearer <token>`
@@ -87,10 +139,23 @@
 {
   "pedidoId": "PED-2026-00981",
   "canal": "CHATBOT",
-  "clienteId": "CLI-8841",
   "estado": "EN_PREPARACION",
-  "moneda": "PEN",
-  "total": 139.90,
+  "contacto": {
+    "clienteId": "CLI-8841",
+    "nombreCompleto": "Juan Pérez Rodríguez",
+    "email": "juan.perez@example.com",
+    "telefono": "+51999888777"
+  },
+  "pago": {
+    "total": 129.90,
+    "moneda": "PEN",
+    "metodoPago": "TARJETA_CREDITO"
+  },
+  "envio": {
+    "modalidad": "DELIVERY",
+    "direccion": "Av. La Marina 1234, Dpto 401",
+    "distrito": "San Miguel"
+  },
   "items": [
     {
       "productoId": "PROD-101",
@@ -130,10 +195,12 @@
 
 ---
 
-#### 1.3 Listar Pedidos por Cliente / Filtros
+#### 1.4 Listar Pedidos por Cliente (Requisito A8)
 - **Endpoint:** `GET /api/v1/pedidos`
+- **Descripción:** Permite obtener el listado histórico de pedidos asociados a un cliente específico.
+- **Headers:** `Authorization: Bearer <token>`
 - **Query Params:**
-  - `clienteId` (opcional): Filtro por identificador de cliente.
+  - `clienteId` (requerido para clientes): Identificador del cliente.
   - `estado` (opcional): `CREADO | PAGADO | EN_PREPARACION | DESPACHADO | ENTREGADO | ANULADO`
   - `desde` (opcional): Fecha inicial ISO.
   - `hasta` (opcional): Fecha final ISO.
@@ -143,11 +210,13 @@
   - **`200 OK`**
 ```json
 {
+  "clienteId": "CLI-8841",
   "contenido": [
     {
       "pedidoId": "PED-2026-00981",
+      "canal": "CHATBOT",
       "estado": "EN_PREPARACION",
-      "total": 139.90,
+      "total": 129.90,
       "moneda": "PEN",
       "fechaCreacion": "2026-09-22T21:40:00Z"
     }
@@ -160,7 +229,7 @@
 
 ---
 
-#### 1.4 Transición de Estado del Pedido
+#### 1.5 Transición de Estado del Pedido
 - **Endpoint:** `PATCH /api/v1/pedidos/{pedidoId}/estado`
 - **Descripción:** Valida la máquina de estados e inserta el evento en el historial. Invocado por Logística (E) o por F2 (Anulación).
 - **Headers:** `Authorization: Bearer <token_admin_o_servicio>`
@@ -178,16 +247,16 @@
 
 ---
 
-#### 1.5 Notificación de Incidencias desde Despacho / Logística (Módulo E)
+#### 1.6 Notificación de Incidencias desde Despacho / Logística (Módulo E)
 - **Endpoint:** `POST /api/v1/pedidos/{pedidoId}/eventos-logistica`
-- **Descripción:** Permite al Módulo E (Despacho) notificar eventos críticos de entrega (como entrega fallida definitiva o rechazo en puerta). M1 transiciona el pedido y dispara de inmediato la solicitud de reembolso hacia F4, devolviendo al Módulo E el estado del reembolso para su liquidación.
+- **Descripción:** Despacho (E) notifica entrega fallida definitiva o rechazo en puerta. M1 anula el pedido y deriva a F4 para el reembolso.
 - **Headers:** `Authorization: Bearer <token_servicio_despacho>`
 - **Request Body:**
 ```json
 {
   "evento": "ENTREGA_FALLIDA_DEFINITIVA",
   "guiaRemision": "GR-00892",
-  "motivo": "Dirección inexistente tras 3 visitas; paquete devuelto a almacén central",
+  "motivo": "Dirección inexistente tras 3 visitas; devuelto a almacén",
   "requiereReembolso": true
 }
 ```
@@ -200,53 +269,51 @@
   "reembolso": {
     "solicitudId": "REEM-90815",
     "estado": "EN_PROCESO",
-    "monto": 139.90,
+    "monto": 129.90,
     "moneda": "PEN"
   },
-  "mensaje": "Incidencia procesada, pedido cancelado y solicitud de reembolso remitida a F4"
+  "mensaje": "Pedido anulado e instrucción de reembolso generada a F4"
 }
 ```
-  - **`404 Not Found`**: El pedido no existe.
-  - **`409 Conflict`**: El pedido ya se encontraba en un estado terminal incompatible.
 
 ---
 
 ### F2: Anulación de Pedidos (Responsable: Luis Arroyo)
 
-#### 1.6 Solicitar Anulación
+#### 1.7 Solicitar Anulación
 - **Endpoint:** `POST /api/v1/pedidos/{pedidoId}/anulaciones`
-- **Descripción:** Procesa la cancelación. Si está en `CREADO` o `PAGADO`, anula directamente; si está en `EN_PREPARACION`, genera solicitud pendiente de aprobación para el Gestor.
+- **Descripción:** Permite cancelar el pedido. Soporta cancelación directa iniciada por el canal en estado `CREADO` por motivo `PAGO_NO_COMPLETADO` sin intervención del Gestor (Requisito A9).
 - **Headers:** `Authorization: Bearer <token>`
 - **Request Body:**
 ```json
 {
-  "motivo": "ERROR_SELECCION_PRODUCTO",
-  "comentario": "El cliente se equivocó de modelo antes de que salga de almacén"
+  "motivo": "PAGO_NO_COMPLETADO",
+  "comentario": "Tiempo límite de espera de pasarela agotado; cancelado por el canal"
 }
 ```
 - **Respuestas:**
-  - **`200 OK`** (Anulación directa):
+  - **`200 OK`** (Anulación directa sin gestor — `CREADO` o `PAGADO`):
 ```json
 {
   "pedidoId": "PED-2026-00981",
   "estadoPedido": "ANULADO",
   "autorizacionRequerida": false,
-  "solicitudReembolsoGenerada": true,
+  "solicitudReembolsoGenerada": false,
   "timestamp": "2026-09-22T21:46:00Z"
 }
 ```
-  - **`202 Accepted`** (Requiere autorización gestor):
+  - **`202 Accepted`** (Requiere autorización del Gestor si está en `EN_PREPARACION`):
 ```json
 {
   "pedidoId": "PED-2026-00981",
   "estadoPedido": "EN_PREPARACION",
   "solicitudAnulacionId": "ANUL-0012",
   "autorizacionRequerida": true,
-  "mensaje": "La orden está en preparación; requiere aprobación administrativa"
+  "mensaje": "Pedido en preparación; requiere aprobación administrativa"
 }
 ```
   - **`400 Bad Request`**: Motivo ausente o no tipificado.
-  - **`409 Conflict`**: Pedido ya en estado `DESPACHADO` o `ENTREGADO` (debe derivarse a Devolución F3).
+  - **`409 Conflict`**: Pedido ya en `DESPACHADO` o `ENTREGADO` (derivar a F3).
 
 ---
 
@@ -256,7 +323,7 @@
 
 #### 2.1 Registrar Expediente de Devolución / Cambio
 - **Endpoint:** `POST /api/v2/devoluciones`
-- **Descripción:** Crea un expediente post-entrega. Valida contra F1 que el pedido esté en estado `ENTREGADO`.
+- **Descripción:** Crea expediente tras la entrega. Valida contra F1 que el pedido esté en estado `ENTREGADO`.
 - **Headers:** `Authorization: Bearer <token>`
 - **Request Body:**
 ```json
@@ -289,7 +356,7 @@
   "fechaRegistro": "2026-09-22T21:47:00Z"
 }
 ```
-  - **`400 Bad Request`**: Faltan evidencias en caso de defecto o está fuera del plazo reglamentario.
+  - **`400 Bad Request`**: Falta de evidencias visuales obligatorias en defectos o plazo excedido.
   - **`409 Conflict`**: El pedido no se encuentra en estado `ENTREGADO`.
 
 ---
@@ -315,19 +382,19 @@
 
 #### 2.3 Resolver Expediente de Devolución
 - **Endpoint:** `PATCH /api/v2/devoluciones/{devolucionId}/resolucion`
-- **Descripción:** Realizado por el Gestor. Deriva a cambio logístico, reembolso (F4) o rechazo fundamentado.
+- **Descripción:** El Gestor aprueba o rechaza. Si es rechazo, exige fundamento no vacío.
 - **Headers:** `Authorization: Bearer <token_gestor>`
 - **Request Body:**
 ```json
 {
   "decision": "RECHAZADA",
-  "fundamento": "El equipo presenta signos evidentes de daño por agua y mal uso físico",
+  "fundamento": "El equipo presenta signos de manipulación y daño por agua",
   "autorizadorId": "GESTOR-03"
 }
 ```
 - **Respuestas:**
-  - **`200 OK`**: Expediente actualizado a `APROBADA` o `RECHAZADA`.
-  - **`400 Bad Request`**: En caso de `RECHAZADA` sin enviar el campo obligatorio `fundamento`.
+  - **`200 OK`**: Actualizado a `APROBADA` o `RECHAZADA`.
+  - **`400 Bad Request`**: Rechazo sin fundamento explicativo.
 
 ---
 
@@ -335,7 +402,7 @@
 
 #### 2.4 Procesar Solicitud de Reembolso
 - **Endpoint:** `POST /api/v2/reembolsos`
-- **Descripción:** Procesamiento monetario idempotente. Solo acepta solicitudes originadas formalmente en `ANULACION` (F2), `DEVOLUCION` (F3) o `DESPACHO_FALLIDO` (Módulo E).
+- **Descripción:** Procesamiento monetario idempotente derivado formalmente de `ANULACION` (F2), `DEVOLUCION` (F3) o `DESPACHO_FALLIDO` (Módulo E).
 - **Headers:**
   - `Authorization: Bearer <token_servicio_o_gestor>`
   - `X-Idempotency-Key: a4c89f55-1211-4fce-bc2a-605e55e396dc`
@@ -344,7 +411,7 @@
 {
   "origen": "DESPACHO_FALLIDO",
   "referenciaId": "PED-2026-00981",
-  "monto": 139.90,
+  "monto": 129.90,
   "moneda": "PEN",
   "motivo": "Paquete devuelto a almacén por entrega fallida en ruta",
   "solicitadoPor": "MODULO_DESPACHO_E"
@@ -357,14 +424,14 @@
   "reembolsoId": "REEM-90812",
   "transaccionPasarelaId": "TX-SIM-871239",
   "estado": "EXITOSO",
-  "monto": 139.90,
+  "monto": 129.90,
   "moneda": "PEN",
   "fechaEjecucion": "2026-09-22T21:48:30Z"
 }
 ```
-  - **`400 Bad Request`**: Monto excede el total pagado originalmente.
-  - **`403 Forbidden`**: Invocado sin origen formal reconocido (`ANULACION`, `DEVOLUCION` o `DESPACHO_FALLIDO`).
-  - **`409 Conflict`**: Fallo en pasarela simulada o conflicto de idempotencia.
+  - **`400 Bad Request`**: El monto excede el total pagado originalmente.
+  - **`403 Forbidden`**: Solicitud sin origen legítimo reconocido.
+  - **`409 Conflict`**: Fallo de pasarela o conflicto de idempotencia.
 
 ---
 
@@ -372,7 +439,6 @@
 
 #### 2.5 Registrar Encuesta CSAT
 - **Endpoint:** `POST /api/v2/csat`
-- **Descripción:** Captura la satisfacción del cliente tras la entrega de la orden.
 - **Request Body:**
 ```json
 {
@@ -384,9 +450,9 @@
 }
 ```
 - **Respuestas:**
-  - **`201 Created`**: Encuesta registrada.
-  - **`400 Bad Request`**: Puntuación fuera de rango (debe ser entero del 1 al 5).
-  - **`409 Conflict`**: Encuesta ya completada previamente para ese pedido.
+  - **`201 Created`**: Encuesta guardada.
+  - **`400 Bad Request`**: Puntuación fuera de rango (1 al 5).
+  - **`409 Conflict`**: Encuesta ya registrada para ese pedido.
 
 ---
 
@@ -394,17 +460,20 @@
 
 #### 2.6 Registrar Reclamo (Libro de Reclamaciones)
 - **Endpoint:** `POST /api/v2/reclamos`
+- **Descripción:** Registra un reclamo formal según normativa Indecopi con plazo de respuesta de 15 días hábiles (Requisito A10).
 - **Request Body:**
 ```json
 {
   "pedidoId": "PED-2026-00981",
-  "tipo": "QUEJA",
-  "canal": "WEB",
-  "detalle": "Retraso en la comunicación durante el despacho",
+  "tipo": "RECLAMO",
+  "canal": "CHATBOT",
+  "motivo": "INCUMPLIMIENTO_PLAZO_ENTREGA",
+  "detalle": "El pedido no llegó en la fecha programada",
   "consumidor": {
-    "nombre": "Juan Pérez",
+    "nombreCompleto": "Juan Pérez",
     "documento": "72458912",
-    "email": "juan.perez@example.com"
+    "email": "juan.perez@example.com",
+    "telefono": "+51999888777"
   }
 }
 ```
@@ -414,15 +483,42 @@
 {
   "reclamoId": "REC-2026-0015",
   "codigoSeguimiento": "REC-2026-0015",
+  "estado": "REGISTRADO",
+  "motivo": "INCUMPLIMIENTO_PLAZO_ENTREGA",
   "plazoDiasHabiles": 15,
   "fechaLimiteSLA": "2026-10-13T23:59:59Z",
-  "estado": "REGISTRADO"
+  "respuestaVisibleCliente": null
 }
 ```
 
 ---
 
-#### 2.7 Consultar Métricas y Agregados del Dashboard
+#### 2.7 Responder y Resolver Reclamo
+- **Endpoint:** `PATCH /api/v2/reclamos/{reclamoId}/respuesta`
+- **Descripción:** El Gestor emite la respuesta formal que será visible para el cliente (Requisito A10).
+- **Headers:** `Authorization: Bearer <token_gestor>`
+- **Request Body:**
+```json
+{
+  "nuevoEstado": "ATENDIDO",
+  "respuestaVisibleCliente": "Estimado Juan, lamentamos la demora. Se ha coordinado la entrega prioritaria y se ha aplicado una bonificación a su cuenta.",
+  "atendidoPor": "GESTOR-02"
+}
+```
+- **Respuestas:**
+  - **`200 OK`**
+```json
+{
+  "reclamoId": "REC-2026-0015",
+  "estado": "ATENDIDO",
+  "fechaRespuesta": "2026-09-22T21:50:00Z",
+  "respuestaVisibleCliente": "Estimado Juan, lamentamos la demora. Se ha coordinado la entrega prioritaria y se ha aplicado una bonificación a su cuenta."
+}
+```
+
+---
+
+#### 2.8 Consultar Métricas del Dashboard
 - **Endpoint:** `GET /api/v2/dashboard/metricas`
 - **Query Params:**
   - `desde`: 2026-09-01
