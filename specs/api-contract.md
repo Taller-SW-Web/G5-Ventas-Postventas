@@ -347,9 +347,32 @@ Los campos `tipoDocumento` y `numeroDocumento` son **estrictamente obligatorios*
 
 ### F3: Devoluciones y Cambios (Responsable: Joseph)
 
-#### 2.1 Registrar Expediente de Devolución / Cambio
+#### 2.1 Subir Evidencia Multimedia de Devolución
+- **Endpoint:** `POST /api/v2/devoluciones/evidencias/upload`
+- **Descripción:** Permite al canal (Chatbot / Web) subir un archivo fotográfico o documento de soporte antes de registrar la solicitud de devolución. Retorna la URL pública/accesible que debe incluirse en el arreglo `evidencias` del expediente.
+- **Headers:**
+  - `Authorization: Bearer <token_canal_o_cliente>`
+  - `Content-Type: multipart/form-data`
+- **Request Body (`multipart/form-data`):**
+  - `file`: Archivo binario adjunto (Formatos permitidos: `image/jpeg`, `image/png`, `image/webp`, `application/pdf`. Tamaño máximo: 5 MB).
+- **Respuestas:**
+  - **`201 Created`**
+```json
+{
+  "tipo": "IMAGEN",
+  "url": "[https://api.empresa.com/v2/uploads/evidencias/ev-981-foto1.jpg](https://api.empresa.com/v2/uploads/evidencias/ev-981-foto1.jpg)",
+  "nombreArchivoOriginal": "evidencia_pantalla.jpg",
+  "tamanioBytes": 1048576,
+  "fechaSubida": "2026-09-23T15:50:00Z"
+}
+```
+  - **`400 Bad Request`**: Formato de archivo no admitido o tamaño superior al límite de 5 MB.
+
+---
+
+#### 2.2 Registrar Expediente de Devolución / Cambio
 - **Endpoint:** `POST /api/v2/devoluciones`
-- **Descripción:** Crea un expediente de devolución o cambio tras la entrega. Valida contra F1 que el pedido exista y esté en estado `ENTREGADO`.
+- **Descripción:** Crea un expediente de devolución o cambio tras la entrega. Valida contra F1 que el pedido exista y se encuentre en estado `ENTREGADO`.
 - **Headers:**
   - `Authorization: Bearer <token_canal_o_cliente>`
   - `Content-Type: application/json`
@@ -369,7 +392,7 @@ Los campos `tipoDocumento` y `numeroDocumento` son **estrictamente obligatorios*
   "evidencias": [
     {
       "tipo": "IMAGEN",
-      "url": "[https://storage.empresa.com/evidencias/ev-981-foto1.jpg](https://storage.empresa.com/evidencias/ev-981-foto1.jpg)"
+      "url": "[https://api.empresa.com/v2/uploads/evidencias/ev-981-foto1.jpg](https://api.empresa.com/v2/uploads/evidencias/ev-981-foto1.jpg)"
     }
   ]
 }
@@ -382,7 +405,7 @@ Los campos `tipoDocumento` y `numeroDocumento` son **estrictamente obligatorios*
   "pedidoId": "PED-2026-00981",
   "tipo": "DEVOLUCION_DINERO",
   "estado": "SOLICITADA",
-  "fechaRegistro": "2026-09-23T00:12:00Z"
+  "fechaRegistro": "2026-09-23T15:51:00Z"
 }
 ```
   - **`400 Bad Request`**: Falta de evidencias visuales obligatorias en defectos o plazo de devolución excedido (más de 7 días naturales post-entrega).
@@ -390,9 +413,9 @@ Los campos `tipoDocumento` y `numeroDocumento` son **estrictamente obligatorios*
 
 ---
 
-#### 2.2 Consultar Expediente de Devolución por ID (Detalle con Estado de Reembolso)
+#### 2.3 Consultar Expediente de Devolución por ID (Detalle con Estado de Reembolso)
 - **Endpoint:** `GET /api/v2/devoluciones/{devolucionId}`
-- **Descripción:** Permite al cliente (Chatbot / Web) o Gestor consultar el detalle, estado del expediente y, en caso de resolución con extorno monetario, la trazabilidad del reembolso generado en F4.
+- **Descripción:** Permite al cliente (Chatbot / Web) o Gestor consultar el detalle, estado del expediente y, en caso de resolución con devolución monetaria, la trazabilidad del reembolso generado en F4.
 - **Headers:** `Authorization: Bearer <token>`
 - **Parámetros Path:** `devolucionId` (string, ej. `DEV-2026-0042`)
 - **Respuestas:**
@@ -410,26 +433,26 @@ Los campos `tipoDocumento` y `numeroDocumento` son **estrictamente obligatorios*
     "decision": "APROBADA",
     "fundamento": "Falla de fábrica confirmada en control de calidad",
     "autorizadorId": "GESTOR-03",
-    "fechaResolucion": "2026-09-23T04:15:00Z",
+    "fechaResolucion": "2026-09-23T16:00:00Z",
     "reembolso": {
       "reembolsoId": "REEM-90812",
       "estado": "EXITOSO",
       "monto": 129.90,
       "moneda": "PEN",
       "transaccionPasarelaId": "TX-SIM-871239",
-      "fechaEjecucion": "2026-09-23T04:16:10Z"
+      "fechaEjecucion": "2026-09-23T16:01:10Z"
     }
   },
   "evidencias": [
     {
       "tipo": "IMAGEN",
-      "url": "[https://storage.empresa.com/evidencias/ev-981-foto1.jpg](https://storage.empresa.com/evidencias/ev-981-foto1.jpg)"
+      "url": "[https://api.empresa.com/v2/uploads/evidencias/ev-981-foto1.jpg](https://api.empresa.com/v2/uploads/evidencias/ev-981-foto1.jpg)"
     }
   ],
-  "fechaRegistro": "2026-09-23T00:12:00Z"
+  "fechaRegistro": "2026-09-23T15:51:00Z"
 }
 ```
-  - **`200 OK` (Ejemplo cuando aún está en evaluación o sin reembolso generado):**
+  - **`200 OK` (Ejemplo cuando aún se encuentra en evaluación):**
 ```json
 {
   "devolucionId": "DEV-2026-0042",
@@ -440,14 +463,14 @@ Los campos `tipoDocumento` y `numeroDocumento` son **estrictamente obligatorios*
   "motivo": "PRODUCTO_DEFECTUOSO",
   "descripcion": "El auricular izquierdo no emite sonido",
   "resolucion": null,
-  "fechaRegistro": "2026-09-23T00:12:00Z"
+  "fechaRegistro": "2026-09-23T15:51:00Z"
 }
 ```
   - **`404 Not Found`**: El expediente solicitado no existe.
 
 ---
 
-#### 2.3 Listar Devoluciones por Cliente (Requisito para Chatbot / Frontends)
+#### 2.4 Listar Devoluciones por Cliente (Requisito para Chatbot / Frontends)
 - **Endpoint:** `GET /api/v2/devoluciones`
 - **Descripción:** Permite obtener el listado histórico paginado de expedientes de devolución o cambio asociados a un cliente específico.
 - **Headers:** `Authorization: Bearer <token>`
@@ -470,7 +493,7 @@ Los campos `tipoDocumento` y `numeroDocumento` son **estrictamente obligatorios*
       "estado": "APROBADA",
       "motivo": "PRODUCTO_DEFECTUOSO",
       "estadoReembolso": "EXITOSO",
-      "fechaRegistro": "2026-09-23T00:12:00Z"
+      "fechaRegistro": "2026-09-23T15:51:00Z"
     }
   ],
   "pagina": 0,
@@ -481,9 +504,9 @@ Los campos `tipoDocumento` y `numeroDocumento` son **estrictamente obligatorios*
 
 ---
 
-#### 2.4 Resolver Expediente de Devolución
+#### 2.5 Resolver Expediente de Devolución
 - **Endpoint:** `PATCH /api/v2/devoluciones/{devolucionId}/resolucion`
-- **Descripción:** El Gestor aprueba o rechaza el expediente. Si es rechazo, exige fundamento no vacío. Si se aprueba con `tipo: DEVOLUCION_DINERO`, F3 orquesta automáticamente el registro del reembolso hacia F4.
+- **Descripción:** El Gestor aprueba o rechaza el expediente. Si es rechazo, exige fundamento no vacío. Si se aprueba con `tipo: DEVOLUCION_DINERO`, F3 orquesta de forma desacoplada la solicitud de reembolso hacia F4.
 - **Headers:** `Authorization: Bearer <token_gestor>`
 - **Request Body:**
 ```json
