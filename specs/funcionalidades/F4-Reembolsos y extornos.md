@@ -1,4 +1,4 @@
-# Especificación F4: Reembolsos y extornos
+# Funcionalidad 4: Reembolsos y extornos
 
 **Responsable:** Luis Alejandro
 **Estado:** En especificación

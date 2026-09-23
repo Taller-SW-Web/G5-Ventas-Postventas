@@ -1,4 +1,4 @@
-# Especificación F1: Ciclo de vida del pedido
+# FUNCIONALIDAD 1: Ciclo de vida del pedido
 
 **Responsable:** Michael
 **Estado:** En especificación
