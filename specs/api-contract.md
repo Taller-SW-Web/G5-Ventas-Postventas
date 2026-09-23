@@ -1,6 +1,6 @@
 # Contrato de API (OpenAPI / REST) — Módulo D: Ventas y Postventa
 
-**Versión:** 1.2.0  
+**Versión:** 1.3.0  
 **Fecha:** Septiembre 2026  
 **Servicios:** M1 (Ventas / Pedidos) y M2 (Postventa)  
 **Convenciones generales:**
@@ -12,7 +12,7 @@
 {
   "codigo": "RECURSO_NO_ENCONTRADO",
   "mensaje": "Descripción legible del error",
-  "timestamp": "2026-09-22T21:45:00Z",
+  "timestamp": "2026-09-23T00:05:00Z",
   "detalles": []
 }
 ```
@@ -25,10 +25,21 @@
 
 #### 1.1 Crear Pedido
 - **Endpoint:** `POST /api/v1/pedidos`
-- **Descripción:** Registra un nuevo pedido proveniente de Canales A (Marketplace), B (Chatbot) o C (Retail). Incluye obligatoriamente los bloques de `canal`, `cupon`, `envio`, `contacto` y `pago`. Inicializa en estado `CREADO`.
+- **Descripción:** Registra un nuevo pedido proveniente de Canales A (Marketplace), B (Chatbot) o C (Retail). Incluye obligatoriamente los bloques de `canal`, `contacto`, `items`, `envio`, `pago` y el bloque opcional `cupon`. Inicializa en estado `CREADO`.
 - **Headers:**
   - `Authorization: Bearer <token_canal>`
   - `Content-Type: application/json`
+
+##### Especificación de Validación del Objeto `contacto`
+Los campos `tipoDocumento` y `numeroDocumento` son **estrictamente obligatorios**. Las reglas para la validación son:
+
+| `tipoDocumento` | Obligatorio | Formato / Regex | Longitud | Descripción |
+|---|---|---|---|---|
+| `DNI` | SÍ | `^[0-9]{8}$` | 8 dígitos | Documento Nacional de Identidad peruano. Solo dígitos numéricos. |
+| `RUC` | SÍ | `^(10\|15\|17\|20)[0-9]{9}$` | 11 dígitos | Registro Único de Contribuyentes. Inicia en 10, 15, 17 o 20. |
+| `CE` | SÍ | `^[a-zA-Z0-9]{8,12}$` | 8 a 12 car. | Carné de Extranjería. Caracteres alfanuméricos sin guiones ni espacios. |
+| `PASAPORTE` | SÍ | `^[a-zA-Z0-9]{6,12}$` | 6 a 12 car. | Pasaporte internacional. Alfanumérico sin caracteres especiales. |
+
 - **Request Body:**
 ```json
 {
@@ -84,11 +95,24 @@
   "total": 129.90,
   "moneda": "PEN",
   "canal": "CHATBOT",
-  "fechaCreacion": "2026-09-22T21:40:00Z"
+  "fechaCreacion": "2026-09-23T00:05:00Z"
 }
 ```
-  - **`400 Bad Request`**: Datos faltantes o tipos inválidos.
-  - **`409 Conflict`**: Fallo de validación de catálogo/stock con el módulo de Productos (F).
+  - **`400 Bad Request` (Documento inválido o faltante):**
+```json
+{
+  "codigo": "DOCUMENTO_INVALIDO",
+  "mensaje": "El número de documento no cumple con el formato requerido para el tipo indicado",
+  "timestamp": "2026-09-23T00:05:00Z",
+  "detalles": [
+    {
+      "campo": "contacto.numeroDocumento",
+      "error": "Para tipoDocumento 'DNI' se requieren exactamente 8 dígitos numéricos"
+    }
+  ]
+}
+```
+  - **`409 Conflict`**: Fallo de validación de catálogo o stock con el módulo de Productos (F).
 
 ---
 
@@ -108,7 +132,7 @@
   "metodo": "TARJETA_CREDITO",
   "marcaTarjeta": "VISA",
   "ultimosCuatroDigitos": "4321",
-  "fechaPago": "2026-09-22T21:41:00Z",
+  "fechaPago": "2026-09-23T00:06:00Z",
   "codigoAutorizacion": "AUTH-99021"
 }
 ```
@@ -119,7 +143,7 @@
   "pedidoId": "PED-2026-00981",
   "nuevoEstado": "PAGADO",
   "transaccionId": "TX-PASARELA-778120",
-  "fechaTransicion": "2026-09-22T21:41:00Z"
+  "fechaTransicion": "2026-09-23T00:06:00Z"
 }
 ```
   - **`400 Bad Request`**: Inconsistencia de montos o datos de transacción.
@@ -143,6 +167,8 @@
   "contacto": {
     "clienteId": "CLI-8841",
     "nombreCompleto": "Juan Pérez Rodríguez",
+    "tipoDocumento": "DNI",
+    "numeroDocumento": "72458912",
     "email": "juan.perez@example.com",
     "telefono": "+51999888777"
   },
@@ -165,24 +191,24 @@
       "precioUnitario": 129.90
     }
   ],
-  "fechaCreacion": "2026-09-22T21:40:00Z",
-  "ultimaActualizacion": "2026-09-22T21:42:15Z",
+  "fechaCreacion": "2026-09-23T00:05:00Z",
+  "ultimaActualizacion": "2026-09-23T00:08:15Z",
   "historialEstados": [
     {
       "estado": "CREADO",
-      "fecha": "2026-09-22T21:40:00Z",
+      "fecha": "2026-09-23T00:05:00Z",
       "actor": "CANAL_CHATBOT",
       "motivo": "Registro inicial de compra"
     },
     {
       "estado": "PAGADO",
-      "fecha": "2026-09-22T21:41:00Z",
+      "fecha": "2026-09-23T00:06:00Z",
       "actor": "PASARELA_PAGOS",
       "motivo": "Confirmación de cobro exitoso"
     },
     {
       "estado": "EN_PREPARACION",
-      "fecha": "2026-09-22T21:42:15Z",
+      "fecha": "2026-09-23T00:08:15Z",
       "actor": "SISTEMA_LOGISTICA",
       "motivo": "Recepción en almacén central"
     }
@@ -195,7 +221,7 @@
 
 ---
 
-#### 1.4 Listar Pedidos por Cliente (Requisito A8)
+#### 1.4 Listar Pedidos por Cliente
 - **Endpoint:** `GET /api/v1/pedidos`
 - **Descripción:** Permite obtener el listado histórico de pedidos asociados a un cliente específico.
 - **Headers:** `Authorization: Bearer <token>`
@@ -218,7 +244,7 @@
       "estado": "EN_PREPARACION",
       "total": 129.90,
       "moneda": "PEN",
-      "fechaCreacion": "2026-09-22T21:40:00Z"
+      "fechaCreacion": "2026-09-23T00:05:00Z"
     }
   ],
   "pagina": 0,
@@ -256,7 +282,7 @@
 {
   "evento": "ENTREGA_FALLIDA_DEFINITIVA",
   "guiaRemision": "GR-00892",
-  "motivo": "Dirección inexistente tras 3 visitas; devuelto a almacén",
+  "motivo": "Dirección inexistente tras 3 visitas; devuelto a almacén central",
   "requiereReembolso": true
 }
 ```
@@ -272,7 +298,7 @@
     "monto": 129.90,
     "moneda": "PEN"
   },
-  "mensaje": "Pedido anulado e instrucción de reembolso generada a F4"
+  "mensaje": "Pedido anulado e instrucción de reembolso remitida a F4"
 }
 ```
 
@@ -282,7 +308,7 @@
 
 #### 1.7 Solicitar Anulación
 - **Endpoint:** `POST /api/v1/pedidos/{pedidoId}/anulaciones`
-- **Descripción:** Permite cancelar el pedido. Soporta cancelación directa iniciada por el canal en estado `CREADO` por motivo `PAGO_NO_COMPLETADO` sin intervención del Gestor (Requisito A9).
+- **Descripción:** Cancela el pedido. Soporta cancelación automática e inmediata por el canal en estado `CREADO` por motivo `PAGO_NO_COMPLETADO` sin intervención del Gestor.
 - **Headers:** `Authorization: Bearer <token>`
 - **Request Body:**
 ```json
@@ -299,7 +325,7 @@
   "estadoPedido": "ANULADO",
   "autorizacionRequerida": false,
   "solicitudReembolsoGenerada": false,
-  "timestamp": "2026-09-22T21:46:00Z"
+  "timestamp": "2026-09-23T00:10:00Z"
 }
 ```
   - **`202 Accepted`** (Requiere autorización del Gestor si está en `EN_PREPARACION`):
@@ -353,7 +379,7 @@
   "devolucionId": "DEV-2026-0042",
   "pedidoId": "PED-2026-00981",
   "estado": "SOLICITADA",
-  "fechaRegistro": "2026-09-22T21:47:00Z"
+  "fechaRegistro": "2026-09-23T00:12:00Z"
 }
 ```
   - **`400 Bad Request`**: Falta de evidencias visuales obligatorias en defectos o plazo excedido.
@@ -373,7 +399,7 @@
   "estado": "EN_EVALUACION",
   "motivo": "PRODUCTO_DEFECTUOSO",
   "resolucion": null,
-  "fechaRegistro": "2026-09-22T21:47:00Z"
+  "fechaRegistro": "2026-09-23T00:12:00Z"
 }
 ```
   - **`404 Not Found`**: Expediente no encontrado.
@@ -426,7 +452,7 @@
   "estado": "EXITOSO",
   "monto": 129.90,
   "moneda": "PEN",
-  "fechaEjecucion": "2026-09-22T21:48:30Z"
+  "fechaEjecucion": "2026-09-23T00:15:30Z"
 }
 ```
   - **`400 Bad Request`**: El monto excede el total pagado originalmente.
@@ -460,7 +486,7 @@
 
 #### 2.6 Registrar Reclamo (Libro de Reclamaciones)
 - **Endpoint:** `POST /api/v2/reclamos`
-- **Descripción:** Registra un reclamo formal según normativa Indecopi con plazo de respuesta de 15 días hábiles (Requisito A10).
+- **Descripción:** Registra un reclamo formal según normativa Indecopi con plazo de respuesta de 15 días hábiles.
 - **Request Body:**
 ```json
 {
@@ -486,7 +512,7 @@
   "estado": "REGISTRADO",
   "motivo": "INCUMPLIMIENTO_PLAZO_ENTREGA",
   "plazoDiasHabiles": 15,
-  "fechaLimiteSLA": "2026-10-13T23:59:59Z",
+  "fechaLimiteSLA": "2026-10-14T23:59:59Z",
   "respuestaVisibleCliente": null
 }
 ```
@@ -495,7 +521,7 @@
 
 #### 2.7 Responder y Resolver Reclamo
 - **Endpoint:** `PATCH /api/v2/reclamos/{reclamoId}/respuesta`
-- **Descripción:** El Gestor emite la respuesta formal que será visible para el cliente (Requisito A10).
+- **Descripción:** El Gestor emite la respuesta formal que será visible para el cliente.
 - **Headers:** `Authorization: Bearer <token_gestor>`
 - **Request Body:**
 ```json
@@ -511,7 +537,7 @@
 {
   "reclamoId": "REC-2026-0015",
   "estado": "ATENDIDO",
-  "fechaRespuesta": "2026-09-22T21:50:00Z",
+  "fechaRespuesta": "2026-09-23T00:18:00Z",
   "respuestaVisibleCliente": "Estimado Juan, lamentamos la demora. Se ha coordinado la entrega prioritaria y se ha aplicado una bonificación a su cuenta."
 }
 ```
