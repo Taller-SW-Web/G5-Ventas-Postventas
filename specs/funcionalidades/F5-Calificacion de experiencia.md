@@ -1,4 +1,4 @@
-# Especificación F5: Calificación de experiencia
+# Funcionalidad 5: Calificación de experiencia
 
 **Responsable:** Johan
 **Estado:** En especificación
