@@ -13,8 +13,8 @@ Garantizar tiempos de respuesta aceptables tanto en las operaciones transacciona
 
 | Operación | Umbral objetivo | Condición de medición |
 |---|---|---|
-| Operaciones transaccionales sobre un pedido (creación, consulta por ID, transición de estado, **solicitud de anulación**) | **< 500 ms** (p95) | Bajo carga concurrente simulada, dataset reproducible. |
-| Consulta del dashboard analítico (F6) | **< 2 s** (p95) | Con un dataset de **≥ 5 000 pedidos** cargados. |
+| Operaciones transaccionales sobre un pedido (creación, consulta por ID, transición de estado, **solicitud de anulación**) | **< 500 ms** (percentil95) | Bajo carga concurrente simulada, dataset reproducible. |
+| Consulta del dashboard analítico (F6) | **< 2 s** (percentil95) | Con un dataset de **≥ 5 000 pedidos** cargados. |
 
 ## 3. Alcance
 
@@ -22,7 +22,7 @@ Incluye:
 
 - Medición del tiempo de respuesta de `POST /api/v1/pedidos/{pedidoId}/anulaciones` (F2 — ESP-05) y de la orquestación de efectos secundarios en ESP-06, bajo el umbral general de 500 ms para la porción síncrona expuesta al cliente.
 - Medición del tiempo de carga del dashboard (F6) con dataset ≥ 5 000 pedidos.
-- Uso de datasets reproducibles (semillas fijas o fixtures versionados) para que las pruebas de carga sean repetibles entre corridas y entre integrantes del equipo.
+- Uso de datasets reproducibles (semillas fijas) para que las pruebas de carga sean repetibles entre corridas y entre integrantes del equipo.
 
 **No incluye:** la latencia de servicios externos simulados (pasarela de pago, logística) fuera del control del equipo; el tiempo de proceso asíncrono de notificaciones o eventos de dominio, que se rige por sus propios acuerdos de entrega.
 

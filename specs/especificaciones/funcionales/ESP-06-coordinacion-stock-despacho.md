@@ -5,7 +5,7 @@
 **Estado:** En especificación
 **Actor principal:** Sistema (orquestador de F2), Productos (F), Despacho (E), F4 — Reembolsos
 **Microservicio:** M1 — Pedidos
-**Lineamiento del curso:** "Anulación de pedidos según reglas de negocio (con autorización)" (Módulo D — Ventas y Postventa)
+**Lineamiento:** "Anulación de pedidos según reglas de negocio (con autorización)" (Módulo D — Ventas y Postventa)
 
 ## 1. Contexto
 

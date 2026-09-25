@@ -5,7 +5,7 @@
 **Estado:** En especificación
 **Actor principal:** Cliente (solicitante), Canal (sistema iniciador) y Gestor (autoriza condicionalmente)
 **Microservicio:** M1 — Pedidos
-**Lineamiento del curso:** "Anulación de pedidos según reglas de negocio (con autorización)" (Módulo D — Ventas y Postventa)
+**Lineamiento:** "Anulación de pedidos según reglas de negocio (con autorización)" (Módulo D — Ventas y Postventa)
 
 ## 1. Contexto
 
@@ -15,7 +15,7 @@ F2 nunca escribe directamente sobre las tablas de pedido: una vez tomada la deci
 
 ## 2. Propósito
 
-Registrar y validar toda solicitud de anulación —ya sea iniciada por el Cliente, por el Canal (automáticamente) o resuelta por el Gestor— garantizando que:
+Registrar y validar toda solicitud de anulación, ya sea iniciada por el Cliente, por el Canal (automáticamente) o resuelta por el Gestor, garantizando que:
 
 - Todo pedido `DESPACHADO` o `ENTREGADO` quede bloqueado (409) y derivado a Devoluciones (F3).
 - Toda solicitud sin motivo tipificado sea rechazada (400).
