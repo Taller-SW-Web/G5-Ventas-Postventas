@@ -1,6 +1,6 @@
 # Contrato de API (OpenAPI / REST) — Módulo D: Ventas y Postventa
 
-**Versión:** 1.3.0  
+**Versión:** 1.4.0  
 **Fecha:** Septiembre 2026  
 **Servicios:** M1 (Ventas / Pedidos) y M2 (Postventa)  
 **Convenciones generales:**
@@ -275,7 +275,7 @@ Los campos `tipoDocumento` y `numeroDocumento` son **estrictamente obligatorios*
 
 #### 1.6 Notificación de Incidencias desde Despacho / Logística (Módulo E)
 - **Endpoint:** `POST /api/v1/pedidos/{pedidoId}/eventos-logistica`
-- **Descripción:** Despacho (E) notifica entrega fallida definitiva o rechazo en puerta. M1 anula el pedido y deriva a F4 para el reembolso.
+- **Descripción:** Despacho (E) notifica entrega fallida definitiva o rechazo en puerta. M1 ejecuta la anulación mediante F2 (motivo: `ENTREGA_FALLIDA_DEFINITIVA`) y es F2 quien deriva la instrucción de reembolso a F4 bajo el origen autorizado `ANULACION`.
 - **Headers:** `Authorization: Bearer <token_servicio_despacho>`
 - **Request Body:**
 ```json
@@ -298,7 +298,7 @@ Los campos `tipoDocumento` y `numeroDocumento` son **estrictamente obligatorios*
     "monto": 129.90,
     "moneda": "PEN"
   },
-  "mensaje": "Pedido anulado e instrucción de reembolso remitida a F4"
+  "mensaje": "Pedido anulado por F2 e instrucción de reembolso generada a F4 con origen ANULACION"
 }
 ```
 
@@ -353,7 +353,7 @@ Los campos `tipoDocumento` y `numeroDocumento` son **estrictamente obligatorios*
 - **Headers:**
   - `Authorization: Bearer <token_canal_o_cliente>`
   - `Content-Type: multipart/form-data`
-- **Request Body (`multipart/form-data`):**
+- **Request Body (multipart/form-data):**
   - `file`: Archivo binario adjunto (Formatos permitidos: `image/jpeg`, `image/png`, `image/webp`, `application/pdf`. Tamaño máximo: 5 MB).
 - **Respuestas:**
   - **`201 Created`**
@@ -506,7 +506,7 @@ Los campos `tipoDocumento` y `numeroDocumento` son **estrictamente obligatorios*
 
 #### 2.5 Resolver Expediente de Devolución
 - **Endpoint:** `PATCH /api/v2/devoluciones/{devolucionId}/resolucion`
-- **Descripción:** El Gestor aprueba o rechaza el expediente. Si es rechazo, exige fundamento no vacío. Si se aprueba con `tipo: DEVOLUCION_DINERO`, F3 orquesta de forma desacoplada la solicitud de reembolso hacia F4.
+- **Descripción:** El Gestor aprueba o rechaza el expediente. Si es rechazo, exige fundamento no vacío. Si se aprueba con `tipo: DEVOLUCION_DINERO`, F3 orquesta la solicitud de reembolso hacia F4 bajo el origen autorizado `DEVOLUCION`.
 - **Headers:** `Authorization: Bearer <token_gestor>`
 - **Request Body:**
 ```json
@@ -525,21 +525,21 @@ Los campos `tipoDocumento` y `numeroDocumento` son **estrictamente obligatorios*
 
 ### F4: Reembolsos y Extornos (Responsable: Luis Alejandro)
 
-#### 2.4 Procesar Solicitud de Reembolso
+#### 2.6 Procesar Solicitud de Reembolso
 - **Endpoint:** `POST /api/v2/reembolsos`
-- **Descripción:** Procesamiento monetario idempotente derivado formalmente de `ANULACION` (F2), `DEVOLUCION` (F3) o `DESPACHO_FALLIDO` (Módulo E).
+- **Descripción:** Procesamiento monetario idempotente derivado formal y exclusivamente de **`ANULACION` (F2)** o **`DEVOLUCION` (F3)**. Rechaza cualquier invocación directa que no provenga de estos dos flujos autorizados (`403 Forbidden`).
 - **Headers:**
   - `Authorization: Bearer <token_servicio_o_gestor>`
   - `X-Idempotency-Key: a4c89f55-1211-4fce-bc2a-605e55e396dc`
 - **Request Body:**
 ```json
 {
-  "origen": "DESPACHO_FALLIDO",
+  "origen": "ANULACION",
   "referenciaId": "PED-2026-00981",
   "monto": 129.90,
   "moneda": "PEN",
-  "motivo": "Paquete devuelto a almacén por entrega fallida en ruta",
-  "solicitadoPor": "MODULO_DESPACHO_E"
+  "motivo": "Entrega fallida definitiva en ruta; anulación tramitada por F2",
+  "solicitadoPor": "SISTEMA_F2"
 }
 ```
 - **Respuestas:**
@@ -554,15 +554,15 @@ Los campos `tipoDocumento` y `numeroDocumento` son **estrictamente obligatorios*
   "fechaEjecucion": "2026-09-23T00:15:30Z"
 }
 ```
-  - **`400 Bad Request`**: El monto excede el total pagado originalmente.
-  - **`403 Forbidden`**: Solicitud sin origen legítimo reconocido.
+  - **`400 Bad Request`**: El monto excede el total pagado originalmente o estructura inválida.
+  - **`403 Forbidden`**: Solicitud con origen no permitido (distinto de `ANULACION` o `DEVOLUCION`).
   - **`409 Conflict`**: Fallo de pasarela o conflicto de idempotencia.
 
 ---
 
 ### F5: Calificación de Experiencia / CSAT (Responsable: Johan)
 
-#### 2.5 Registrar Encuesta CSAT
+#### 2.7 Registrar Encuesta CSAT
 - **Endpoint:** `POST /api/v2/csat`
 - **Request Body:**
 ```json
@@ -583,7 +583,7 @@ Los campos `tipoDocumento` y `numeroDocumento` son **estrictamente obligatorios*
 
 ### F6: Reclamos y Dashboard (Responsable: Fabrizio)
 
-#### 2.6 Registrar Reclamo (Libro de Reclamaciones)
+#### 2.8 Registrar Reclamo (Libro de Reclamaciones)
 - **Endpoint:** `POST /api/v2/reclamos`
 - **Descripción:** Registra un reclamo formal según normativa Indecopi con plazo de respuesta de 15 días hábiles.
 - **Headers:**
@@ -622,7 +622,7 @@ Los campos `tipoDocumento` y `numeroDocumento` son **estrictamente obligatorios*
 
 ---
 
-#### 2.7 Consultar Reclamo por Código de Seguimiento (Consulta para Chatbot / Web)
+#### 2.9 Consultar Reclamo por Código de Seguimiento (Consulta para Chatbot / Web)
 - **Endpoint:** `GET /api/v2/reclamos/{codigoSeguimiento}`
 - **Descripción:** Permite al cliente (desde Chatbot o Web) o al Gestor consultar el estado actual y la respuesta formal de un reclamo específico mediante su código.
 - **Headers:** `Authorization: Bearer <token>`
@@ -651,7 +651,7 @@ Los campos `tipoDocumento` y `numeroDocumento` son **estrictamente obligatorios*
 
 ---
 
-#### 2.8 Listar Reclamos por Cliente / Consumidor
+#### 2.10 Listar Reclamos por Cliente / Consumidor
 - **Endpoint:** `GET /api/v2/reclamos`
 - **Descripción:** Permite obtener el listado histórico de reclamos asociados a un cliente o número de documento de identidad.
 - **Headers:** `Authorization: Bearer <token>`
@@ -684,7 +684,7 @@ Los campos `tipoDocumento` y `numeroDocumento` son **estrictamente obligatorios*
 
 ---
 
-#### 2.9 Responder y Resolver Reclamo
+#### 2.11 Responder y Resolver Reclamo
 - **Endpoint:** `PATCH /api/v2/reclamos/{reclamoId}/respuesta`
 - **Descripción:** El Gestor emite la respuesta formal que será visible para el cliente (Requisito A10).
 - **Headers:** `Authorization: Bearer <token_gestor>`
@@ -710,7 +710,7 @@ Los campos `tipoDocumento` y `numeroDocumento` son **estrictamente obligatorios*
 
 ---
 
-#### 2.10 Consultar Métricas del Dashboard
+#### 2.12 Consultar Métricas del Dashboard
 - **Endpoint:** `GET /api/v2/dashboard/metricas`
 - **Query Params:**
   - `desde`: 2026-09-01
@@ -737,7 +737,4 @@ Los campos `tipoDocumento` y `numeroDocumento` son **estrictamente obligatorios*
     "reclamosPendientesSLA": 3
   }
 }
-```
-
-
 ```
