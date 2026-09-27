@@ -1,6 +1,6 @@
 # Contrato de API (OpenAPI / REST) — Módulo D: Ventas y Postventa
 
-**Versión:** 1.3.0  
+**Versión:** 1.4.0  
 **Fecha:** Septiembre 2026  
 **Servicios:** M1 (Ventas / Pedidos) y M2 (Postventa)  
 **Convenciones generales:**
@@ -275,7 +275,7 @@ Los campos `tipoDocumento` y `numeroDocumento` son **estrictamente obligatorios*
 
 #### 1.6 Notificación de Incidencias desde Despacho / Logística (Módulo E)
 - **Endpoint:** `POST /api/v1/pedidos/{pedidoId}/eventos-logistica`
-- **Descripción:** Despacho (E) notifica entrega fallida definitiva o rechazo en puerta. M1 anula el pedido y deriva a F4 para el reembolso.
+- **Descripción:** Despacho (E) notifica entrega fallida definitiva o rechazo en puerta. M1 ejecuta la anulación mediante F2 (motivo: `ENTREGA_FALLIDA_DEFINITIVA`) y es F2 quien deriva la instrucción de reembolso a F4 bajo el origen autorizado `ANULACION`.
 - **Headers:** `Authorization: Bearer <token_servicio_despacho>`
 - **Request Body:**
 ```json
@@ -298,7 +298,7 @@ Los campos `tipoDocumento` y `numeroDocumento` son **estrictamente obligatorios*
     "monto": 129.90,
     "moneda": "PEN"
   },
-  "mensaje": "Pedido anulado e instrucción de reembolso remitida a F4"
+  "mensaje": "Pedido anulado por F2 e instrucción de reembolso generada a F4 con origen ANULACION"
 }
 ```
 
@@ -347,17 +347,42 @@ Los campos `tipoDocumento` y `numeroDocumento` son **estrictamente obligatorios*
 
 ### F3: Devoluciones y Cambios (Responsable: Joseph)
 
-#### 2.1 Registrar Expediente de Devolución / Cambio
+#### 2.1 Subir Evidencia Multimedia de Devolución
+- **Endpoint:** `POST /api/v2/devoluciones/evidencias/upload`
+- **Descripción:** Permite al canal (Chatbot / Web) subir un archivo fotográfico o documento de soporte antes de registrar la solicitud de devolución. Retorna la URL pública/accesible que debe incluirse en el arreglo `evidencias` del expediente.
+- **Headers:**
+  - `Authorization: Bearer <token_canal_o_cliente>`
+  - `Content-Type: multipart/form-data`
+- **Request Body (multipart/form-data):**
+  - `file`: Archivo binario adjunto (Formatos permitidos: `image/jpeg`, `image/png`, `image/webp`, `application/pdf`. Tamaño máximo: 5 MB).
+- **Respuestas:**
+  - **`201 Created`**
+```json
+{
+  "tipo": "IMAGEN",
+  "url": "[https://api.empresa.com/v2/uploads/evidencias/ev-981-foto1.jpg](https://api.empresa.com/v2/uploads/evidencias/ev-981-foto1.jpg)",
+  "nombreArchivoOriginal": "evidencia_pantalla.jpg",
+  "tamanioBytes": 1048576,
+  "fechaSubida": "2026-09-23T15:50:00Z"
+}
+```
+  - **`400 Bad Request`**: Formato de archivo no admitido o tamaño superior al límite de 5 MB.
+
+---
+
+#### 2.2 Registrar Expediente de Devolución / Cambio
 - **Endpoint:** `POST /api/v2/devoluciones`
-- **Descripción:** Crea expediente tras la entrega. Valida contra F1 que el pedido esté en estado `ENTREGADO`.
-- **Headers:** `Authorization: Bearer <token>`
+- **Descripción:** Crea un expediente de devolución o cambio tras la entrega. Valida contra F1 que el pedido exista y se encuentre en estado `ENTREGADO`.
+- **Headers:**
+  - `Authorization: Bearer <token_canal_o_cliente>`
+  - `Content-Type: application/json`
 - **Request Body:**
 ```json
 {
   "pedidoId": "PED-2026-00981",
-  "tipo": "CAMBIO",
+  "tipo": "DEVOLUCION_DINERO",
   "motivo": "PRODUCTO_DEFECTUOSO",
-  "descripcion": "El botón de encendido no responde",
+  "descripcion": "El auricular izquierdo no emite sonido y no carga en el estuche",
   "items": [
     {
       "productoId": "PROD-101",
@@ -367,7 +392,7 @@ Los campos `tipoDocumento` y `numeroDocumento` son **estrictamente obligatorios*
   "evidencias": [
     {
       "tipo": "IMAGEN",
-      "url": "[https://storage.empresa.com/evidencias/ev-981-foto1.jpg](https://storage.empresa.com/evidencias/ev-981-foto1.jpg)"
+      "url": "[https://api.empresa.com/v2/uploads/evidencias/ev-981-foto1.jpg](https://api.empresa.com/v2/uploads/evidencias/ev-981-foto1.jpg)"
     }
   ]
 }
@@ -378,69 +403,143 @@ Los campos `tipoDocumento` y `numeroDocumento` son **estrictamente obligatorios*
 {
   "devolucionId": "DEV-2026-0042",
   "pedidoId": "PED-2026-00981",
+  "tipo": "DEVOLUCION_DINERO",
   "estado": "SOLICITADA",
-  "fechaRegistro": "2026-09-23T00:12:00Z"
+  "fechaRegistro": "2026-09-23T15:51:00Z"
 }
 ```
-  - **`400 Bad Request`**: Falta de evidencias visuales obligatorias en defectos o plazo excedido.
+  - **`400 Bad Request`**: Falta de evidencias visuales obligatorias en defectos o plazo de devolución excedido (más de 7 días naturales post-entrega).
   - **`409 Conflict`**: El pedido no se encuentra en estado `ENTREGADO`.
 
 ---
 
-#### 2.2 Consultar Expediente de Devolución por ID
+#### 2.3 Consultar Expediente de Devolución por ID (Detalle con Estado de Reembolso)
 - **Endpoint:** `GET /api/v2/devoluciones/{devolucionId}`
+- **Descripción:** Permite al cliente (Chatbot / Web) o Gestor consultar el detalle, estado del expediente y, en caso de resolución con devolución monetaria, la trazabilidad del reembolso generado en F4.
+- **Headers:** `Authorization: Bearer <token>`
+- **Parámetros Path:** `devolucionId` (string, ej. `DEV-2026-0042`)
 - **Respuestas:**
-  - **`200 OK`**
+  - **`200 OK` (Ejemplo con resolución aprobada y reembolso de dinero vinculado):**
 ```json
 {
   "devolucionId": "DEV-2026-0042",
   "pedidoId": "PED-2026-00981",
-  "tipo": "CAMBIO",
-  "estado": "EN_EVALUACION",
+  "clienteId": "CLI-8841",
+  "tipo": "DEVOLUCION_DINERO",
+  "estado": "APROBADA",
   "motivo": "PRODUCTO_DEFECTUOSO",
-  "resolucion": null,
-  "fechaRegistro": "2026-09-23T00:12:00Z"
+  "descripcion": "El auricular izquierdo no emite sonido",
+  "resolucion": {
+    "decision": "APROBADA",
+    "fundamento": "Falla de fábrica confirmada en control de calidad",
+    "autorizadorId": "GESTOR-03",
+    "fechaResolucion": "2026-09-23T16:00:00Z",
+    "reembolso": {
+      "reembolsoId": "REEM-90812",
+      "estado": "EXITOSO",
+      "monto": 129.90,
+      "moneda": "PEN",
+      "transaccionPasarelaId": "TX-SIM-871239",
+      "fechaEjecucion": "2026-09-23T16:01:10Z"
+    }
+  },
+  "evidencias": [
+    {
+      "tipo": "IMAGEN",
+      "url": "[https://api.empresa.com/v2/uploads/evidencias/ev-981-foto1.jpg](https://api.empresa.com/v2/uploads/evidencias/ev-981-foto1.jpg)"
+    }
+  ],
+  "fechaRegistro": "2026-09-23T15:51:00Z"
 }
 ```
-  - **`404 Not Found`**: Expediente no encontrado.
+  - **`200 OK` (Ejemplo cuando aún se encuentra en evaluación):**
+```json
+{
+  "devolucionId": "DEV-2026-0042",
+  "pedidoId": "PED-2026-00981",
+  "clienteId": "CLI-8841",
+  "tipo": "DEVOLUCION_DINERO",
+  "estado": "EN_EVALUACION",
+  "motivo": "PRODUCTO_DEFECTUOSO",
+  "descripcion": "El auricular izquierdo no emite sonido",
+  "resolucion": null,
+  "fechaRegistro": "2026-09-23T15:51:00Z"
+}
+```
+  - **`404 Not Found`**: El expediente solicitado no existe.
 
 ---
 
-#### 2.3 Resolver Expediente de Devolución
+#### 2.4 Listar Devoluciones por Cliente (Requisito para Chatbot / Frontends)
+- **Endpoint:** `GET /api/v2/devoluciones`
+- **Descripción:** Permite obtener el listado histórico paginado de expedientes de devolución o cambio asociados a un cliente específico.
+- **Headers:** `Authorization: Bearer <token>`
+- **Query Params:**
+  - `clienteId` (requerido para clientes): Identificador del cliente.
+  - `estado` (opcional): `SOLICITADA | EN_EVALUACION | APROBADA | RECHAZADA | COMPLETADA`
+  - `tipo` (opcional): `CAMBIO | DEVOLUCION_DINERO`
+  - `pagina` (opcional, default: `0`)
+  - `tamano` (opcional, default: `10`)
+- **Respuestas:**
+  - **`200 OK`**
+```json
+{
+  "clienteId": "CLI-8841",
+  "contenido": [
+    {
+      "devolucionId": "DEV-2026-0042",
+      "pedidoId": "PED-2026-00981",
+      "tipo": "DEVOLUCION_DINERO",
+      "estado": "APROBADA",
+      "motivo": "PRODUCTO_DEFECTUOSO",
+      "estadoReembolso": "EXITOSO",
+      "fechaRegistro": "2026-09-23T15:51:00Z"
+    }
+  ],
+  "pagina": 0,
+  "totalPaginas": 1,
+  "totalElementos": 1
+}
+```
+
+---
+
+#### 2.5 Resolver Expediente de Devolución
 - **Endpoint:** `PATCH /api/v2/devoluciones/{devolucionId}/resolucion`
-- **Descripción:** El Gestor aprueba o rechaza. Si es rechazo, exige fundamento no vacío.
+- **Descripción:** El Gestor aprueba o rechaza el expediente. Si es rechazo, exige fundamento no vacío. Si se aprueba con `tipo: DEVOLUCION_DINERO`, F3 orquesta la solicitud de reembolso hacia F4 bajo el origen autorizado `DEVOLUCION`.
 - **Headers:** `Authorization: Bearer <token_gestor>`
 - **Request Body:**
 ```json
 {
   "decision": "RECHAZADA",
-  "fundamento": "El equipo presenta signos de manipulación y daño por agua",
+  "fundamento": "El equipo presenta signos evidentes de manipulación interna y sulfatación por agua",
   "autorizadorId": "GESTOR-03"
 }
 ```
 - **Respuestas:**
   - **`200 OK`**: Actualizado a `APROBADA` o `RECHAZADA`.
   - **`400 Bad Request`**: Rechazo sin fundamento explicativo.
+  - **`404 Not Found`**: Expediente no encontrado.
 
 ---
 
 ### F4: Reembolsos y Extornos (Responsable: Luis Alejandro)
 
-#### 2.4 Procesar Solicitud de Reembolso
+#### 2.6 Procesar Solicitud de Reembolso
 - **Endpoint:** `POST /api/v2/reembolsos`
-- **Descripción:** Procesamiento monetario idempotente derivado formalmente de `ANULACION` (F2), `DEVOLUCION` (F3) o `DESPACHO_FALLIDO` (Módulo E).
+- **Descripción:** Procesamiento monetario idempotente derivado formal y exclusivamente de **`ANULACION` (F2)** o **`DEVOLUCION` (F3)**. Rechaza cualquier invocación directa que no provenga de estos dos flujos autorizados (`403 Forbidden`).
 - **Headers:**
   - `Authorization: Bearer <token_servicio_o_gestor>`
   - `X-Idempotency-Key: a4c89f55-1211-4fce-bc2a-605e55e396dc`
 - **Request Body:**
 ```json
 {
-  "origen": "DESPACHO_FALLIDO",
+  "origen": "ANULACION",
   "referenciaId": "PED-2026-00981",
   "monto": 129.90,
   "moneda": "PEN",
-  "motivo": "Paquete devuelto a almacén por entrega fallida en ruta",
-  "solicitadoPor": "MODULO_DESPACHO_E"
+  "motivo": "Entrega fallida definitiva en ruta; anulación tramitada por F2",
+  "solicitadoPor": "SISTEMA_F2"
 }
 ```
 - **Respuestas:**
@@ -455,15 +554,15 @@ Los campos `tipoDocumento` y `numeroDocumento` son **estrictamente obligatorios*
   "fechaEjecucion": "2026-09-23T00:15:30Z"
 }
 ```
-  - **`400 Bad Request`**: El monto excede el total pagado originalmente.
-  - **`403 Forbidden`**: Solicitud sin origen legítimo reconocido.
+  - **`400 Bad Request`**: El monto excede el total pagado originalmente o estructura inválida.
+  - **`403 Forbidden`**: Solicitud con origen no permitido (distinto de `ANULACION` o `DEVOLUCION`).
   - **`409 Conflict`**: Fallo de pasarela o conflicto de idempotencia.
 
 ---
 
 ### F5: Calificación de Experiencia / CSAT (Responsable: Johan)
 
-#### 2.5 Registrar Encuesta CSAT
+#### 2.7 Registrar Encuesta CSAT
 - **Endpoint:** `POST /api/v2/csat`
 - **Request Body:**
 ```json
@@ -484,9 +583,12 @@ Los campos `tipoDocumento` y `numeroDocumento` son **estrictamente obligatorios*
 
 ### F6: Reclamos y Dashboard (Responsable: Fabrizio)
 
-#### 2.6 Registrar Reclamo (Libro de Reclamaciones)
+#### 2.8 Registrar Reclamo (Libro de Reclamaciones)
 - **Endpoint:** `POST /api/v2/reclamos`
 - **Descripción:** Registra un reclamo formal según normativa Indecopi con plazo de respuesta de 15 días hábiles.
+- **Headers:**
+  - `Authorization: Bearer <token_canal_o_cliente>`
+  - `Content-Type: application/json`
 - **Request Body:**
 ```json
 {
@@ -516,12 +618,75 @@ Los campos `tipoDocumento` y `numeroDocumento` son **estrictamente obligatorios*
   "respuestaVisibleCliente": null
 }
 ```
+  - **`400 Bad Request`**: Datos incompletos del consumidor o motivo no tipificado.
 
 ---
 
-#### 2.7 Responder y Resolver Reclamo
+#### 2.9 Consultar Reclamo por Código de Seguimiento (Consulta para Chatbot / Web)
+- **Endpoint:** `GET /api/v2/reclamos/{codigoSeguimiento}`
+- **Descripción:** Permite al cliente (desde Chatbot o Web) o al Gestor consultar el estado actual y la respuesta formal de un reclamo específico mediante su código.
+- **Headers:** `Authorization: Bearer <token>`
+- **Parámetros Path:** `codigoSeguimiento` (string, ej. `REC-2026-0015`)
+- **Respuestas:**
+  - **`200 OK`**
+```json
+{
+  "reclamoId": "REC-2026-0015",
+  "codigoSeguimiento": "REC-2026-0015",
+  "pedidoId": "PED-2026-00981",
+  "tipo": "RECLAMO",
+  "canal": "CHATBOT",
+  "motivo": "INCUMPLIMIENTO_PLAZO_ENTREGA",
+  "detalle": "El pedido no llegó en la fecha programada",
+  "estado": "ATENDIDO",
+  "plazoDiasHabiles": 15,
+  "fechaLimiteSLA": "2026-10-14T23:59:59Z",
+  "fechaRegistro": "2026-09-23T00:10:00Z",
+  "fechaAtencion": "2026-09-23T08:30:00Z",
+  "respuestaVisibleCliente": "Estimado Juan, su reclamo fue atendido. Se coordinó la entrega prioritaria y se emitió una bonificación a su cuenta."
+}
+```
+  - **`401 Unauthorized`**: Token ausente o inválido.
+  - **`404 Not Found`**: Reclamo no encontrado con ese código de seguimiento.
+
+---
+
+#### 2.10 Listar Reclamos por Cliente / Consumidor
+- **Endpoint:** `GET /api/v2/reclamos`
+- **Descripción:** Permite obtener el listado histórico de reclamos asociados a un cliente o número de documento de identidad.
+- **Headers:** `Authorization: Bearer <token>`
+- **Query Params:**
+  - `documento` (opcional): Número de documento de identidad del reclamante.
+  - `clienteId` (opcional): Identificador del cliente.
+  - `estado` (opcional): `REGISTRADO | EN_PROCESO | ATENDIDO | DERIVADO`
+  - `pagina` (opcional, default: `0`)
+  - `tamano` (opcional, default: `10`)
+- **Respuestas:**
+  - **`200 OK`**
+```json
+{
+  "contenido": [
+    {
+      "reclamoId": "REC-2026-0015",
+      "codigoSeguimiento": "REC-2026-0015",
+      "tipo": "RECLAMO",
+      "motivo": "INCUMPLIMIENTO_PLAZO_ENTREGA",
+      "estado": "ATENDIDO",
+      "fechaRegistro": "2026-09-23T00:10:00Z",
+      "fechaLimiteSLA": "2026-10-14T23:59:59Z"
+    }
+  ],
+  "pagina": 0,
+  "totalPaginas": 1,
+  "totalElementos": 1
+}
+```
+
+---
+
+#### 2.11 Responder y Resolver Reclamo
 - **Endpoint:** `PATCH /api/v2/reclamos/{reclamoId}/respuesta`
-- **Descripción:** El Gestor emite la respuesta formal que será visible para el cliente.
+- **Descripción:** El Gestor emite la respuesta formal que será visible para el cliente (Requisito A10).
 - **Headers:** `Authorization: Bearer <token_gestor>`
 - **Request Body:**
 ```json
@@ -541,10 +706,11 @@ Los campos `tipoDocumento` y `numeroDocumento` son **estrictamente obligatorios*
   "respuestaVisibleCliente": "Estimado Juan, lamentamos la demora. Se ha coordinado la entrega prioritaria y se ha aplicado una bonificación a su cuenta."
 }
 ```
+  - **`400 Bad Request`**: Campo `respuestaVisibleCliente` vacío o nulo.
 
 ---
 
-#### 2.8 Consultar Métricas del Dashboard
+#### 2.12 Consultar Métricas del Dashboard
 - **Endpoint:** `GET /api/v2/dashboard/metricas`
 - **Query Params:**
   - `desde`: 2026-09-01
