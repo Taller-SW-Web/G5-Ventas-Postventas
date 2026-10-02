@@ -256,3 +256,6 @@ La cardinalidad `DEVOLUCION ||--o| REEMBOLSO` expresa que una devolución puede 
 ## 7. Límites del documento
 
 El diagrama explica entidades, atributos y relaciones de persistencia. No define endpoints, payloads, tecnologías concretas, migraciones ni reglas de interfaz; dichos detalles pertenecen a las especificaciones y contratos correspondientes.
+
+**Referencia Draw.io:**  
+`https://drive.google.com/drive/folders/1348tkN7TzHICA0R6juXmMFJekAxfxBnx?usp=sharing`
