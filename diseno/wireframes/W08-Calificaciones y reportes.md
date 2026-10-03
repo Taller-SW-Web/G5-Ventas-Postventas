@@ -56,6 +56,8 @@ La pantalla se organiza en cinco zonas principales:
 
 La distribución prioriza primero el resumen general y luego permite revisar información más específica
 
+La pantalla debe contemplar estados de carga, ausencia de datos y error de consulta. Si el periodo o canal seleccionado no cuenta con información consolidada, se debe informar claramente al Gestor sin reemplazar los indicadores por valores que correspondan a otro filtro.
+
 ---
 
 ## 5. Filtros y acciones de consulta
