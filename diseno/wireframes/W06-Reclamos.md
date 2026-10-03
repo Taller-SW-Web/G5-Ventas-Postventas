@@ -83,6 +83,13 @@ La tabla principal presenta:
 
 El listado incluye ordenamiento por fecha y paginación para mantener una vista limpia
 
+### Estados de interfaz de la bandeja
+
+- **Carga:** mientras se consultan los reclamos, la tabla debe indicar que los datos están siendo cargados.
+- **Sin resultados:** cuando los filtros no devuelven expedientes, se debe informar que no existen reclamos para los criterios seleccionados.
+- **Error:** si la consulta falla, se debe mostrar un mensaje comprensible y una acción para volver a intentarla.
+- **Éxito:** al registrar una respuesta o cerrar un reclamo, la interfaz debe confirmar la operación y actualizar el estado visible del expediente.
+
 ### Detalle visual: filtros y bandeja de reclamos
 
 ---
@@ -163,6 +170,16 @@ con una rama opcional `DERIVADO`
 El wireframe utiliza etiquetas visuales como **PENDIENTE**, **EN ATENCIÓN**, **ATENDIDO** y **VENCIDO** para facilitar la lectura operativa
 
 Durante la implementación estas etiquetas deben mantenerse coherentes con los estados canónicos del backend y con la condición del SLA, evitando tratar un SLA vencido como una transición independiente del ciclo de vida del reclamo
+
+### 10.1 Equivalencia entre etiquetas visuales y estados canónicos
+
+| Etiqueta visible | Estado canónico | Interpretación operativa |
+|---|---|---|
+| Pendiente | `REGISTRADO` | El expediente fue creado y aún espera la revisión del Gestor. |
+| En atención | `EN_PROCESO` | El Gestor se encuentra analizando el caso o reuniendo información. |
+| Atendido | `ATENDIDO` | La respuesta formal se registró y quedó disponible para el cliente. |
+| Derivado | `DERIVADO` | El caso fue escalado a una instancia de mediación externa. |
+| Vencido | No aplica | Es una condición del SLA; no reemplaza el estado canónico del reclamo. |
 
 ---
 

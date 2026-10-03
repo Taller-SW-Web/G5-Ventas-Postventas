@@ -54,6 +54,26 @@ Incluye:
 | CA-02 | Carga del dataset reproducible (≥ 5 000 pedidos) y medición del tiempo de respuesta del endpoint del dashboard. | Integración / carga | Reporte con percentil 95 < 2 s. |
 | CA-03 | Ejecutar el fixture de carga dos veces en entornos distintos y comparar volumen/distribución resultante. | Integración | Resultados idénticos o con variación despreciable. |
 
+### Ejemplo de script de prueba de carga (k6)
+
+```javascript
+import http from 'k6/http';
+import { check } from 'k6';
+
+export const options = {
+  vus: 50,
+  duration: '30s',
+  thresholds: { http_req_duration: ['p(95)<500'] },
+};
+
+export default function () {
+  const res = http.post('https://api.example.com/api/v1/pedidos/1045/anulaciones',
+    JSON.stringify({ motivo: 'SOLICITUD_CLIENTE' }),
+    { headers: { 'Content-Type': 'application/json' } });
+  check(res, { 'status 200': (r) => r.status === 200 });
+}
+```
+
 ## 6. Fuera de alcance
 
 - Optimización de la latencia de terceros externos simulados (pasarela de pago, módulo de logística).

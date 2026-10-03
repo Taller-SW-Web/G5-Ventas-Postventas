@@ -27,7 +27,7 @@ Incluye:
 
 - Endpoint `POST /api/v1/pedidos/{pedidoId}/anulaciones`.
 - Validación de estado anulable (`CREADO`, `PAGADO`, `EN PREPARACIÓN`).
-- Validación de motivo tipificado obligatorio (`PAGO_NO_COMPLETADO`, `ERROR_SELECCION_PRODUCTO`, `ARREPENTIMIENTO_COMPRA`, `SOLICITUD_CLIENTE`, entre otros definidos en el catálogo del equipo).
+- Validación de motivo tipificado obligatorio, contra el catálogo cerrado definido en la sección 3.2.
 - Matriz de autorización según estado y actor disparador (ver tabla 3.1).
 - Bandeja de autorizaciones pendientes para el Gestor cuando el pedido está `EN PREPARACIÓN`.
 - Registro del solicitante, autorizador (si aplica), motivo y resultado en el historial de la anulación.
@@ -43,6 +43,19 @@ Incluye:
 | `PAGADO` | Cliente / Gestor | Motivo tipificado de anulación | **NO** (directa) | `200 OK` → `ANULADO` |
 | `EN PREPARACIÓN` | Cliente | Motivo tipificado de anulación | **SÍ** (bandeja de aprobación) | `202 Accepted` → pendiente |
 | `DESPACHADO` / `ENTREGADO` | Cualquiera | Cualquiera | Bloqueado | `409 Conflict` → deriva a F3 |
+
+### 3.2. Catálogo de motivos tipificados
+
+| Motivo | Quién lo dispara | Aplica sobre |
+|---|---|---|
+| `PAGO_NO_COMPLETADO` | Canal (automático) | `CREADO` |
+| `ERROR_SELECCION_PRODUCTO` | Cliente | `CREADO`, `PAGADO` |
+| `ARREPENTIMIENTO_COMPRA` | Cliente | `CREADO`, `PAGADO` |
+| `SOLICITUD_CLIENTE` | Cliente | `CREADO`, `PAGADO`, `EN PREPARACIÓN` |
+| `ERROR_DATOS_ENVIO` | Cliente | `CREADO`, `PAGADO`, `EN PREPARACIÓN` |
+| `DUPLICADO` | Cliente / Gestor | `CREADO`, `PAGADO` |
+
+Este catálogo es cerrado: una solicitud con un valor de `motivo` fuera de esta lista se rechaza con `400 Bad Request` (ver CA-04).
 
 ## 4. Precondiciones, dependencias y resultados
 
