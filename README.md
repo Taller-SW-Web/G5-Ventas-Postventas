@@ -14,6 +14,7 @@ Bienvenido al repositorio oficial de diseño y especificaciones del **Módulo D 
 6. [Requerimientos no funcionales clave](#requerimientos-no-funcionales-clave)
 7. [Estado del proyecto](#estado-del-proyecto)
 8. [Documentación de referencia](#documentación-de-referencia)
+9. [Prototipo en Figma](#prototipo-en-figma)
 
 ---
 
@@ -200,6 +201,10 @@ Detalle completo de cada uno en [`specs/especificaciones/no-funcionales/`](specs
 
 ---
 
+## Prototipo en Figma
+
+- [Mockup Ovejita](https://www.figma.com/design/J2KeLP6nl8qlDunNNUAC52/Mockup-Ovejita?node-id=0-1&t=PekgkEgirKTfGdiP-1)
+
 ## Documentación de referencia
 
 - [Visión general de arquitectura](specs/overview.md)
@@ -207,4 +212,4 @@ Detalle completo de cada uno en [`specs/especificaciones/no-funcionales/`](specs
 - [Stack de frontend](specs/stack-frontend.md)
 - [Glosario del dominio](specs/glosario.md)
 - [Diagrama entidad-relación](diseno/diagramas/diagrama-er.md)
-- [Prototipo en Figma](https://www.figma.com/design/6GzOHE5mfItYRTMFtHIPiU/Untitled?node-id=129-787&t=1TBNyETO4gqAVJM3-1)
+- [Prototipo anterior en Figma](https://www.figma.com/design/6GzOHE5mfItYRTMFtHIPiU/Untitled?node-id=129-787&t=1TBNyETO4gqAVJM3-1)
