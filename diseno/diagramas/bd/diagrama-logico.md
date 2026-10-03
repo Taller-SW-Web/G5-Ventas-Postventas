@@ -11,7 +11,7 @@ El módulo se divide en dos microservicios bajo el patrón **Database-per-Servic
 - **M1 — Ventas:** pedidos, sus detalles, pagos, historial de estados y anulaciones.
 - **M2 — Postventa:** devoluciones, evidencias, reembolsos, reclamos, calificaciones y agregados para analítica.
 
-El modelo lógico no reemplaza el script físico de PostgreSQL. Los nombres de tablas, tipos concretos, índices y restricciones de implementación se encuentran en [`infra/ventas_postventa_schema.sql`](../../../infra/ventas_postventa_schema.sql).
+El modelo lógico no reemplaza el script físico de PostgreSQL. Los nombres de tablas, tipos concretos, índices y restricciones de implementación se encuentran en [`infra/bd/ventas_postventa_schema.sql`](../../../infra/bd/ventas_postventa_schema.sql).
 
 ## 2. Convenciones
 
@@ -153,7 +153,7 @@ erDiagram
 |---|---|---|
 | Modelo conceptual / ER | Entidades del dominio y relaciones generales. | [`diagrama-conceptual.md`](diagrama-conceptual.md) |
 | Modelo lógico | Claves, cardinalidades, reglas y límites de propiedad de datos. | Este documento. |
-| Modelo físico | Esquemas PostgreSQL, columnas, tipos, índices y restricciones ejecutables. | [`ventas_postventa_schema.sql`](../../../infra/ventas_postventa_schema.sql) |
+| Modelo físico | Esquemas PostgreSQL, columnas, tipos, índices y restricciones ejecutables. | [`ventas_postventa_schema.sql`](../../../infra/bd/ventas_postventa_schema.sql) |
 
 ## 8. Decisiones de diseño
 
