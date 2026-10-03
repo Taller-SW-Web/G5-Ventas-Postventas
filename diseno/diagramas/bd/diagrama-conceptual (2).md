@@ -9,13 +9,9 @@ Las entidades se dividen según el microservicio al que pertenecen:
 
 ## 1. Diagrama
 
-![Modelo conceptual](diagrama-conceptual.png)
-
 Archivo editable: [diagrama-conceptual.drawio](diagrama-conceptual.drawio)
 
 Carpeta del equipo en Drive: https://drive.google.com/drive/folders/1348tkN7TzHICA0R6juXmMFJekAxfxBnx?usp=sharing
-
-Versión en Mermaid (solo entidades y relaciones):
 
 ```mermaid
 erDiagram
@@ -90,4 +86,4 @@ DEVOLUCION y REEMBOLSO están en el mismo microservicio, pero no tienen clave fo
 | Modelo | Archivo |
 |---|---|
 | Lógico | [diagrama-logico.md](diagrama-logico.md) |
-| Físico | [ventas_postventa_schema.sql](../../../infra/bd/ventas_postventa_schema.sql) |
+| Físico | [diagrama-fisico.md](diagrama-fisico.md) |

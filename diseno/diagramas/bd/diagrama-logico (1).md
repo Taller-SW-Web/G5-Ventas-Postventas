@@ -9,7 +9,151 @@ Pasa las entidades del [modelo conceptual](diagrama-conceptual.md) a tablas, con
 
 ## 1. Diagrama
 
-![Modelo lógico](diagrama-logico.png)
+Esquema ventas (M1):
+
+```mermaid
+erDiagram
+    PEDIDO ||--|{ DETALLE_PEDIDO : contiene
+    PEDIDO ||--o{ PAGO : registra
+    PEDIDO ||--|{ HISTORIAL_ESTADO : audita
+    PEDIDO ||--o| ANULACION : "puede tener"
+    PEDIDO {
+        bigint id PK
+        varchar(30) codigo UK "NN"
+        varchar(30) canal "NN"
+        date fecha "NN"
+        varchar(20) estado "NN"
+        char(3) moneda "NN"
+        decimal(12-2) subtotal "NN"
+        decimal(12-2) descuento "NN"
+        decimal(12-2) total "NN"
+        varchar(150) nombre_contacto
+        varchar(20) tipo_documento
+        varchar(20) numero_documento
+        varchar(20) telefono
+        varchar(150) email
+        varchar(30) modalidad_envio
+        decimal(12-2) costo_envio "NN"
+        varchar(150) destinatario
+        varchar(80) distrito
+        varchar(255) direccion
+        varchar(40) codigo_cupon
+        timestamp creado_en "NN"
+        bigint id_cliente "referencia sin FK"
+        bigint id_vendedor "referencia sin FK"
+        bigint id_direccion_entrega "referencia sin FK"
+    }
+    DETALLE_PEDIDO {
+        bigint id PK
+        bigint id_pedido FK "NN"
+        bigint id_producto "referencia sin FK"
+        varchar(50) sku "NN"
+        varchar(255) descripcion
+        integer cantidad "NN"
+        decimal(12-2) precio_unitario "NN"
+        decimal(12-2) descuento "NN"
+        decimal(12-2) importe "NN"
+    }
+    PAGO {
+        bigint id PK
+        bigint id_pedido FK "NN"
+        varchar(30) metodo "NN"
+        varchar(100) referencia
+        decimal(12-2) monto "NN"
+        varchar(20) estado "NN"
+        timestamp fecha_proceso
+    }
+    HISTORIAL_ESTADO {
+        bigint id PK
+        bigint id_pedido FK "NN"
+        varchar(20) estado_anterior
+        varchar(20) estado_nuevo "NN"
+        varchar(30) actor "NN"
+        varchar(60) motivo
+        timestamp fecha_hora "NN"
+    }
+    ANULACION {
+        bigint id PK
+        bigint id_pedido FK,UK "NN"
+        varchar(255) motivo "NN"
+        bigint id_solicitante
+        bigint id_autorizador
+        varchar(20) estado "NN"
+        date fecha "NN"
+    }
+```
+
+Esquema postventa (M2):
+
+```mermaid
+erDiagram
+    DEVOLUCION ||--o{ EVIDENCIA_DEVOLUCION : adjunta
+    DEVOLUCION {
+        bigint id PK
+        bigint id_pedido "referencia sin FK, NN"
+        varchar(20) tipo "NN"
+        varchar(255) motivo "NN"
+        varchar(20) estado "NN"
+        varchar(30) resolucion
+        bigint id_autorizador
+        text fundamento_rechazo
+        date fecha "NN"
+    }
+    EVIDENCIA_DEVOLUCION {
+        bigint id PK
+        bigint id_devolucion FK "NN"
+        varchar(500) url "NN"
+        varchar(30) tipo
+        date fecha "NN"
+    }
+    REEMBOLSO {
+        bigint id PK
+        bigint id_origen "referencia sin FK, NN"
+        varchar(20) tipo_origen "NN"
+        varchar(100) idempotency_key UK "NN"
+        decimal(12-2) monto "NN"
+        char(3) moneda "NN"
+        varchar(100) id_transaccion
+        varchar(20) estado "NN"
+        bigint id_autorizador
+        date fecha "NN"
+    }
+    RECLAMO {
+        bigint id PK
+        varchar(30) codigo UK "NN"
+        bigint id_pedido "referencia sin FK"
+        varchar(20) tipo "NN"
+        varchar(60) motivo "NN"
+        text detalle "NN"
+        varchar(150) nombre_consumidor "NN"
+        varchar(20) documento "NN"
+        varchar(150) email
+        varchar(20) telefono
+        varchar(20) estado "NN"
+        integer plazo_dias_habiles "NN"
+        date fecha_limite_respuesta "NN"
+        text respuesta_visible_cliente
+    }
+    CALIFICACION {
+        bigint id PK
+        bigint id_pedido UK "referencia sin FK, NN"
+        integer puntaje "NN"
+        text comentario
+        varchar(30) canal "NN"
+        date fecha "NN"
+    }
+    AGREGADO_VENTAS {
+        varchar(7) periodo PK
+        varchar(30) canal PK
+        bigint id_vendedor PK
+        bigint id_producto PK
+        integer unidades "NN"
+        decimal(14-2) monto "NN"
+        timestamp actualizado_en "NN"
+    }
+```
+
+Los tipos decimal(12-2) equivalen a DECIMAL(12,2); Mermaid no admite comas en el tipo.
 
 Archivo editable: [diagrama-logico.drawio](diagrama-logico.drawio)
 
@@ -140,4 +284,4 @@ M2:
 | Modelo | Archivo |
 |---|---|
 | Conceptual | [diagrama-conceptual.md](diagrama-conceptual.md) |
-| Físico | [ventas_postventa_schema.sql](../../../infra/bd/ventas_postventa_schema.sql) |
+| Físico | [diagrama-fisico.md](diagrama-fisico.md) |
