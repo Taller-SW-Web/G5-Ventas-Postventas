@@ -159,6 +159,8 @@ F5 mantiene actualizado el agregado de CSAT después de cada respuesta válida. 
 
 La pantalla debe consultar estos agregados y no recalcular todas las métricas recorriendo directamente la base transaccional cada vez que el Gestor ingresa a la vista
 
+La interfaz debe indicar la fecha y hora de la última consolidación disponible. Si existen eventos pendientes por una interrupción temporal, se conserva la última información válida y no se presenta como definitiva una actualización incompleta.
+
 ---
 
 ## 11. Relación con funcionalidades y navegación
