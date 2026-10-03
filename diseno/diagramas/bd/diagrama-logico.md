@@ -136,7 +136,41 @@ erDiagram
 7. Una calificación tiene puntaje entre 1 y 5 y solo existe una calificación por pedido entregado.
 8. Los agregados no reemplazan a las transacciones: se actualizan con eventos para consultar indicadores sin recorrer toda la operación histórica.
 
-## 6. Matriz de correspondencia con funcionalidades
+## 6. Diccionario de datos esencial
+
+El diccionario resume los datos que el gestor consulta o registra con mayor frecuencia. Los tipos técnicos, longitudes e índices se mantienen en el [modelo físico](../../../infra/bd/ventas_postventa_schema.sql).
+
+### 6.1. M1 — Ventas
+
+| Entidad | Dato | Significado para el negocio | Regla principal |
+|---|---|---|---|
+| `PEDIDO` | `codigo` | Identificador visible del pedido para búsquedas y atención. | Es único. |
+| `PEDIDO` | `estado` | Situación actual de la compra dentro de su ciclo de venta. | Solo admite estados definidos por el flujo de pedido. |
+| `PEDIDO` | `total` | Importe final que debe pagar el cliente. | No puede ser negativo. |
+| `DETALLE_PEDIDO` | `idPedido` | Pedido al que pertenece cada producto comprado. | Debe referenciar un pedido de M1. |
+| `DETALLE_PEDIDO` | `cantidad` | Unidades adquiridas del producto. | Debe ser mayor que cero. |
+| `PAGO` | `referencia` | Código devuelto por la pasarela o medio de pago. | Permite rastrear la operación de pago. |
+| `PAGO` | `estado` | Resultado del intento de pago. | No sustituye el estado canónico del pedido. |
+| `HISTORIAL_ESTADO` | `estadoNuevo` | Estado que queda vigente después de una transición. | Se registra con actor y fecha y hora. |
+| `ANULACION` | `motivo` | Razón declarada para solicitar la anulación. | Es obligatorio. |
+| `ANULACION` | `idAutorizador` | Gestor que autoriza o rechaza la solicitud. | Es una referencia al módulo de usuarios. |
+
+### 6.2. M2 — Postventa
+
+| Entidad | Dato | Significado para el negocio | Regla principal |
+|---|---|---|---|
+| `DEVOLUCION` | `idPedido` | Pedido relacionado con la solicitud postventa. | Se valida mediante API contra M1; no es FK física. |
+| `DEVOLUCION` | `resolucion` | Resultado final: cambio, reembolso o rechazo. | Cambio y reembolso son excluyentes. |
+| `EVIDENCIA_DEVOLUCION` | `url` | Ubicación del archivo que respalda el caso. | Debe pertenecer a una devolución existente. |
+| `REEMBOLSO` | `idempotencyKey` | Clave para reconocer reintentos de la misma operación financiera. | Es única y evita pagos duplicados. |
+| `REEMBOLSO` | `tipoOrigen` e `idOrigen` | Caso que origina el reembolso: anulación o devolución. | La combinación debe ser única. |
+| `RECLAMO` | `codigo` | Identificador visible del reclamo o queja. | Es único. |
+| `RECLAMO` | `fechaLimiteRespuesta` | Fecha máxima para responder conforme al SLA. | Debe calcularse al registrar el expediente. |
+| `RECLAMO` | `respuestaVisibleCliente` | Respuesta que el consumidor puede consultar. | Es necesaria para cerrar un reclamo como atendido. |
+| `CALIFICACION` | `puntaje` | Valoración CSAT otorgada al pedido. | Admite valores de 1 a 5. |
+| `AGREGADO_VENTAS` | `periodo` | Mes al que corresponden los indicadores consolidados. | Forma parte de la clave compuesta del agregado. |
+
+## 7. Matriz de correspondencia con funcionalidades
 
 | Funcionalidad | Entidades principales | Resultado de negocio |
 |---|---|---|
@@ -147,7 +181,7 @@ erDiagram
 | **F5 — Calificación CSAT** | `CALIFICACION` | Medición de satisfacción posterior a la entrega. |
 | **F6 — Reclamos y dashboard** | `RECLAMO`, `AGREGADO_VENTAS` | Atención de reclamos, control SLA y consulta analítica. |
 
-## 7. Diferencia entre modelos del repositorio
+## 8. Diferencia entre modelos del repositorio
 
 | Artefacto | Qué describe | Ubicación |
 |---|---|---|
@@ -155,7 +189,7 @@ erDiagram
 | Modelo lógico | Claves, cardinalidades, reglas y límites de propiedad de datos. | Este documento. |
 | Modelo físico | Esquemas PostgreSQL, columnas, tipos, índices y restricciones ejecutables. | [`ventas_postventa_schema.sql`](../../../infra/bd/ventas_postventa_schema.sql) |
 
-## 8. Decisiones de diseño
+## 9. Decisiones de diseño
 
 - No se crean FKs entre `ventas` y `postventa`; los identificadores cruzados se validan por API o eventos.
 - `ANULACION` pertenece al modelo lógico de M1 — Ventas, porque modifica el estado canónico del pedido.
@@ -163,6 +197,6 @@ erDiagram
 - Los datos de usuario, catálogo y logística permanecen bajo propiedad de los módulos G, F y E, respectivamente.
 - El modelo permite que las pantallas del Gestor consulten pedidos, postventa y reportes sin romper el aislamiento entre microservicios.
 
-## 9. Relación con el modelo físico
+## 10. Relación con el modelo físico
 
 El modelo físico actual implementa once tablas: cinco en el esquema `ventas` y seis en `postventa`. Antes de crear nuevas tablas o relaciones, se debe validar que la necesidad no invada la propiedad de otro microservicio y que las reglas de integración estén definidas en las APIs o eventos del módulo.
