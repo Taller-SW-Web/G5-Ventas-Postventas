@@ -214,6 +214,7 @@ Detalle completo de cada uno en [`specs/especificaciones/no-funcionales/`](specs
 - [Diagrama entidad-relación](diseno/diagramas/diagrama-er.md)
 - [F6 — Reclamos, dashboard y reportes](specs/funcionalidades/F6-Reclamo,dashboard%20y%20reportes.md)
 - [Matriz de pruebas de F6](specs/funcionalidades/F6-matriz-pruebas.md)
+- [Casos de prueba API de F6](specs/funcionalidades/F6-casos-prueba-api.md)
 - [ESP-13 — Registro del Libro de Reclamaciones](specs/especificaciones/funcionales/ESP-13-registro-libro-reclamos.md)
 - [ESP-14 — Formato y evidencia de atención](specs/especificaciones/funcionales/ESP-14-formato-evidencia-atencion.md)
 - [ESP-15 — Tablas agregadas y optimización](specs/especificaciones/funcionales/ESP-15-tablas-agregadas-optimizacion.md)
