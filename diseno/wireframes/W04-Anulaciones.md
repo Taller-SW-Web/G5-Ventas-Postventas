@@ -122,6 +122,8 @@ F2 coordina estos efectos, pero no modifica directamente las tablas del pedido. 
 
 Cuando existe un pago confirmado, F2 origina la solicitud hacia F4 para el reembolso correspondiente
 
+Si la anulación proviene de un pedido `CREADO` con motivo `PAGO_NO_COMPLETADO`, esta fila de "Reembolso" no se muestra, porque nunca se llegó a cobrar dinero
+
 ---
 
 ## 8. Reglas de autorización
@@ -137,6 +139,8 @@ La autorización depende del estado actual del pedido:
 | `ENTREGADO` | No anulable desde F2 y debe gestionarse mediante postventa |
 
 Cuando una solicitud en `EN PREPARACIÓN` es aprobada, el pedido puede pasar a `ANULADO` y se coordinan los efectos derivados
+
+Las anulaciones automáticas por `PAGO_NO_COMPLETADO` en estado `CREADO` nunca aparecen en esta bandeja: se ejecutan sin intervención humana y el Gestor solo las ve después, como registro histórico en el detalle del pedido (W03)
 
 Si el Gestor rechaza la solicitud, el pedido conserva su estado anterior
 
