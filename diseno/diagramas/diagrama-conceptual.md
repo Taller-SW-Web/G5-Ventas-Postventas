@@ -1,4 +1,4 @@
-# Diagrama Entidad-Relación — Ventas y Postventa
+# Diagrama Conceptual (Entidad-Relación) — Ventas y Postventa
 
 > **Estado:** Documento de diseño. Describe el modelo de datos propuesto del Módulo D y sus límites entre microservicios.
 
