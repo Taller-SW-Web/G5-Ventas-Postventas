@@ -83,6 +83,13 @@ La tabla principal presenta:
 
 El listado incluye ordenamiento por fecha y paginación para mantener una vista limpia
 
+### Estados de interfaz de la bandeja
+
+- **Carga:** mientras se consultan los reclamos, la tabla debe indicar que los datos están siendo cargados.
+- **Sin resultados:** cuando los filtros no devuelven expedientes, se debe informar que no existen reclamos para los criterios seleccionados.
+- **Error:** si la consulta falla, se debe mostrar un mensaje comprensible y una acción para volver a intentarla.
+- **Éxito:** al registrar una respuesta o cerrar un reclamo, la interfaz debe confirmar la operación y actualizar el estado visible del expediente.
+
 ### Detalle visual: filtros y bandeja de reclamos
 
 ---
