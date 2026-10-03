@@ -13,8 +13,9 @@ Bienvenido al repositorio oficial de diseño y especificaciones del **Módulo D 
 5. [Estructura del repositorio](#estructura-del-repositorio)
 6. [Requerimientos no funcionales clave](#requerimientos-no-funcionales-clave)
 7. [Estado del proyecto](#estado-del-proyecto)
-8. [Documentación de referencia](#documentación-de-referencia)
-9. [Prototipo en Figma](#prototipo-en-figma)
+8. [Guía UX/UI](#guía-uxui)
+9. [Documentación de referencia](#documentación-de-referencia)
+10. [Prototipo en Figma](#prototipo-en-figma)
 
 ---
 
@@ -200,6 +201,10 @@ Detalle completo de cada uno en [`specs/especificaciones/no-funcionales/`](specs
 **Pendiente:** implementación de código (frontend y backend). Todavía no existe un proyecto inicializado (`package.json`, carpeta `src/`, etc.) — la guía de instalación y ejecución local se agregará a este README en cuanto arranque esa etapa.
 
 ---
+
+## Guía UX/UI
+
+- [Guía UX/UI de la plataforma](https://docs.google.com/document/d/1G0LNrLTyebiCu84i5fzmHE8zAQHfhycqQyE39PsMnpI/edit?usp=sharing)
 
 ## Prototipo en Figma
 
