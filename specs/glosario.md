@@ -10,7 +10,7 @@
 
 * *Pedido (Order):* Entidad transaccional central del microservicio M1 que representa la intención y compromiso formal de compra de uno o más productos por parte de un cliente a través de un canal autorizado.
 * *Detalle de Pedido (Order Item):* Línea individual de producto asociada a un pedido. Mantiene una copia fija (snapshot) del SKU, descripción y precio unitario al momento exacto de la venta.
-* *Solicitud de Anulación (Cancellation Request):* Expediente generado para cancelar un pedido cuando este se encuentra en una etapa que compromete recursos físicos (ej. EN_PREPARACION), requiriendo la evaluación y dictamen de un Gestor.
+* *Solicitud de Anulación (Cancellation Request):* Registro generado por F2 ante cualquier pedido en estado anulable (`CREADO`, `PAGADO` o `EN_PREPARACION`). Solo cuando el pedido está en `EN_PREPARACION` requiere evaluación y dictamen de un Gestor; en `CREADO` y `PAGADO` se resuelve de forma directa, sin intervención humana.
 * *Devolución / Cambio (Return / Exchange):* Expediente postventa (F3 en M2) solicitado por un cliente tras la entrega efectiva de su compra, destinado a devolver físicamente un producto defectuoso o disconforme a cambio de un reemplazo o el extorno del dinero.
 * *Evidencia Multimedia (Return Evidence):* Archivo digital (imagen PNG/JPG o documento PDF) adjunto a un expediente de devolución que sustenta de manera objetiva el defecto, falla o condición del producto entregado.
 * *Reembolso / Extorno (Refund):* Transacción financiera ejecutada por el servicio F4 en M2 para restituir fondos al cliente hacia la pasarela de pagos o cuenta bancaria, originada exclusivamente por una anulación (F2), devolución aprobada (F3) o entrega fallida definitiva (Módulo E).
