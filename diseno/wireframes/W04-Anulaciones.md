@@ -138,6 +138,8 @@ La autorización depende del estado actual del pedido:
 
 Cuando una solicitud en `EN PREPARACIÓN` es aprobada, el pedido puede pasar a `ANULADO` y se coordinan los efectos derivados
 
+Las anulaciones automáticas por `PAGO_NO_COMPLETADO` en estado `CREADO` nunca aparecen en esta bandeja: se ejecutan sin intervención humana y el Gestor solo las ve después, como registro histórico en el detalle del pedido (W03)
+
 Si el Gestor rechaza la solicitud, el pedido conserva su estado anterior
 
 ---
