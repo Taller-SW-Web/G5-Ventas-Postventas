@@ -162,7 +162,7 @@ G5-Ventas-Postventas/
 │
 └── diseno/
     ├── diagramas/
-    │   └── diagrama-er.md         # Modelo entidad-relación (M1 y M2)
+    │   └── bd/                    # Modelos conceptual y lógico de datos
     └── wireframes/
         ├── 00-Contexto-Wireframes.md
         ├── W01-Dashboard.md
@@ -216,8 +216,8 @@ Detalle completo de cada uno en [`specs/especificaciones/no-funcionales/`](specs
 - [Contrato de API REST](specs/api-contract.md)
 - [Stack de frontend](specs/stack-frontend.md)
 - [Glosario del dominio](specs/glosario.md)
-- [Diagrama entidad-relación](diseno/diagramas/diagrama-er.md)
-- [Modelo lógico de datos](diseno/diagramas/modelo-logico-ventas-postventa.md)
+- [Diagrama conceptual (entidad-relación)](diseno/diagramas/bd/diagrama-conceptual.md)
+- [Modelo lógico de datos](diseno/diagramas/bd/modelo-logico-ventas-postventa.md)
 - [F6 — Reclamos, dashboard y reportes](specs/funcionalidades/F6-Reclamo,dashboard%20y%20reportes.md)
 - [Matriz de pruebas de F6](specs/funcionalidades/F6-matriz-pruebas.md)
 - [Casos de prueba API de F6](specs/funcionalidades/F6-casos-prueba-api.md)
