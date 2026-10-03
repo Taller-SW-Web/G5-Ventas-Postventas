@@ -14,7 +14,7 @@ Garantizar que todo endpoint que modifique o exponga datos de pedidos, anulacion
 | Regla | Descripción |
 |---|---|
 | Validación de token | Toda solicitud a un endpoint protegido debe incluir un `Authorization: Bearer <token>` válido, emitido por el módulo de Seguridad (G). Un token ausente, expirado o inválido responde `401 Unauthorized`. |
-| Validación de rol | Las acciones administrativas (aprobar/rechazar anulaciones `EN PREPARACIÓN`, resolver expedientes, consultar el dashboard) requieren rol `GESTOR`/`ADMIN`. Un rol insuficiente responde `403 Forbidden`. |
+| Validación de rol | Las acciones administrativas (aprobar/rechazar anulaciones `EN PREPARACIÓN`, resolver expedientes, consultar el dashboard) requieren rol `GESTOR`/`ADMIN`. Un rol insuficiente, o un rol presente en el token pero no reconocido por el catálogo del sistema, responde `403 Forbidden` (nunca `500`). |
 | Validación de pertenencia del recurso | Un Cliente solo puede consultar o anular **sus propios** pedidos. Intentar operar sobre un pedido de otro cliente responde `403 Forbidden`, aunque el token sea válido. |
 | Validación de origen de servicio | Endpoints invocados por sistemas internos (Canal, Despacho, pasarela de pago) exigen un token de servicio específico, distinto del token de usuario final. |
 
