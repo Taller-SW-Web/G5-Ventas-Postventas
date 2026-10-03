@@ -4,7 +4,151 @@ Implementación del [modelo lógico](diagrama-logico.md) en PostgreSQL 17 sobre 
 
 ## 1. Diagrama
 
-![Modelo físico](diagrama-fisico.png)
+Esquema ventas (M1):
+
+```mermaid
+erDiagram
+    PEDIDO ||--|{ DETALLE_PEDIDO : contiene
+    PEDIDO ||--o{ PAGO : registra
+    PEDIDO ||--|{ HISTORIAL_ESTADO : audita
+    PEDIDO ||--o| ANULACION : "puede tener"
+    PEDIDO {
+        bigint id PK "identity, not null"
+        varchar(30) codigo UK "not null"
+        varchar(30) canal "not null"
+        date fecha "not null, default current_date"
+        varchar(20) estado "not null, default CREADO"
+        char(3) moneda "not null, default PEN"
+        numeric(12-2) subtotal "not null"
+        numeric(12-2) descuento "not null"
+        numeric(12-2) total "not null"
+        varchar(150) nombre_contacto "null"
+        varchar(20) tipo_documento "null"
+        varchar(20) numero_documento "null"
+        varchar(20) telefono "null"
+        varchar(150) email "null"
+        varchar(30) modalidad_envio "null"
+        numeric(12-2) costo_envio "not null"
+        varchar(150) destinatario "null"
+        varchar(80) distrito "null"
+        varchar(255) direccion "null"
+        varchar(40) codigo_cupon "null"
+        timestamptz creado_en "not null, default now()"
+        bigint id_cliente "referencia sin FK, null"
+        bigint id_vendedor "referencia sin FK, null"
+        bigint id_direccion_entrega "referencia sin FK, null"
+    }
+    DETALLE_PEDIDO {
+        bigint id PK "identity, not null"
+        bigint id_pedido FK "not null"
+        bigint id_producto "referencia sin FK, null"
+        varchar(50) sku "not null"
+        varchar(255) descripcion "null"
+        integer cantidad "not null"
+        numeric(12-2) precio_unitario "not null"
+        numeric(12-2) descuento "not null"
+        numeric(12-2) importe "not null"
+    }
+    PAGO {
+        bigint id PK "identity, not null"
+        bigint id_pedido FK "not null"
+        varchar(30) metodo "not null"
+        varchar(100) referencia "null"
+        numeric(12-2) monto "not null"
+        varchar(20) estado "not null"
+        timestamptz fecha_proceso "null"
+    }
+    HISTORIAL_ESTADO {
+        bigint id PK "identity, not null"
+        bigint id_pedido FK "not null"
+        varchar(20) estado_anterior "null"
+        varchar(20) estado_nuevo "not null"
+        varchar(30) actor "not null"
+        varchar(60) motivo "null"
+        timestamptz fecha_hora "not null, default now()"
+    }
+    ANULACION {
+        bigint id PK "identity, not null"
+        bigint id_pedido FK,UK "not null"
+        varchar(255) motivo "not null"
+        bigint id_solicitante "null"
+        bigint id_autorizador "null"
+        varchar(20) estado "not null"
+        date fecha "not null"
+    }
+```
+
+Esquema postventa (M2):
+
+```mermaid
+erDiagram
+    DEVOLUCION ||--o{ EVIDENCIA_DEVOLUCION : adjunta
+    DEVOLUCION {
+        bigint id PK "identity, not null"
+        bigint id_pedido "referencia sin FK, not null"
+        varchar(20) tipo "not null"
+        varchar(255) motivo "not null"
+        varchar(20) estado "not null"
+        varchar(30) resolucion "null"
+        bigint id_autorizador "null"
+        text fundamento_rechazo "null"
+        date fecha "not null"
+    }
+    EVIDENCIA_DEVOLUCION {
+        bigint id PK "identity, not null"
+        bigint id_devolucion FK "not null"
+        varchar(500) url "not null"
+        varchar(30) tipo "null"
+        date fecha "not null"
+    }
+    REEMBOLSO {
+        bigint id PK "identity, not null"
+        bigint id_origen "referencia sin FK, not null"
+        varchar(20) tipo_origen "not null"
+        varchar(100) idempotency_key UK "not null"
+        numeric(12-2) monto "not null"
+        char(3) moneda "not null, default PEN"
+        varchar(100) id_transaccion "null"
+        varchar(20) estado "not null, default PENDIENTE"
+        bigint id_autorizador "null"
+        date fecha "not null"
+    }
+    RECLAMO {
+        bigint id PK "identity, not null"
+        varchar(30) codigo UK "not null"
+        bigint id_pedido "referencia sin FK, null"
+        varchar(20) tipo "not null"
+        varchar(60) motivo "not null"
+        text detalle "not null"
+        varchar(150) nombre_consumidor "not null"
+        varchar(20) documento "not null"
+        varchar(150) email "null"
+        varchar(20) telefono "null"
+        varchar(20) estado "not null"
+        integer plazo_dias_habiles "not null, default 15"
+        date fecha_limite_respuesta "not null"
+        text respuesta_visible_cliente "null"
+    }
+    CALIFICACION {
+        bigint id PK "identity, not null"
+        bigint id_pedido UK "referencia sin FK, not null"
+        integer puntaje "not null"
+        text comentario "null"
+        varchar(30) canal "not null"
+        date fecha "not null"
+    }
+    AGREGADO_VENTAS {
+        varchar(7) periodo PK "not null"
+        varchar(30) canal PK "not null"
+        bigint id_vendedor PK "not null"
+        bigint id_producto PK "not null"
+        integer unidades "not null"
+        numeric(14-2) monto "not null"
+        timestamptz actualizado_en "not null, default now()"
+    }
+```
+
+Los tipos numéricos se escriben como numeric(12-2) porque Mermaid no admite comas; en la base son numeric(12,2).
 
 Archivo editable: [diagrama-fisico.drawio](diagrama-fisico.drawio)
 
