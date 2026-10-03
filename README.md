@@ -1,6 +1,6 @@
 # Módulo D: Ventas y Postventa (G5-Ventas-Postventas)
 
-Bienvenido al repositorio oficial de diseño y especificaciones del **Módulo D — Ventas y Postventa** de la plataforma de comercio electrónico. Este módulo agrupa el núcleo transaccional de compras y el ciclo integral post-compra del sistema, y es una pieza más de un proyecto mayor (módulos A/B/C — canales de venta, D — este módulo, E — Despacho y Logística, F — Productos y Ofertas, G — Seguridad y Usuarios).
+Bienvenido al repositorio oficial de diseño y especificaciones del **Módulo D — Ventas y Postventa** de una plataforma de comercio electrónico especializada en **productos deportivos**. Este módulo agrupa el núcleo transaccional de compras y el ciclo integral post-compra del sistema, y es una pieza más de un proyecto mayor (módulos A/B/C — canales de venta, D — este módulo, E — Despacho y Logística, F — Productos y Ofertas, G — Seguridad y Usuarios).
 
 ---
 
