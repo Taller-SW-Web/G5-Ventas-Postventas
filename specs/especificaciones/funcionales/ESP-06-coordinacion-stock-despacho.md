@@ -97,7 +97,7 @@ El sistema DEBE registrar de forma visible cualquier falla de un servicio extern
 
 #### CA-05. Falla parcial visible
 
-- **DADO** que la anulación se ejecutó pero la cancelación de despacho falló (por ejemplo, E no respondió).
+- **DADO** que la anulación se ejecutó pero la cancelación de despacho falló (E no respondió dentro de 5 segundos, o respondió con error 5xx tras 3 reintentos con backoff exponencial).
 - **CUANDO** ocurre la falla.
 - **ENTONCES** el sistema registra la inconsistencia de forma visible para el Gestor, con evidencia suficiente para reintento manual o automático — nunca la oculta como si todo hubiese salido bien.
 
