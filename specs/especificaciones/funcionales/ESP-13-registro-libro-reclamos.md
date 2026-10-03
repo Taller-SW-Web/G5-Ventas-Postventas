@@ -39,6 +39,8 @@ El contrato vigente no define longitudes ni expresiones regulares adicionales pa
 - `RECLAMO`
 - `QUEJA`
 
+El tipo clasifica la disconformidad registrada por el consumidor y debe conservarse sin modificaciones en el expediente y en la respuesta de creación. Esta clasificación permite diferenciar los registros del Libro de Reclamaciones sin alterar el flujo común de atención y consulta.
+
 ### 3.2. Valores permitidos para `canal`
 
 - `CHATBOT`
