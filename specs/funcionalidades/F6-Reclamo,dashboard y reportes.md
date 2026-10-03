@@ -166,8 +166,10 @@ Superficie visible dentro del panel del Gestor (más el formulario de reclamo y 
 | Consulta pública (cliente) | Verifica estado del reclamo con código `REC-YYYY-XXXX` + número de documento. |
 | Bandeja de reclamos (Gestor) | Lista por estado y urgencia de SLA, con acceso al detalle y respuesta. |
 | Formulario de cierre (Gestor) | Exige `respuestaVisibleCliente` antes de permitir la transición a `ATENDIDO`. |
-| Dashboard | Indicadores, gráficos/tablas filtrables por periodo, canal, vendedor y producto. |
-| Exportación de reportes | Botón de descarga del reporte según los filtros aplicados. |
+| Dashboard | Indicadores y gráficos/tablas filtrables por periodo y canal, que son los filtros definidos actualmente en el contrato de API. |
+| Exportación de reportes | Botón de descarga del reporte según los filtros aplicados, cuando la ruta y el formato de exportación estén incorporados al contrato. |
+
+Los filtros por vendedor y producto podrán incorporarse en una versión posterior del contrato. No deben mostrarse como filtros operativos ni utilizarse para consultar métricas hasta que cuenten con parámetros y agregados formalmente definidos.
 
 ## 8. Backend
 

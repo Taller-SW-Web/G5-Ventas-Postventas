@@ -60,4 +60,7 @@
 * *Snapshot Histórico:* Patrón de persistencia en el cual se copia y congela el estado exacto de los datos en el momento de la transacción (como precios de catálogo, datos de contacto y documentos fiscales), evitando inconsistencias si el catálogo o el perfil del usuario cambian en el futuro.
 * *SLA (Service Level Agreement):* Acuerdo de Nivel de Servicio que estipula el tiempo máximo legal o contractual para atender una solicitud. En el Libro de Reclamaciones (F6) corresponde a un plazo legal perentorio de *15 días hábiles* fijado por la normativa de Indecopi.
 * *Respuesta Visible al Cliente:* Dictamen resolutivo emitido y redactado formalmente por el Gestor que se publica en el expediente del reclamo para consulta directa y transparente del consumidor.
+* *Código de Seguimiento:* Identificador único con formato `REC-YYYY-XXXX` que permite ubicar un reclamo o queja durante su consulta y atención.
+* *Agregado Precalculado:* Proyección analítica actualizada incrementalmente a partir de eventos, utilizada por el dashboard para evitar recorridos completos sobre las operaciones transaccionales.
+* *Última Consolidación Disponible:* Marca de tiempo de la actualización más reciente incorporada en los agregados que consume el dashboard.
 * *Aislamiento de Microservicios:* Principio de diseño (*RNF-07*) que prohíbe el uso de bases de datos compartidas y llaves foráneas físicas cruzadas entre M1 (Ventas) y M2 (Postventa), obligando a que toda comunicación inter-módulo ocurra mediante APIs REST o eventos.

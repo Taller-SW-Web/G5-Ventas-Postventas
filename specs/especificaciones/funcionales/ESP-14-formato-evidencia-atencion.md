@@ -62,6 +62,8 @@ La evidencia de atención está compuesta por:
 
 `respuestaVisibleCliente` no es una nota interna: es el dictamen o comunicación formal que el consumidor podrá ver al consultar el estado de su reclamo.
 
+La vista de atención debe diferenciar esta respuesta pública de las observaciones operativas internas. Estas últimas no reemplazan ni pueden ocultar el contenido de `respuestaVisibleCliente` que se expone al consumidor.
+
 ## 7. Ejemplo de request
 
 ```json

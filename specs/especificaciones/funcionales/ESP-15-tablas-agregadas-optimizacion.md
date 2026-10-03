@@ -104,6 +104,8 @@ El sistema debe conservar evidencia suficiente para reconocer un evento ya aplic
 
 Los agregados son la fuente de lectura de `GET /api/v2/dashboard/metricas`. La consulta combina las proyecciones del periodo solicitado y aplica opcionalmente el filtro de canal definido en el contrato.
 
+La interfaz administrativa debe poder identificar la última consolidación disponible a partir del timestamp de actualización de las proyecciones. Ese dato informa la vigencia de las métricas, pero no modifica los valores calculados ni sustituye el filtro de periodo y canal.
+
 El resultado debe poder construir esta estructura sin consultar todas las operaciones transaccionales:
 
 ```json
