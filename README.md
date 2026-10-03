@@ -203,7 +203,7 @@ Detalle completo de cada uno en [`specs/especificaciones/no-funcionales/`](specs
 
 ## Prototipo en Figma
 
-- [Mockup Ovejita](https://www.figma.com/design/J2KeLP6nl8qlDunNNUAC52/Mockup-Ovejita?node-id=0-1&t=PekgkEgirKTfGdiP-1)
+- [Mockup Avance](https://www.figma.com/design/J2KeLP6nl8qlDunNNUAC52/Mockup-Ovejita?node-id=0-1&t=PekgkEgirKTfGdiP-1)
 
 ## Documentación de referencia
 
