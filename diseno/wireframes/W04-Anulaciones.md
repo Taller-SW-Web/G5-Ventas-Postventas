@@ -122,6 +122,8 @@ F2 coordina estos efectos, pero no modifica directamente las tablas del pedido. 
 
 Cuando existe un pago confirmado, F2 origina la solicitud hacia F4 para el reembolso correspondiente
 
+Si la anulación proviene de un pedido `CREADO` con motivo `PAGO_NO_COMPLETADO`, esta fila de "Reembolso" no se muestra, porque nunca se llegó a cobrar dinero
+
 ---
 
 ## 8. Reglas de autorización
