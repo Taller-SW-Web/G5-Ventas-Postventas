@@ -1,9 +1,5 @@
 # Módulo D: Ventas y Postventa (G5-Ventas-Postventas)
 
-![Versión Specs](https://img.shields.io/badge/Especificación-v2.0.0-blue.svg)
-![Estado](https://img.shields.io/badge/Estado-En_Desarrollo-orange.svg)
-![Arquitectura](https://img.shields.io/badge/Arquitectura-Microservicios_Database--per--Service-green.svg)
-
 Bienvenido al repositorio oficial de diseño y especificaciones del **Módulo D — Ventas y Postventa** de la plataforma de comercio electrónico. Este módulo agrupa el núcleo transaccional de compras y el ciclo integral post-compra del sistema, y es una pieza más de un proyecto mayor (módulos A/B/C — canales de venta, D — este módulo, E — Despacho y Logística, F — Productos y Ofertas, G — Seguridad y Usuarios).
 
 ---
