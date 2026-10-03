@@ -164,6 +164,16 @@ El wireframe utiliza etiquetas visuales como **PENDIENTE**, **EN ATENCIÓN**, **
 
 Durante la implementación estas etiquetas deben mantenerse coherentes con los estados canónicos del backend y con la condición del SLA, evitando tratar un SLA vencido como una transición independiente del ciclo de vida del reclamo
 
+### 10.1 Equivalencia entre etiquetas visuales y estados canónicos
+
+| Etiqueta visible | Estado canónico | Interpretación operativa |
+|---|---|---|
+| Pendiente | `REGISTRADO` | El expediente fue creado y aún espera la revisión del Gestor. |
+| En atención | `EN_PROCESO` | El Gestor se encuentra analizando el caso o reuniendo información. |
+| Atendido | `ATENDIDO` | La respuesta formal se registró y quedó disponible para el cliente. |
+| Derivado | `DERIVADO` | El caso fue escalado a una instancia de mediación externa. |
+| Vencido | No aplica | Es una condición del SLA; no reemplaza el estado canónico del reclamo. |
+
 ---
 
 ## 11. Relación con funcionalidades y navegación
