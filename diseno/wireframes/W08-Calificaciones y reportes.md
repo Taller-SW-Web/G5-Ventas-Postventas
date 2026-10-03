@@ -64,8 +64,8 @@ El wireframe incorpora los filtros:
 
 - **Periodo:** restringe la información al rango temporal seleccionado
 - **Canal:** permite consultar Marketplace, Chatbot, Retail o todos los canales
-- **Vendedor:** permite segmentar el desempeño comercial
-- **Reporte / Vista:** permite seleccionar el tipo de visualización disponible
+
+El diseño de referencia también contempla segmentación por **vendedor** y selección de **reporte / vista**. Sin embargo, la versión actual del contrato solo define los parámetros `desde`, `hasta` y `canal` para consultar métricas. Por ello, los controles de vendedor, producto o vista no deben habilitarse como filtros operativos hasta que el contrato y los agregados correspondientes los incorporen.
 
 Las acciones principales son:
 
@@ -182,6 +182,8 @@ La navegación prevista es:
 W08 debe mantener una lectura rápida aun cuando concentre diferentes tipos de información. Los indicadores, gráficos y tablas deben estar agrupados por objetivo para evitar sobrecargar al Gestor
 
 Los filtros deben afectar únicamente la información correspondiente a la selección realizada y la exportación debe conservar esos mismos criterios
+
+En la implementación actual, los únicos criterios de consulta habilitados son el periodo y el canal. La exportación permanece pendiente de una ruta y formato definidos en `specs/api-contract.md`; por lo tanto, no debe presentarse como una operación disponible mientras ese contrato no exista.
 
 Los componentes visuales deben mantener coherencia con las demás pantallas del módulo y conservar el enfoque de baja fidelidad definido para el Hito 1
 
