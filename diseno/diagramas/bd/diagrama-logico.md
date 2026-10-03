@@ -1,202 +1,143 @@
-# Modelo lógico de datos — Módulo D: Ventas y Postventa
+# Modelo lógico - Ventas y Postventa
 
-> **Estado:** Diseño lógico alineado con el modelo entidad-relación y el esquema PostgreSQL del módulo.
+Pasa las entidades del [modelo conceptual](diagrama-conceptual.md) a tablas, con columnas, tipos, claves y campos obligatorios. Los nombres son los mismos del script [ventas_postventa_schema.sql](../../../infra/bd/ventas_postventa_schema.sql).
 
-## 1. Propósito y alcance
+| Esquema | Microservicio | Tablas |
+|---|---|---|
+| ventas | M1 | pedido, detalle_pedido, pago, historial_estado, anulacion |
+| postventa | M2 | devolucion, evidencia_devolucion, reembolso, reclamo, calificacion, agregado_ventas |
 
-Este documento transforma el modelo conceptual del negocio en un modelo lógico: define las entidades, sus identificadores, las relaciones, las reglas de integridad y los límites de propiedad de los datos.
+## 1. Diagrama
 
-El módulo se divide en dos microservicios bajo el patrón **Database-per-Service**:
+![Modelo lógico](diagrama-logico.png)
 
-- **M1 — Ventas:** pedidos, sus detalles, pagos, historial de estados y anulaciones.
-- **M2 — Postventa:** devoluciones, evidencias, reembolsos, reclamos, calificaciones y agregados para analítica.
+Archivo editable: [diagrama-logico.drawio](diagrama-logico.drawio)
 
-El modelo lógico no reemplaza el script físico de PostgreSQL. Los nombres de tablas, tipos concretos, índices y restricciones de implementación se encuentran en [`infra/bd/ventas_postventa_schema.sql`](../../../infra/bd/ventas_postventa_schema.sql).
-
-## 2. Convenciones
+## 2. Notación
 
 | Marca | Significado |
 |---|---|
-| `PK` | Identificador único de una entidad. |
-| `FK` | Relación física permitida dentro del mismo microservicio. |
-| `UK` | Regla de unicidad del negocio. |
-| `Referencia API` | Identificador lógico de una entidad que pertenece a otro microservicio o módulo; no crea una FK física. |
-| `0..1`, `0..N`, `1` | Cardinalidad mínima y máxima de la relación. |
+| PK | Clave primaria |
+| FK | Clave foránea dentro del mismo esquema |
+| UK | Valor único |
+| R | Referencia a otro microservicio o módulo, sin clave foránea |
+| NN | Obligatorio (NOT NULL) |
 
-Las fechas y eventos de auditoría se registran en UTC en la implementación. Los identificadores externos a los módulos G, E y F también se conservan como referencias lógicas.
+Los tipos DECIMAL y TIMESTAMP se implementan en PostgreSQL como numeric y timestamptz.
 
-## 3. Vista de integración y límites de datos
+## 3. Esquema relacional
 
-```mermaid
-flowchart LR
-    subgraph M1["M1 — Ventas"]
-        P[PEDIDO]
-        DP[DETALLE_PEDIDO]
-        PG[PAGO]
-        HE[HISTORIAL_ESTADO]
-        AN[ANULACION]
-        P --> DP
-        P --> PG
-        P --> HE
-        P --> AN
-    end
+PK entre [ ], FK con →, referencia sin FK con ⇢.
 
-    subgraph M2["M2 — Postventa"]
-        DV[DEVOLUCION]
-        ED[EVIDENCIA_DEVOLUCION]
-        RE[REEMBOLSO]
-        RC[RECLAMO]
-        CA[CALIFICACION]
-        AV[AGREGADO_VENTAS]
-        DV --> ED
-        DV -. origen de reembolso .-> RE
-    end
+ventas (M1):
 
-    DV -. "idPedido: referencia API" .-> P
-    RC -. "idPedido opcional: referencia API" .-> P
-    CA -. "idPedido: referencia API" .-> P
-    AN -. "origen ANULACION: referencia API" .-> RE
+```text
+pedido           ([id], codigo UK, canal, fecha, estado, moneda, subtotal, descuento, total,
+                  nombre_contacto, tipo_documento, numero_documento, telefono, email,
+                  modalidad_envio, costo_envio, destinatario, distrito, direccion, codigo_cupon,
+                  creado_en, id_cliente ⇢ G, id_vendedor ⇢ G, id_direccion_entrega ⇢ E)
+
+detalle_pedido   ([id], id_pedido → pedido.id, id_producto ⇢ F, sku, descripcion, cantidad,
+                  precio_unitario, descuento, importe)
+
+pago             ([id], id_pedido → pedido.id, metodo, referencia, monto, estado, fecha_proceso)
+
+historial_estado ([id], id_pedido → pedido.id, estado_anterior, estado_nuevo, actor, motivo,
+                  fecha_hora)
+
+anulacion        ([id], id_pedido → pedido.id UK, motivo, id_solicitante, id_autorizador,
+                  estado, fecha)
 ```
 
-Las líneas punteadas representan integración por API o eventos. No son relaciones físicas entre bases de datos ni autorizan consultas directas entre M1 y M2.
+postventa (M2):
 
-## 4. Modelo lógico de M1 — Ventas
+```text
+devolucion           ([id], id_pedido ⇢ M1.pedido, tipo, motivo, estado, resolucion,
+                      id_autorizador, fundamento_rechazo, fecha)
 
-### 4.1. Entidades y atributos principales
+evidencia_devolucion ([id], id_devolucion → devolucion.id, url, tipo, fecha)
 
-| Entidad | Identificador y reglas | Atributos lógicos principales | Propósito |
-|---|---|---|---|
-| `PEDIDO` | `idPedido` (PK), `codigo` (UK) | canal, estado, fecha, moneda, subtotal, descuento, total, contacto y datos de entrega | Representa la compra y su estado canónico. |
-| `DETALLE_PEDIDO` | `idDetallePedido` (PK), `idPedido` (FK) | idProducto externo, SKU, descripción, cantidad, precio unitario, descuento, importe | Conserva el detalle comercial de cada ítem del pedido. |
-| `PAGO` | `idPago` (PK), `idPedido` (FK) | método, referencia, monto, estado, fecha de proceso | Registra intentos y resultados de pago asociados al pedido. |
-| `HISTORIAL_ESTADO` | `idHistorial` (PK), `idPedido` (FK) | estado anterior, estado nuevo, actor, motivo, fecha y hora | Mantiene la auditoría cronológica de transiciones. |
-| `ANULACION` | `idAnulacion` (PK), `idPedido` (FK, UK) | motivo, solicitante, autorizador, estado, fecha | Registra la única solicitud de anulación posible por pedido. |
+reembolso            ([id], id_origen ⇢ M1.anulacion | devolucion, tipo_origen,
+                      idempotency_key UK, monto, moneda, id_transaccion, estado,
+                      id_autorizador, fecha)            UK (tipo_origen, id_origen)
 
-### 4.2. Relaciones internas
+reclamo              ([id], codigo UK, id_pedido ⇢ M1.pedido, tipo, motivo, detalle,
+                      nombre_consumidor, documento, email, telefono, estado,
+                      plazo_dias_habiles, fecha_limite_respuesta, respuesta_visible_cliente)
 
-```mermaid
-erDiagram
-    PEDIDO ||--|{ DETALLE_PEDIDO : contiene
-    PEDIDO ||--o{ PAGO : registra
-    PEDIDO ||--|{ HISTORIAL_ESTADO : audita
-    PEDIDO ||--o| ANULACION : puede_tener
+calificacion         ([id], id_pedido ⇢ M1.pedido UK, puntaje, comentario, canal, fecha)
+
+agregado_ventas      ([periodo, canal, id_vendedor, id_producto], unidades, monto, actualizado_en)
 ```
 
-| Relación | Cardinalidad | Regla lógica |
-|---|---:|---|
-| `PEDIDO` — `DETALLE_PEDIDO` | 1 a 1..N | Un pedido válido contiene al menos un ítem. |
-| `PEDIDO` — `PAGO` | 1 a 0..N | Un pedido puede registrar varios intentos u operaciones de pago. |
-| `PEDIDO` — `HISTORIAL_ESTADO` | 1 a 1..N | Todo cambio de estado queda auditado con actor y fecha. |
-| `PEDIDO` — `ANULACION` | 1 a 0..1 | Un pedido solo puede tener una anulación registrada. |
+## 4. Relaciones
 
-### 4.3. Reglas de integridad de M1
+Con clave foránea:
 
-1. `codigo` identifica de manera única un pedido.
-2. El estado del pedido sigue el ciclo `CREADO → PAGADO → EN_PREPARACION → DESPACHADO → ENTREGADO`, con `ANULADO` como resultado permitido de una anulación elegible.
-3. Un pedido despachado o entregado no puede anularse mediante F2; los casos posteriores se atienden mediante postventa.
-4. Los importes y cantidades no pueden ser negativos; la cantidad del detalle debe ser mayor que cero.
-5. `idCliente`, `idVendedor`, `idDireccionEntrega` e `idProducto` son referencias externas a los módulos G, E y F.
+| Padre | Hija | Columna | Cardinalidad | Al borrar el padre |
+|---|---|---|---|---|
+| pedido | detalle_pedido | id_pedido | 1 a 1..N | Se borran los detalles |
+| pedido | pago | id_pedido | 1 a 0..N | Se borran los pagos |
+| pedido | historial_estado | id_pedido | 1 a 1..N | Se borra el historial |
+| pedido | anulacion | id_pedido (UK) | 1 a 0..1 | Se borra la anulación |
+| devolucion | evidencia_devolucion | id_devolucion | 1 a 0..N | Se borran las evidencias |
 
-## 5. Modelo lógico de M2 — Postventa
+El mínimo de 1 en detalle_pedido e historial_estado viene de ESP-01. La base no lo puede exigir; lo controla M1 al crear el pedido.
 
-### 5.1. Entidades y atributos principales
+Sin clave foránea:
 
-| Entidad | Identificador y reglas | Atributos lógicos principales | Propósito |
-|---|---|---|---|
-| `DEVOLUCION` | `idDevolucion` (PK), `idPedido` (Referencia API) | tipo, motivo, estado, resolución, autorizador, fundamento de rechazo, fecha | Gestiona solicitudes de devolución o cambio posteriores a la entrega. |
-| `EVIDENCIA_DEVOLUCION` | `idEvidencia` (PK), `idDevolucion` (FK) | URL, tipo de archivo, fecha | Conserva los archivos que sustentan una solicitud. |
-| `REEMBOLSO` | `idReembolso` (PK), `idempotencyKey` (UK), `tipoOrigen + idOrigen` (UK) | monto, moneda, transacción externa, estado, autorizador, fecha | Orquesta la devolución de dinero sin duplicar operaciones. |
-| `RECLAMO` | `idReclamo` (PK), `codigo` (UK), `idPedido` opcional (Referencia API) | tipo, motivo, detalle, consumidor, estado, plazo SLA, fecha límite, respuesta visible | Registra y atiende reclamos o quejas. |
-| `CALIFICACION` | `idCalificacion` (PK), `idPedido` (Referencia API, UK) | puntaje, comentario, canal, fecha | Conserva la encuesta CSAT de un pedido entregado. |
-| `AGREGADO_VENTAS` | PK compuesta: periodo, canal, vendedor y producto | unidades, monto, fecha de actualización | Proyección de lectura para el dashboard y reportes. |
-
-### 5.2. Relaciones internas y referencias lógicas
-
-```mermaid
-erDiagram
-    DEVOLUCION ||--o{ EVIDENCIA_DEVOLUCION : adjunta
-    DEVOLUCION ||--o| REEMBOLSO : origina_si_corresponde
-```
-
-| Origen | Destino | Tipo de vínculo | Regla lógica |
-|---|---|---|---|
-| `DEVOLUCION` | `EVIDENCIA_DEVOLUCION` | FK interna, 1 a 0..N | Una solicitud puede no tener evidencias o tener varias. |
-| `DEVOLUCION` | `REEMBOLSO` | Origen lógico condicional, 1 a 0..1 | Una devolución aprobada con devolución de dinero puede originar un reembolso. |
-| `ANULACION` de M1 | `REEMBOLSO` | Referencia API | Una anulación pagada puede originar un reembolso de tipo `ANULACION`. |
-| `PEDIDO` de M1 | `DEVOLUCION`, `RECLAMO`, `CALIFICACION` | Referencia API | M2 usa `idPedido` para consultar contexto autorizado, sin FK interservicio. |
-
-### 5.3. Reglas de integridad de M2
-
-1. Una devolución requiere un pedido entregado, pero M2 valida esa condición mediante la API de M1.
-2. Una devolución se resuelve como **cambio**, **reembolso** o **rechazo**; cambio y reembolso son alternativas excluyentes para el mismo expediente.
-3. Un reembolso solo admite origen `ANULACION` o `DEVOLUCION`; la combinación de tipo e identificador de origen es única.
-4. `idempotencyKey` es única: un reintento conserva la misma operación financiera y no crea una segunda devolución de dinero.
-5. Un reclamo inicia en `REGISTRADO`, puede pasar a `EN_PROCESO` y solo llega a `ATENDIDO` si existe una respuesta visible para el consumidor.
-6. El SLA del reclamo expresa la condición de plazo; no reemplaza el estado de atención del expediente.
-7. Una calificación tiene puntaje entre 1 y 5 y solo existe una calificación por pedido entregado.
-8. Los agregados no reemplazan a las transacciones: se actualizan con eventos para consultar indicadores sin recorrer toda la operación histórica.
-
-## 6. Diccionario de datos esencial
-
-El diccionario resume los datos que el gestor consulta o registra con mayor frecuencia. Los tipos técnicos, longitudes e índices se mantienen en el [modelo físico](../../../infra/bd/ventas_postventa_schema.sql).
-
-### 6.1. M1 — Ventas
-
-| Entidad | Dato | Significado para el negocio | Regla principal |
-|---|---|---|---|
-| `PEDIDO` | `codigo` | Identificador visible del pedido para búsquedas y atención. | Es único. |
-| `PEDIDO` | `estado` | Situación actual de la compra dentro de su ciclo de venta. | Solo admite estados definidos por el flujo de pedido. |
-| `PEDIDO` | `total` | Importe final que debe pagar el cliente. | No puede ser negativo. |
-| `DETALLE_PEDIDO` | `idPedido` | Pedido al que pertenece cada producto comprado. | Debe referenciar un pedido de M1. |
-| `DETALLE_PEDIDO` | `cantidad` | Unidades adquiridas del producto. | Debe ser mayor que cero. |
-| `PAGO` | `referencia` | Código devuelto por la pasarela o medio de pago. | Permite rastrear la operación de pago. |
-| `PAGO` | `estado` | Resultado del intento de pago. | No sustituye el estado canónico del pedido. |
-| `HISTORIAL_ESTADO` | `estadoNuevo` | Estado que queda vigente después de una transición. | Se registra con actor y fecha y hora. |
-| `ANULACION` | `motivo` | Razón declarada para solicitar la anulación. | Es obligatorio. |
-| `ANULACION` | `idAutorizador` | Gestor que autoriza o rechaza la solicitud. | Es una referencia al módulo de usuarios. |
-
-### 6.2. M2 — Postventa
-
-| Entidad | Dato | Significado para el negocio | Regla principal |
-|---|---|---|---|
-| `DEVOLUCION` | `idPedido` | Pedido relacionado con la solicitud postventa. | Se valida mediante API contra M1; no es FK física. |
-| `DEVOLUCION` | `resolucion` | Resultado final: cambio, reembolso o rechazo. | Cambio y reembolso son excluyentes. |
-| `EVIDENCIA_DEVOLUCION` | `url` | Ubicación del archivo que respalda el caso. | Debe pertenecer a una devolución existente. |
-| `REEMBOLSO` | `idempotencyKey` | Clave para reconocer reintentos de la misma operación financiera. | Es única y evita pagos duplicados. |
-| `REEMBOLSO` | `tipoOrigen` e `idOrigen` | Caso que origina el reembolso: anulación o devolución. | La combinación debe ser única. |
-| `RECLAMO` | `codigo` | Identificador visible del reclamo o queja. | Es único. |
-| `RECLAMO` | `fechaLimiteRespuesta` | Fecha máxima para responder conforme al SLA. | Debe calcularse al registrar el expediente. |
-| `RECLAMO` | `respuestaVisibleCliente` | Respuesta que el consumidor puede consultar. | Es necesaria para cerrar un reclamo como atendido. |
-| `CALIFICACION` | `puntaje` | Valoración CSAT otorgada al pedido. | Admite valores de 1 a 5. |
-| `AGREGADO_VENTAS` | `periodo` | Mes al que corresponden los indicadores consolidados. | Forma parte de la clave compuesta del agregado. |
-
-## 7. Matriz de correspondencia con funcionalidades
-
-| Funcionalidad | Entidades principales | Resultado de negocio |
+| Columna | Apunta a | Motivo |
 |---|---|---|
-| **F1 — Gestión de pedidos** | `PEDIDO`, `DETALLE_PEDIDO`, `PAGO`, `HISTORIAL_ESTADO` | Control del ciclo de vida y trazabilidad de la compra. |
-| **F2 — Anulaciones** | `ANULACION`, `PEDIDO`, `HISTORIAL_ESTADO` | Registro y resolución de anulaciones elegibles. |
-| **F3 — Devoluciones y cambios** | `DEVOLUCION`, `EVIDENCIA_DEVOLUCION` | Evaluación del expediente y coordinación de cambio o reembolso. |
-| **F4 — Reembolsos y extornos** | `REEMBOLSO` | Devolución financiera idempotente desde un origen autorizado. |
-| **F5 — Calificación CSAT** | `CALIFICACION` | Medición de satisfacción posterior a la entrega. |
-| **F6 — Reclamos y dashboard** | `RECLAMO`, `AGREGADO_VENTAS` | Atención de reclamos, control SLA y consulta analítica. |
+| devolucion.id_pedido | ventas.pedido | Está en otro microservicio; se valida con la API de M1 |
+| reclamo.id_pedido | ventas.pedido | Igual que el anterior; es opcional |
+| calificacion.id_pedido | ventas.pedido | Igual que el anterior; es único |
+| reembolso.id_origen | ventas.anulacion o postventa.devolucion | Depende de tipo_origen y una de las tablas está en M1 |
+| pedido.id_cliente, pedido.id_vendedor | Módulo G | Usuarios de Seguridad y Usuarios |
+| pedido.id_direccion_entrega | Módulo E | Dato de Despacho y Entrega |
+| detalle_pedido.id_producto | Módulo F | Catálogo de Productos y Ofertas |
 
-## 8. Diferencia entre modelos del repositorio
+## 5. Reglas
 
-| Artefacto | Qué describe | Ubicación |
-|---|---|---|
-| Modelo conceptual / ER | Entidades del dominio y relaciones generales. | [`diagrama-conceptual.md`](diagrama-conceptual.md) |
-| Modelo lógico | Claves, cardinalidades, reglas y límites de propiedad de datos. | Este documento. |
-| Modelo físico | Esquemas PostgreSQL, columnas, tipos, índices y restricciones ejecutables. | [`ventas_postventa_schema.sql`](../../../infra/bd/ventas_postventa_schema.sql) |
+M1:
 
-## 9. Decisiones de diseño
+1. pedido.codigo es único.
+2. pedido.estado solo admite CREADO, PAGADO, EN_PREPARACION, DESPACHADO, ENTREGADO y ANULADO. Las transiciones las controla M1 (ESP-03).
+3. Un pedido tiene como máximo una anulación.
+4. detalle_pedido.cantidad es mayor que cero y los montos no pueden ser negativos.
+5. historial_estado solo recibe inserciones.
 
-- No se crean FKs entre `ventas` y `postventa`; los identificadores cruzados se validan por API o eventos.
-- `ANULACION` pertenece al modelo lógico de M1 — Ventas, porque modifica el estado canónico del pedido.
-- `REEMBOLSO` se ubica en M2 — Postventa y recibe un origen lógico desde una devolución o una anulación aprobada.
-- Los datos de usuario, catálogo y logística permanecen bajo propiedad de los módulos G, F y E, respectivamente.
-- El modelo permite que las pantallas del Gestor consulten pedidos, postventa y reportes sin romper el aislamiento entre microservicios.
+M2:
 
-## 10. Relación con el modelo físico
+1. Solo se registra una devolución para un pedido ENTREGADO; M2 lo consulta a M1.
+2. devolucion.resolucion es cambio, reembolso o rechazo.
+3. reembolso.tipo_origen solo admite ANULACION o DEVOLUCION, y (tipo_origen, id_origen) es único.
+4. reembolso.idempotency_key es única para que un reintento no genere otro pago (ESP-09).
+5. reembolso.estado solo admite PENDIENTE, EXITOSO o FALLIDO.
+6. reclamo.codigo es único. El reclamo pasa de REGISTRADO a EN_PROCESO y llega a ATENDIDO solo con respuesta visible al cliente (ESP-13, ESP-14).
+7. reclamo.plazo_dias_habiles es 15 por defecto.
+8. calificacion.puntaje va de 1 a 5, con una calificación por pedido.
+9. agregado_ventas se actualiza con eventos.
 
-El modelo físico actual implementa once tablas: cinco en el esquema `ventas` y seis en `postventa`. Antes de crear nuevas tablas o relaciones, se debe validar que la necesidad no invada la propiedad de otro microservicio y que las reglas de integración estén definidas en las APIs o eventos del módulo.
+## 6. Tablas por funcionalidad
+
+| Funcionalidad | Tablas |
+|---|---|
+| F1 Ciclo de vida del pedido | pedido, detalle_pedido, pago, historial_estado |
+| F2 Anulación de pedidos | anulacion, pedido, historial_estado |
+| F3 Devoluciones y cambios | devolucion, evidencia_devolucion |
+| F4 Reembolsos y extornos | reembolso |
+| F5 Calificación de experiencia | calificacion |
+| F6 Reclamos, dashboard y reportes | reclamo, agregado_ventas |
+
+## 7. Pendientes
+
+- Valores de historial_estado.actor: la base acepta CLIENTE, GESTOR, CANAL_CHATBOT, PASARELA_PAGOS y SISTEMA_LOGISTICA, pero ESP-03 usa PASARELA, CANAL, DESPACHO, GESTOR y SISTEMA. Hay que unificarlos.
+- pago.estado, devolucion.estado, anulacion.estado y pedido.canal no tienen lista de valores definida.
+- anulacion está en M1 porque cambia el estado del pedido, pero el C4 nivel 2 pone F2 en M2. Hay que alinear ambos documentos.
+
+## 8. Otros modelos
+
+| Modelo | Archivo |
+|---|---|
+| Conceptual | [diagrama-conceptual.md](diagrama-conceptual.md) |
+| Físico | [ventas_postventa_schema.sql](../../../infra/bd/ventas_postventa_schema.sql) |
