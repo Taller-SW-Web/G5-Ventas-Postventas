@@ -275,7 +275,6 @@ M2:
 
 ## 7. Pendientes
 
-- Valores de historial_estado.actor: la base acepta CLIENTE, GESTOR, CANAL_CHATBOT, PASARELA_PAGOS y SISTEMA_LOGISTICA, pero ESP-03 usa PASARELA, CANAL, DESPACHO, GESTOR y SISTEMA. Hay que unificarlos.
 - pago.estado, devolucion.estado, anulacion.estado y pedido.canal no tienen lista de valores definida.
 - anulacion está en M1 porque cambia el estado del pedido, pero el C4 nivel 2 pone F2 en M2. Hay que alinear ambos documentos.
 

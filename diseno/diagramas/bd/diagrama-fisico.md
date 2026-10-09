@@ -257,7 +257,6 @@ Los tres últimos sirven para buscar por pedido en M2 aunque esas columnas no se
 
 ## 8. Pendientes
 
-- `ck_historial_actor` usa los valores del ER original y no coincide con ESP-03 (PASARELA, CANAL, DESPACHO, GESTOR, SISTEMA). Se corrige con una migración cuando el equipo decida qué lista usar.
 - pago.estado, devolucion.estado, anulacion.estado y pedido.canal no tienen CHECK porque sus valores aún no están definidos.
 
 ## 9. Otros modelos

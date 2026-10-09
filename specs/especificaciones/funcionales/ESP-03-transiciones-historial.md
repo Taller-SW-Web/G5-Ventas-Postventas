@@ -36,13 +36,13 @@ La publicación de eventos de dominio derivada de estas transiciones corresponde
 
 ## 4. Actores y responsabilidades
 
-| Actor                                | Responsabilidad                                                                 |
-| -------------------------------------- | ----------------------------------------------------------------------------------- |
-| **Pasarela de pago (notificación)**    | Notifica la confirmación o el rechazo del pago, disparando `CREADO → PAGADO` o `CREADO → ANULADO`. |
-| **Canal**                               | Dispara la anulación por `PAGO_NO_COMPLETADO` cuando la pasarela reporta el fallo, sin intervención del Gestor. |
-| **Gestor**                              | Autoriza anulaciones desde `EN PREPARACIÓN` (ver F2); consulta el historial.        |
-| **Despacho y Entrega (E)**              | Notifica `DESPACHADO` y `ENTREGADO` (o entrega fallida) mediante su llamada a la API de F1. |
-| **M1 — Pedidos**                        | Valida cada transición contra la máquina de estados y registra el historial.        |
+| Actor                                | Valor en `historial_estado.actor` | Responsabilidad                                                                 |
+| -------------------------------------- | ------------------------------------ | ----------------------------------------------------------------------------------- |
+| **Pasarela de pago (notificación)**    | `PASARELA_PAGOS` | Notifica la confirmación o el rechazo del pago, disparando `CREADO → PAGADO` o `CREADO → ANULADO`. |
+| **Canal**                               | `CANAL_CHATBOT` | Dispara la anulación por `PAGO_NO_COMPLETADO` cuando la pasarela reporta el fallo, sin intervención del Gestor. |
+| **Gestor**                              | `GESTOR` | Autoriza anulaciones desde `EN PREPARACIÓN` (ver F2); consulta el historial.        |
+| **Despacho y Entrega (E)**              | `SISTEMA_LOGISTICA` | Notifica `DESPACHADO` y `ENTREGADO` (o entrega fallida) mediante su llamada a la API de F1. |
+| **M1 — Pedidos**                        | — | Valida cada transición contra la máquina de estados y registra el historial.        |
 
 ---
 
@@ -84,12 +84,14 @@ CREADO ──────► PAGADO ──────► EN PREPARACIÓN ──
 
 | Origen             | Destino        | Disparador                              | Actor    | Motivo                | ¿Requiere Gestor? |
 | --------------------- | ---------------- | ------------------------------------------ | ---------- | ------------------------ | :------------------: |
-| `CREADO`               | `PAGADO`          | Notificación de la pasarela de pago         | Pasarela   | —                          | No                    |
-| `CREADO`               | `ANULADO`         | Notificación de pago no completado          | Canal      | `PAGO_NO_COMPLETADO`      | No                    |
-| `PAGADO`               | `EN PREPARACIÓN`  | Acción interna del flujo de preparación     | Sistema    | —                          | No                    |
-| `EN PREPARACIÓN`       | `DESPACHADO`      | Confirmación de Despacho (E)                | Despacho   | —                          | No                    |
-| `EN PREPARACIÓN`       | `ANULADO`         | Solicitud de anulación (ver F2)             | Gestor     | Tipificado (F2)           | **Sí**                |
-| `DESPACHADO`           | `ENTREGADO`       | Notificación de entrega de Despacho (E)     | Despacho   | —                          | No                    |
+| `CREADO`               | `PAGADO`          | Notificación de la pasarela de pago         | `PASARELA_PAGOS`   | —                          | No                    |
+| `CREADO`               | `ANULADO`         | Notificación de pago no completado          | `CANAL_CHATBOT`      | `PAGO_NO_COMPLETADO`      | No                    |
+| `PAGADO`               | `EN PREPARACIÓN`  | Acción interna del flujo de preparación     | `SISTEMA_LOGISTICA`    | —                          | No                    |
+| `EN PREPARACIÓN`       | `DESPACHADO`      | Confirmación de Despacho (E)                | `SISTEMA_LOGISTICA`   | —                          | No                    |
+| `EN PREPARACIÓN`       | `ANULADO`         | Solicitud de anulación (ver F2)             | `GESTOR`     | Tipificado (F2)           | **Sí**                |
+| `DESPACHADO`           | `ENTREGADO`       | Notificación de entrega de Despacho (E)     | `SISTEMA_LOGISTICA`   | —                          | No                    |
+
+> Los valores de `Actor` corresponden al enum real de `historial_estado.actor` en base de datos: `CLIENTE`, `GESTOR`, `CANAL_CHATBOT`, `PASARELA_PAGOS`, `SISTEMA_LOGISTICA` (ver [diagrama-fisico.md](../../../diseno/diagramas/bd/diagrama-fisico.md)).
 
 Cualquier transición fuera de esta tabla se rechaza, incluso con permisos de `ADMIN`.
 
@@ -97,8 +99,8 @@ Cualquier transición fuera de esta tabla se rechaza, incluso con permisos de `A
 
 1. La pasarela de pago notifica el resultado del cobro de un pedido `CREADO`.
 2. El sistema valida la clave de idempotencia de la notificación.
-3. Si el resultado es exitoso, transiciona el pedido a `PAGADO` y registra el historial (actor: `PASARELA`).
-4. Si el resultado es un fallo de pago, transiciona el pedido a `ANULADO` con motivo `PAGO_NO_COMPLETADO` y registra el historial (actor: `CANAL`) — **sin requerir intervención del Gestor**.
+3. Si el resultado es exitoso, transiciona el pedido a `PAGADO` y registra el historial (actor: `PASARELA_PAGOS`).
+4. Si el resultado es un fallo de pago, transiciona el pedido a `ANULADO` con motivo `PAGO_NO_COMPLETADO` y registra el historial (actor: `CANAL_CHATBOT`) — **sin requerir intervención del Gestor**.
 
 ### 7.4 Flujos alternativos
 
@@ -138,7 +140,7 @@ Cualquier transición fuera de esta tabla se rechaza, incluso con permisos de `A
 | Campo                  | Tipo         | Obligatorio | Descripción                                             |
 | ------------------------ | ------------- | :---------: | ----------------------------------------------------------- |
 | `nuevoEstado`             | Enumeración   |      Sí     | Estado destino de la transición.                             |
-| `actor`                   | Texto         |      Sí     | Quién/qué dispara la transición (`PASARELA`, `CANAL`, `DESPACHO`, `GESTOR`, `SISTEMA`). |
+| `actor`                   | Texto         |      Sí     | Quién/qué dispara la transición. Restringido al enum de `historial_estado.actor`: `CLIENTE`, `GESTOR`, `CANAL_CHATBOT`, `PASARELA_PAGOS`, `SISTEMA_LOGISTICA`. |
 | `motivo`                  | Texto         | Condicional | Obligatorio para transiciones a `ANULADO`.                   |
 | `claveIdempotencia`       | Texto         |      Sí     | Identificador único de la operación, para evitar duplicados. |
 
@@ -193,7 +195,7 @@ Ejemplo — notificación de pago no completado:
 ```json
 {
   "nuevoEstado": "ANULADO",
-  "actor": "CANAL",
+  "actor": "CANAL_CHATBOT",
   "motivo": "PAGO_NO_COMPLETADO",
   "claveIdempotencia": "pasarela-evt-98213"
 }
@@ -211,7 +213,7 @@ Ejemplo — notificación de pago no completado:
 
 **CUANDO** la pasarela notifica el pago como exitoso.
 
-**ENTONCES** el sistema transiciona el pedido a `PAGADO` y registra el historial con actor `PASARELA`.
+**ENTONCES** el sistema transiciona el pedido a `PAGADO` y registra el historial con actor `PASARELA_PAGOS`.
 
 ---
 
@@ -221,7 +223,7 @@ Ejemplo — notificación de pago no completado:
 
 **CUANDO** la pasarela notifica que el pago no se completó.
 
-**ENTONCES** el sistema transiciona el pedido a `ANULADO` con motivo `PAGO_NO_COMPLETADO`, registra el historial con actor `CANAL`, y **no requiere ninguna autorización del Gestor**.
+**ENTONCES** el sistema transiciona el pedido a `ANULADO` con motivo `PAGO_NO_COMPLETADO`, registra el historial con actor `CANAL_CHATBOT`, y **no requiere ninguna autorización del Gestor**.
 
 ---
 
@@ -241,7 +243,7 @@ Ejemplo — notificación de pago no completado:
 
 **CUANDO** el módulo Despacho y Entrega notifica la entrega exitosa.
 
-**ENTONCES** el sistema transiciona el pedido a `ENTREGADO`, registrando el actor como `DESPACHO`.
+**ENTONCES** el sistema transiciona el pedido a `ENTREGADO`, registrando el actor como `SISTEMA_LOGISTICA`.
 
 ---
 
