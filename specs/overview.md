@@ -86,7 +86,8 @@ El dominio de Ventas y Postventa está desacoplado en dos microservicios indepen
 
 ## 5. Requerimientos No Funcionales (RNF)
 
-* **RNF-05 (Rendimiento y Autonomía en Checkout):** El registro de pedidos (POST /api/v1/pedidos) responde en T < 500 ms. No realiza bloqueos síncronos contra servicios externos periféricos.
+* **RNF-01 (Performance):** El registro de pedidos (POST /api/v1/pedidos) responde en T < 500 ms.
+* **RNF-05 (Disponibilidad):** El checkout no realiza bloqueos síncronos contra servicios externos periféricos.
 * **RNF-07 (Aislamiento de Microservicios):** Prohibición absoluta de esquemas relacionales compartidos o triggers entre M1 y M2. Toda coordinación inter-módulo se gestiona a nivel de aplicación (API REST interna autenticada).
 * **RNF-08 (Idempotencia Financiera):** Todas las solicitudes de reembolso en F4 requieren la cabecera X-Idempotency-Key generada por el emisor, garantizando que reintentos de red no originen transacciones duplicadas.
-* **RNF-12 (Trazabilidad y No Repudio):** Cualquier dictamen humano (autorización de anulación en F2, rechazo de devolución en F3, respuesta a reclamo en F6) persiste el autorizadorId, marca de tiempo ISO-8601 y fundamento no editable para fines de auditoría.
+* **RNF-03 (Trazabilidad):** Cualquier dictamen humano (autorización de anulación en F2, rechazo de devolución en F3, respuesta a reclamo en F6) persiste el autorizadorId, marca de tiempo ISO-8601 y fundamento no editable para fines de auditoría.
