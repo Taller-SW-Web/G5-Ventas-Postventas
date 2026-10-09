@@ -141,12 +141,21 @@ G5-Ventas-Postventas/
 ├── AGENTS.md                      # Contexto de negocio para asistentes de IA
 ├── .gitignore
 │
+├── arquitectura/                  # Modelo C4 — propuesta en discusión, no aprobada
+│   ├── c4-nivel-1-contexto-ventas-postventa.md
+│   ├── c4-nivel-2-contenedores-ventas-postventa.md
+│   └── c4-nivel-3-componentes-ventas-postventa.md
+│
 ├── specs/
 │   ├── overview.md                # Visión general del módulo D
-│   ├── api-contract.md            # Contrato de API (OpenAPI/REST)
+│   ├── api-contract.md            # Índice de contratos de API (enlaza a specs/api/)
 │   ├── stack-frontend.md          # Definición tecnológica del frontend
 │   ├── glosario.md                # Lenguaje ubicuo del dominio
-│   ├── modelo-datos.md            # Diccionario de datos
+│   ├── modelo-datos.md            # Índice del modelo de datos (enlaza a diseno/diagramas/bd/ e infra/bd/)
+│   │
+│   ├── api/
+│   │   ├── api-ventas.md          # Contrato REST de M1 (Ventas)
+│   │   └── api-postventas.md      # Contrato REST de M2 (Postventa)
 │   │
 │   ├── funcionalidades/           # Visión general por funcionalidad (F1 a F6)
 │   │   ├── F1-Ciclo de vida del pedido.md
@@ -154,25 +163,35 @@ G5-Ventas-Postventas/
 │   │   ├── F3-Devoluciones y cambios.md
 │   │   ├── F4-Reembolsos y extornos.md
 │   │   ├── F5-Calificacion de experiencia.md
-│   │   └── F6-Reclamo,dashboard y reportes.md
+│   │   ├── F6-Reclamo,dashboard y reportes.md
+│   │   ├── F6-matriz-pruebas.md
+│   │   └── F6-casos-prueba-api.md
 │   │
 │   └── especificaciones/
 │       ├── funcionales/           # ESP-01 a ESP-16 (criterios de aceptación por RF)
 │       └── no-funcionales/        # RNF-01 a RNF-08 (performance, seguridad, idempotencia...)
 │
-└── diseno/
-    ├── diagramas/
-    │   └── bd/                    # Modelos conceptual y lógico de datos
-    └── wireframes/
-        ├── 00-Contexto-Wireframes.md
-        ├── W01-Dashboard.md
-        ├── W02-Bandeja de pedidos.md
-        ├── W03-Detalle del pedido.md
-        ├── W04-Anulaciones.md
-        ├── W05-Devoluciones y cambios.md
-        ├── W06-Reclamos.md
-        ├── W07-Reembolsos.md
-        └── W08-Calificaciones y reportes.md
+├── diseno/
+│   ├── diagramas/
+│   │   └── bd/                    # Modelos conceptual, lógico y físico de datos (.md y .drawio)
+│   ├── guia_ux_ui/                # Identidad de marca, paleta, tipografía, espaciado, componentes...
+│   ├── mockups/                   # Mockup 01 a 09 + propuestas-ux-ui/ (mejoras propuestas)
+│   └── wireframes/
+│       ├── Contexto-Wireframes.md
+│       ├── W01-Dashboard.md
+│       ├── W02-Bandeja de pedidos.md
+│       ├── W03-Detalle del pedido.md
+│       ├── W04-Anulaciones.md
+│       ├── W05-Devoluciones y cambios.md
+│       ├── W06-Reclamos.md
+│       ├── W07-Reembolsos.md
+│       └── W08-Calificaciones y reportes.md
+│
+└── infra/
+    ├── infra-overview.md          # Índice de documentación de infraestructura
+    └── bd/
+        ├── base-de-datos-ventas-postventa.md
+        └── ventas_postventa_schema.sql
 ```
 
 ---
