@@ -60,7 +60,7 @@ Antes de registrar una devolución se debe cumplir lo siguiente:
 4. El usuario debe tener autorización para solicitar la devolución del pedido.
 5. El motivo de devolución debe haber sido proporcionado.
 6. Si el motivo corresponde a un defecto o incidencia que requiera comprobación, se debe adjuntar evidencia.
-7. La solicitud debe encontrarse dentro del plazo permitido para devoluciones.
+7. La solicitud debe encontrarse dentro del plazo permitido para devoluciones (7 días naturales desde la entrega).
 
 ---
 
@@ -170,20 +170,18 @@ Se registra la devolución
 | `descripcion` | Texto                |      No     | Explicación adicional proporcionada por el cliente.              |
 | `evidencia`   | Archivo / referencia | Condicional | Evidencia asociada a la devolución cuando el motivo lo requiera. |
 
-### 8.2 Motivos de devolución
+### 8.2 Motivos de devolución (`MotivoDevolucion`)
 
-Los motivos deben manejarse mediante valores definidos por el sistema. Como mínimo, deben permitir distinguir los casos que requieren evidencia de aquellos que no.
+Catálogo cerrado; un motivo fuera de esta lista se rechaza con `400 Bad Request`:
 
-Ejemplo:
+| Motivo | ¿Requiere evidencia? |
+|---|---|
+| `PRODUCTO_DEFECTUOSO` | Sí |
+| `PRODUCTO_DANADO` | Sí |
+| `PRODUCTO_INCORRECTO` | Sí |
+| `OTRO` | No |
 
-```text
-PRODUCTO_DEFECTUOSO
-PRODUCTO_DANADO
-PRODUCTO_INCORRECTO
-OTRO
-```
-
-> Los valores definitivos deben mantenerse consistentes con el modelo de datos y el contrato de API del módulo.
+Confirmado en la guía de implementación del backend y en el modelo de datos.
 
 ### 8.3 Datos de salida
 
@@ -234,7 +232,7 @@ La información de trazabilidad debe mantenerse de acuerdo con **RNF-03 — Traz
 2. El pedido debe encontrarse en estado `ENTREGADO`.
 3. El motivo de devolución es obligatorio.
 4. Los motivos que correspondan a defectos o incidencias que requieran comprobación deben contar con evidencia.
-5. La solicitud debe encontrarse dentro del plazo permitido.
+5. La solicitud debe encontrarse dentro del plazo permitido (7 días naturales desde la entrega).
 6. Toda nueva devolución debe iniciar en estado `SOLICITADA`.
 7. Una devolución registrada debe poder ser consultada posteriormente mediante su identificador.
 8. El registro de una devolución no implica automáticamente la aprobación del cambio o reembolso.
@@ -319,28 +317,30 @@ M2
 
 ### Registro de devolución
 
-El registro pertenece a M2 y debe realizarse mediante el endpoint definido para devoluciones.
-
-Una referencia de contrato puede ser:
+El registro pertenece a M2, mediante el endpoint definido en [api-postventas.md](../../api/api-postventas.md), sección 2.2:
 
 ```http
-POST /devoluciones
+POST /api/v2/devoluciones
 ```
 
 Con un cuerpo similar a:
 
 ```json
 {
-  "pedidoId": "PED-000456",
+  "pedidoId": "PED-2026-00981",
+  "tipo": "DEVOLUCION_DINERO",
   "motivo": "PRODUCTO_DEFECTUOSO",
   "descripcion": "El producto presenta daños visibles.",
-  "evidencia": [
-    "evidencia-001.jpg"
+  "items": [
+    { "productoId": "PROD-101", "cantidad": 1 }
+  ],
+  "evidencias": [
+    { "tipo": "IMAGEN", "url": "https://api.empresa.com/v2/uploads/evidencias/ev-981-foto1.jpg" }
   ]
 }
 ```
 
-> Las rutas, nombres de campos y estructuras definitivas deben mantenerse alineadas con `specs/api-contract.md`.
+La evidencia se sube primero con `POST /api/v2/devoluciones/evidencias/upload` (sección 2.1 de `api-postventas.md`); la URL devuelta es la que se incluye en `evidencias`.
 
 ---
 
@@ -413,7 +413,7 @@ Con un cuerpo similar a:
 | **Funcionalidad**              | F3 — Devoluciones y cambios                                        |
 | **Especificación**             | ESP-07 — Registro de devolución con evidencia                      |
 | **RNF relacionados**           | RNF-03 — Trazabilidad; RNF-07 — Aislamiento                        |
-| **Wireframe**                  | [`F3-devoluciones.md`](../../diseno/wireframes/F3-devoluciones.md) |
+| **Wireframe**                  | [`W05-Devoluciones y cambios.md`](../../diseno/wireframes/W05-Devoluciones%20y%20cambios.md) |
 | **Contrato API**               | [`api-contract.md`](../api-contract.md)                            |
 | **Especificación relacionada** | ESP-08 — Resolución de devolución                                  |
 

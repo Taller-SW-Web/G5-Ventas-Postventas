@@ -20,7 +20,7 @@ Content-Type: application/json
 {
   "pedidoId": "PED-PRUEBA-001",
   "tipo": "RECLAMO",
-  "canal": "WEB",
+  "canal": "MARKETPLACE",
   "motivo": "INCUMPLIMIENTO_PLAZO_ENTREGA",
   "detalle": "Pedido de prueba no entregado en la fecha acordada.",
   "consumidor": {
@@ -45,7 +45,7 @@ Content-Type: application/json
 
 {
   "tipo": "RECLAMO",
-  "canal": "WEB",
+  "canal": "MARKETPLACE",
   "motivo": "MOTIVO_NO_VALIDO",
   "detalle": "Caso de validación.",
   "consumidor": {
