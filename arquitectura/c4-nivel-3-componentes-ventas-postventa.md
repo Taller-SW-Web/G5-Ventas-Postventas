@@ -158,7 +158,7 @@ flowchart TB
 
 Cada flecha hacia un sistema externo en los diagramas anteriores corresponde a un cliente del paquete `integracion/` de ese servicio.
 
-M1 — `pe.unmsm.ventaspostventa.ventas`:
+M1 — paquete `ventas`:
 
 | Componente | Paquete |
 |---|---|
@@ -169,7 +169,7 @@ M1 — `pe.unmsm.ventaspostventa.ventas`:
 | Llamadas a Despacho y Logística (E) | `integracion/DespachoClient` |
 | Solicitud de reembolso a M2 | `integracion/PostventaClient` |
 
-M2 — `pe.unmsm.ventaspostventa.postventa`:
+M2 — paquete `postventa`:
 
 | Componente | Paquete |
 |---|---|

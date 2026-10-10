@@ -7,7 +7,7 @@
 | **Código**          | ESP-03                                 |
 | **Nombre**          | Transiciones de estado e historial      |
 | **Funcionalidad**   | F1 — Ciclo de vida del pedido           |
-| **Módulo**          | M1 — Ventas                             |
+| **Módulo**          | M1 — Ventas                            |
 | **Responsable**     | Michael                                 |
 | **Tipo**            | Especificación funcional                |
 
@@ -75,12 +75,14 @@ Aplica el cambio y registra el historial
 
 ```text
 CREADO ──────► PAGADO ──────► EN_PREPARACION ──────► DESPACHADO ──────► ENTREGADO
-  │               │                 │
-  │               │                 └──► ANULADO  (solicitud F2, requiere autorización del Gestor)
-  │               │
-  │               └──► ANULADO  (solicitud F2 del Cliente o Gestor, sin autorización)
-  │
-  └──► ANULADO  (pago rechazado por la pasarela, aviso del canal o solicitud F2; sin autorización)
+│              │              │                      │
+│              │              │                      └──► ANULADO  (entrega fallida definitiva, por SISTEMA_LOGISTICA; sin autorización)
+│              │              │
+│              │              └──► ANULADO  (solicitud F2, requiere autorización del Gestor)
+│              │
+│              └──► ANULADO  (solicitud F2 del Cliente o Gestor, sin autorización)
+│
+└──► ANULADO  (pago rechazado por la pasarela, aviso del canal o solicitud F2; sin autorización)
 ```
 
 ### 7.2 Matriz de transiciones
@@ -96,6 +98,7 @@ CREADO ──────► PAGADO ──────► EN_PREPARACION ──�
 | `EN_PREPARACION`       | `DESPACHADO`      | Confirmación de Despacho (E)                | `SISTEMA_LOGISTICA`   | —                          | No                    |
 | `EN_PREPARACION`       | `ANULADO`         | Solicitud de anulación aprobada (ver F2)    | `GESTOR`     | Catálogo de ESP-05        | **Sí**                |
 | `DESPACHADO`           | `ENTREGADO`       | Notificación de entrega de Despacho (E)     | `SISTEMA_LOGISTICA`   | —                          | No                    |
+| `DESPACHADO`           | `ANULADO`         | Entrega fallida definitiva (Despacho, ver api-ventas.md 1.6) | `SISTEMA_LOGISTICA` | `ENTREGA_FALLIDA_DEFINITIVA` | No         |
 
 > Los valores de `Actor` corresponden al enum real de `historial_estado.actor` en base de datos: `CLIENTE`, `GESTOR`, `CANAL_CHATBOT`, `PASARELA_PAGOS`, `SISTEMA_LOGISTICA` (ver [diagrama-fisico.md](../../../diseno/diagramas/bd/diagrama-fisico.md)).
 
@@ -167,9 +170,10 @@ Cualquier transición fuera de esta tabla se rechaza, incluso con permisos de `A
 1. M1 es el único dueño del estado del pedido; ninguna transición fuera de la matriz de la sección 7.2 está permitida, ni siquiera con permisos de `ADMIN`.
 2. La transición `CREADO → PAGADO` solo puede dispararla la notificación de la pasarela de pago.
 3. Las transiciones `CREADO → ANULADO` y `PAGADO → ANULADO` **no requieren autorización del Gestor**: las dispara la pasarela o el canal (`PAGO_NO_COMPLETADO`) o una solicitud de anulación de F2. Solo la anulación desde `EN_PREPARACION` requiere autorización (ver F2).
-4. Toda transición a `ANULADO` exige un motivo tipificado.
-5. Toda transición queda registrada en el historial con actor, motivo (si aplica) y fecha/hora en UTC.
-6. Las notificaciones externas (pasarela, Despacho) deben procesarse de forma idempotente.
+4. La transición `DESPACHADO → ANULADO` solo la dispara Despacho (`SISTEMA_LOGISTICA`) por `ENTREGA_FALLIDA_DEFINITIVA` (ver api-ventas.md, 1.6), sin intervención del Gestor.
+5. Toda transición a `ANULADO` exige un motivo tipificado.
+6. Toda transición queda registrada en el historial con actor, motivo (si aplica) y fecha/hora en UTC.
+7. Las notificaciones externas (pasarela, Despacho) deben procesarse de forma idempotente.
 
 ---
 
@@ -186,7 +190,7 @@ Cualquier transición fuera de esta tabla se rechaza, incluso con permisos de `A
 
 ## 11. Estado y trazabilidad
 
-El historial debe quedar siempre ordenado cronológicamente y debe permitir distinguir por qué un pedido llegó a `ANULADO`: por `PAGO_NO_COMPLETADO` (actor `PASARELA_PAGOS` o `CANAL_CHATBOT`), por una solicitud directa desde `CREADO` o `PAGADO` (actor `CLIENTE` o `GESTOR`) o por una anulación autorizada desde `EN_PREPARACION` (actor `GESTOR`, ver F2). Todas terminan en `ANULADO`, pero con actor y motivo distintos.
+El historial debe quedar siempre ordenado cronológicamente y debe permitir distinguir por qué un pedido llegó a `ANULADO`: por `PAGO_NO_COMPLETADO` (actor `PASARELA_PAGOS` o `CANAL_CHATBOT`), por una solicitud directa desde `CREADO` o `PAGADO` (actor `CLIENTE` o `GESTOR`), por una anulación autorizada desde `EN_PREPARACION` (actor `GESTOR`, ver F2) o por entrega fallida definitiva desde `DESPACHADO` (actor `SISTEMA_LOGISTICA`, motivo `ENTREGA_FALLIDA_DEFINITIVA`). Todas terminan en `ANULADO`, pero con actor y motivo distintos.
 
 ---
 

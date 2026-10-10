@@ -62,7 +62,7 @@ Los documentos bajo `arquitectura/` (C4 niveles 1, 2 y 3) siguen siendo **propue
 
 No inventes valores para estos campos; si hace falta, pregunta o deja el gap explícito:
 
-- M1 se llama "M1 — Ventas" en README, overview, modelo de datos y C4, pero "M1 — Pedidos" en mockups, wireframes, RNF y algunas ESP. Falta unificar el nombre en esos documentos.
+- Dónde se despliega `simulador-pasarela` (Render u otro). En local corre como aplicación propia en el puerto 8083 (ver la guía del backend, sección 9.3).
 
 ---
 
