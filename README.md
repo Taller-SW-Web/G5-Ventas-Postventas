@@ -151,7 +151,7 @@ G5-Ventas-Postventas/
 │
 ├── integraciones/                 # Acuerdos confirmados con otros módulos del curso
 │   ├── ACUERDO_G1_MARKETPLACE.md
-│   └── RESPUESTA_H02_H05.md        # Respuesta formal enviada a Marketplace (Jim)
+│   └── RESPUESTAS_G1_MARKETPLACE.md # Respuestas formales enviadas a Marketplace (Jim), por consulta
 │
 ├── specs/
 │   ├── overview.md                # Visión general del módulo D

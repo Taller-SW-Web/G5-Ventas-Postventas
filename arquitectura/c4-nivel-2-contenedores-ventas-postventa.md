@@ -116,6 +116,7 @@ M2 nunca escribe en el esquema `ventas`. Cuando necesita datos del pedido, los c
 |---|---|---|
 | Canal crea, consulta o anula un pedido | API REST síncrona mediante el Gateway (`/api/v1/pedidos`) | ESP-01, ESP-02, ESP-05 |
 | Canal o Gestor opera postventa | API REST síncrona mediante el Gateway (`/api/v2/...`) | ESP-07 a ESP-16 |
+| M1 solicita un cobro simulado | API REST síncrona hacia el simulador, inmediatamente después de crear el pedido con la reserva de stock confirmada — ningún canal invoca al simulador ni al webhook de notificación directamente | ESP-01 |
 | Pasarela informa el resultado del cobro | `POST /api/v1/pedidos/{pedidoId}/pagos/notificacion` (scope `ventas:pagos:webhook`) | ESP-03 |
 | Despacho informa estados | `PATCH /api/v1/pedidos/{pedidoId}/estado` (scope `ventas:pedidos:estado`, actor `SISTEMA_LOGISTICA`) | ESP-03 |
 | Despacho informa entrega fallida definitiva | `POST /api/v1/pedidos/{pedidoId}/eventos-logistica`; M1 anula el pedido y solicita el reembolso | ESP-05, ESP-06 |

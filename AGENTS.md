@@ -36,6 +36,7 @@ Estas decisiones están vigentes en la documentación aprobada. Si un documento 
 5. **Matriz de transiciones del pedido**: la de ESP-03 sección 7.2. Incluye `CREADO → ANULADO` y `PAGADO → ANULADO` directas (sin Gestor) para las solicitudes de F2; solo `EN_PREPARACION → ANULADO` requiere autorización del Gestor.
 6. **Gateway**: rutea por recurso (`/api/*/pedidos/**` a M1; devoluciones, reembolsos, csat, reclamos y dashboard a M2). `POST /api/v2/eventos` es interno y no pasa por el Gateway.
 7. **Integraciones**: cada servicio tiene un paquete `integracion/` con un cliente por sistema externo. Los eventos de M1 salen por `ventas.outbox_evento` y M2 descarta duplicados con `postventa.evento_recibido`.
+8. **Orquestación del cobro simulado (consulta de Marketplace, 2026-10-10)**: M1 es quien invoca al simulador de pasarela para iniciar el cobro, inmediatamente después de crear el pedido con la reserva confirmada — ningún canal invoca al simulador ni al endpoint `1.2` (`pagos/notificacion`, reservado a la pasarela) directamente. El canal solo crea el pedido (1.1) y consulta su estado (1.3/1.4b) hasta ver `PAGADO`. Decisión autocontenida en M1 + simulador (ambos del propio equipo); no depende de acuerdos con otros módulos del curso. Ver `F1-Ciclo de vida del pedido.md` (CA-01b), `ESP-01` (regla 12), `api-ventas.md` (1.1).
 
 Si necesitas tocar cualquiera de estos puntos, pregunta antes de asumir que el C4 "propuesta" ya es la versión vigente.
 
@@ -65,6 +66,7 @@ No inventes valores ni contenido para estos puntos; si hace falta, pregunta o de
 - Dónde se despliega `simulador-pasarela` (Render u otro). En local corre como aplicación propia en el puerto 8083 (ver la guía del backend, sección 9.3).
 - Mecanismo técnico de entrega del webhook `pedidos.envio.estado_actualizado` hacia Marketplace (acuerdo H-05, ver `api-ventas.md` 1.10) — reintentos, backoff, cola de salida. El contrato ya está cerrado; falta el diseño de implementación, a cargo de quien construya F1.
 - `integraciones/` (acuerdos con otros módulos): con G1 (Marketplace) ya hay contenido real — ver `integraciones/ACUERDO_G1_MARKETPLACE.md`. Con G2, G3, G6 y G7 sigue en pausa: solo crear su documento si existe una negociación real que documentar, nunca como placeholder vacío.
+- Liberación del cupón aplicado cuando un pedido se anula desde `CREADO` (por timeout/abandono del canal o por rechazo de la pasarela, ver `F1-Ciclo de vida del pedido.md` CA-12 y CA-07b): no existe integración documentada con Productos y Ofertas (F) para esto, a diferencia de la reposición de stock que sí la tiene. Gap preexistente, detectado el 2026-10-10 al homologar el pago simulado con Marketplace.
 
 ---
 

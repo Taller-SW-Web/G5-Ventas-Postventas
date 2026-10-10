@@ -101,6 +101,7 @@ Se registra el pedido en estado CREADO
 11. El sistema persiste el pedido con estado inicial `CREADO`.
 12. El sistema registra el primer historial de estado (`null → CREADO`, actor: canal).
 13. El sistema devuelve al canal la confirmación con el identificador del pedido.
+14. Inmediatamente después, M1 invoca al simulador de pasarela de pagos para iniciar el cobro simulado — el canal no interviene en este paso ni recibe su respuesta directamente; el resultado llega de forma asíncrona vía la notificación de pago (ver ESP-03, actor `PASARELA_PAGOS`).
 
 ### 7.2 Flujos alternativos
 
@@ -220,6 +221,7 @@ El pedido debe conservar como mínimo:
 9. Todo pedido creado debe iniciar en estado `CREADO`, sin excepción.
 10. El primer registro de historial se genera en la misma operación que la creación, nunca por separado.
 11. La cabecera `Idempotency-Key` es obligatoria (acuerdo H-02 con Marketplace). Misma clave + mismo payload devuelve el pedido ya creado sin duplicar ni reservar stock dos veces; misma clave + payload distinto rechaza con `409 Conflict` (`IDEMPOTENCY_KEY_REUSED`); si la solicitud falla por validación, la clave no se persiste y puede reintentarse.
+12. M1 es el único que invoca al simulador de pasarela para iniciar el cobro, y lo hace inmediatamente después de crear el pedido. Ningún canal (Marketplace, Chatbot o Retail) invoca al simulador directamente ni al endpoint de notificación de pago (`POST /api/v1/pedidos/{pedidoId}/pagos/notificacion`, reservado a la pasarela) — el canal solo crea el pedido y consulta su estado hasta ver `PAGADO` (ver ESP-02).
 
 ---
 
