@@ -36,7 +36,7 @@ Además, permite anticipar los efectos que tendrá la anulación sobre el estado
 
 El usuario principal de W04 es el **Gestor o Administrador de ventas**
 
-No todas las anulaciones necesitan intervención manual. De acuerdo con F2, los pedidos `CREADO` o `PAGADO` pueden tener anulaciones directas según el actor y motivo, mientras que una solicitud sobre un pedido `EN PREPARACIÓN` requiere autorización expresa del Gestor
+No todas las anulaciones necesitan intervención manual. De acuerdo con F2, los pedidos `CREADO` o `PAGADO` pueden tener anulaciones directas según el actor y motivo, mientras que una solicitud sobre un pedido `EN_PREPARACION` requiere autorización expresa del Gestor
 
 Los pedidos `DESPACHADO` o `ENTREGADO` no deben anularse desde este flujo y deben continuar por los procesos de postventa correspondientes
 
@@ -134,11 +134,11 @@ La autorización depende del estado actual del pedido:
 |---|---|
 | `CREADO` | Puede anularse directamente según actor y motivo |
 | `PAGADO` | Puede anularse directamente y origina reembolso cuando corresponde |
-| `EN PREPARACIÓN` | Requiere autorización explícita del Gestor |
+| `EN_PREPARACION` | Requiere autorización explícita del Gestor |
 | `DESPACHADO` | No anulable desde F2 |
 | `ENTREGADO` | No anulable desde F2 y debe gestionarse mediante postventa |
 
-Cuando una solicitud en `EN PREPARACIÓN` es aprobada, el pedido puede pasar a `ANULADO` y se coordinan los efectos derivados
+Cuando una solicitud en `EN_PREPARACION` es aprobada, el pedido puede pasar a `ANULADO` y se coordinan los efectos derivados
 
 Las anulaciones automáticas por `PAGO_NO_COMPLETADO` en estado `CREADO` nunca aparecen en esta bandeja: se ejecutan sin intervención humana y el Gestor solo las ve después, como registro histórico en el detalle del pedido (W03)
 

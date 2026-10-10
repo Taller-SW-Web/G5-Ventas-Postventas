@@ -81,7 +81,7 @@ Al elegir una opción se actualiza el contenido del campo y se cierra el despleg
 
 ### 5.2. Filtro Estado
 
-El filtro **Estado** presenta las opciones **Todos**, **CREADO**, **PAGADO**, **EN PREPARACIÓN**, **DESPACHADO**, **ENTREGADO** y **ANULADO**
+El filtro **Estado** presenta las opciones **Todos**, **CREADO**, **PAGADO**, **EN_PREPARACION**, **DESPACHADO**, **ENTREGADO** y **ANULADO**
 
 Su finalidad es delimitar la consulta según la situación del pedido, seleccionar un estado en este control no modifica el estado real de ningún registro
 
@@ -163,7 +163,7 @@ El bloque **Listado de pedidos** presenta una indicación para seleccionar una f
 | **Estado** | Situación actual del pedido |
 | **Acción** | Botón Ver detalle |
 
-La primera página muestra seis registros, entre ellos el pedido **PED-2026-1042** de Ana López en estado **PAGADO** y el pedido **PED-2026-1041** de Carlos Ramírez en estado **EN PREPARACIÓN**
+La primera página muestra seis registros, entre ellos el pedido **PED-2026-1042** de Ana López en estado **PAGADO** y el pedido **PED-2026-1041** de Carlos Ramírez en estado **EN_PREPARACION**
 
 Las etiquetas de estado permiten identificar cada caso dentro de la tabla, la información completa permanece disponible mediante el panel lateral
 
@@ -247,7 +247,7 @@ Esta entrada no ejecuta una anulación inmediata, su finalidad es revisar el ped
 |---|---|
 | **CREADO** | Puede participar en el flujo de anulación según actor y motivo |
 | **PAGADO** | Puede participar en el flujo y origina un reembolso cuando corresponde |
-| **EN PREPARACIÓN** | Requiere autorización expresa del Gestor |
+| **EN_PREPARACION** | Requiere autorización expresa del Gestor |
 | **DESPACHADO** | No admite anulación desde F2 |
 | **ENTREGADO** | Debe continuar por el proceso de postventa que corresponda |
 | **ANULADO** | No corresponde iniciar nuevamente la misma anulación |

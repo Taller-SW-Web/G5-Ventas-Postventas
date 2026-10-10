@@ -25,7 +25,7 @@ Incluye:
 | `CREADO` | **Canal (Chatbot / Web / Retail)** | `PAGO_NO_COMPLETADO` | **NO** (Automática e inmediata) | Reposición de stock en F. **Sin reembolso en F4**. |
 | `CREADO` | Cliente | `ERROR_SELECCION_PRODUCTO`, `ARREPENTIMIENTO_COMPRA` | **NO** (Directa) | Reposición de stock en F. **Sin reembolso en F4**. |
 | `PAGADO` | Cliente / Gestor | Motivo tipificado de anulación | **NO** (Directa) | Reposición de stock en F, cancelación despacho en E y **solicitud única de reembolso a F4**. |
-| `EN PREPARACIÓN` | Cliente | Motivo tipificado de anulación | **SÍ** (Condicional - bandeja de aprobación) | Si se aprueba: reposición en F, cancelación en E y **solicitud a F4**. Si se rechaza: conserva estado. |
+| `EN_PREPARACION` | Cliente | Motivo tipificado de anulación | **SÍ** (Condicional - bandeja de aprobación) | Si se aprueba: reposición en F, cancelación en E y **solicitud a F4**. Si se rechaza: conserva estado. |
 | `DESPACHADO` / `ENTREGADO` | Cualquiera | Cualquiera | **Bloqueado (409 Conflict)** | No anulable. Debe gestionarse como Devolución (F3). |
 
 - Ejecución de la transición a `ANULADO` (vía F1) y su registro en el historial.
@@ -38,10 +38,10 @@ Incluye:
 
 ### 4.1. Precondiciones
 
-- El pedido existe y está en un estado anulable (`CREADO`, `PAGADO` o `EN PREPARACIÓN`).
+- El pedido existe y está en un estado anulable (`CREADO`, `PAGADO` o `EN_PREPARACION`).
 - El solicitante está identificado (cliente desde su canal, sistema del canal o Gestor).
 - El motivo de anulación es obligatorio y tipificado (ej. `PAGO_NO_COMPLETADO`, `ERROR_SELECCION_PRODUCTO`, `SOLICITUD_CLIENTE`).
-- Si el pedido está `EN PREPARACIÓN`, existe una decisión de autorización expresa del Gestor antes de ejecutar.
+- Si el pedido está `EN_PREPARACION`, existe una decisión de autorización expresa del Gestor antes de ejecutar.
 
 ### 4.2. Dependencias
 
@@ -52,13 +52,13 @@ Incluye:
 | Despacho y Entrega (E) | Cancela el envío si ya estaba programado. |
 | F4 — Reembolsos y extornos | Recibe el origen de la solicitud de reembolso cuando el pedido ya tenía pago confirmado; F2 nunca ejecuta el extorno directamente. Si el pedido estaba en `CREADO`, F2 no invoca a F4. |
 | Canales A/B/C | Inician la anulación automática directa sobre pedidos `CREADO` cuando vence el tiempo de pago o falla la pasarela. |
-| Gestor | Autoriza o rechaza la anulación exclusivamente cuando el pedido está `EN PREPARACIÓN`. |
+| Gestor | Autoriza o rechaza la anulación exclusivamente cuando el pedido está `EN_PREPARACION`. |
 
 ### 4.3. Resultados
 
 - Una anulación válida deja el pedido en `ANULADO`, con motivo y actor registrados en el historial.
 - Se genera la solicitud de reposición de stock hacia F y, si aplica, de cancelación de despacho hacia E.
-- Si el pedido tenía pago confirmado (`PAGADO` o `EN PREPARACIÓN` aprobada), se origina exactamente una solicitud hacia F4 (idempotente). Si estaba en `CREADO`, no se genera solicitud a F4.
+- Si el pedido tenía pago confirmado (`PAGADO` o `EN_PREPARACION` aprobada), se origina exactamente una solicitud hacia F4 (idempotente). Si estaba en `CREADO`, no se genera solicitud a F4.
 - Una anulación rechazada o inválida no modifica el pedido.
 
 ## 5. Requisitos y criterios de aceptación automatizables
@@ -93,19 +93,19 @@ El sistema DEBE validar que el pedido esté en un estado anulable antes de proce
 
 ### RF-02. Autorización condicional
 
-El sistema DEBE exigir autorización explícita del Gestor cuando el pedido está `EN PREPARACIÓN`.
+El sistema DEBE exigir autorización explícita del Gestor cuando el pedido está `EN_PREPARACION`.
 
 #### CA-04. Autorización requerida y aprobada
 
-- **DADO** un pedido en estado `EN PREPARACIÓN`.
+- **DADO** un pedido en estado `EN_PREPARACION`.
 - **CUANDO** el Gestor aprueba la anulación desde su bandeja.
 - **ENTONCES** el sistema ejecuta la transición a `ANULADO`, registra al Gestor como autorizador en el historial y dispara los efectos secundarios (stock, despacho y reembolso).
 
 #### CA-05. Autorización requerida y rechazada
 
-- **DADO** un pedido en estado `EN PREPARACIÓN`.
+- **DADO** un pedido en estado `EN_PREPARACION`.
 - **CUANDO** el Gestor rechaza la solicitud.
-- **ENTONCES** el pedido conserva su estado operativo anterior (`EN PREPARACIÓN`) y se registra la decisión de rechazo con su motivo.
+- **ENTONCES** el pedido conserva su estado operativo anterior (`EN_PREPARACION`) y se registra la decisión de rechazo con su motivo.
 
 ### RF-03. Coordinación de efectos secundarios
 
@@ -136,7 +136,7 @@ Superficie visible dentro del panel del Gestor:
 | Elemento | Responsabilidad |
 |---|---|
 | Acción "Anular pedido" | Disponible solo cuando el estado del pedido lo permite; pide motivo tipificado obligatorio. |
-| Bandeja de autorizaciones pendientes | Lista exclusivamente los pedidos `EN PREPARACIÓN` con solicitud de anulación esperando decisión del Gestor. |
+| Bandeja de autorizaciones pendientes | Lista exclusivamente los pedidos `EN_PREPARACION` con solicitud de anulación esperando decisión del Gestor. |
 | Detalle de la anulación | Muestra motivo, solicitante, autorizador (si aplica) y el resultado de las acciones derivadas (stock, despacho, reembolso). |
 | Alertas de inconsistencia | Resalta visualmente cuando una acción derivada falló y necesita reintento manual/automático. |
 
@@ -144,8 +144,8 @@ Superficie visible dentro del panel del Gestor:
 
 | Componente lógico | Responsabilidad |
 |---|---|
-| Validador de elegibilidad | Verifica que el estado actual del pedido permita anulación (`CREADO`, `PAGADO`, `EN PREPARACIÓN`). |
-| Motor de autorización | Discrimina solicitudes directas (incluyendo `CREADO` con `PAGO_NO_COMPLETADO` por canal) frente a condicionales que exigen aprobación del Gestor (`EN PREPARACIÓN`). |
+| Validador de elegibilidad | Verifica que el estado actual del pedido permita anulación (`CREADO`, `PAGADO`, `EN_PREPARACION`). |
+| Motor de autorización | Discrimina solicitudes directas (incluyendo `CREADO` con `PAGO_NO_COMPLETADO` por canal) frente a condicionales que exigen aprobación del Gestor (`EN_PREPARACION`). |
 | Orquestador de efectos secundarios | Solicita reposición de stock (F), cancelación de despacho (E) y origina la solicitud a F4 solo si el pedido fue pagado. |
 | Cliente hacia F1 | Ejecuta la transición de estado a través del endpoint `PATCH /api/v1/pedidos/{id}/estado` de F1 — F2 nunca escribe directamente sobre las tablas de pedido. |
 
@@ -168,7 +168,7 @@ Superficie visible dentro del panel del Gestor:
 |---|---|---|---|
 | CA-01 y CA-01b | Anular directamente desde `CREADO` (por cliente o por canal con `PAGO_NO_COMPLETADO`) y desde `PAGADO`. | Unitaria e integración | Transición aplicada de inmediato sin crear tareas pendientes de aprobación ni solicitud a F4 en pedidos `CREADO`. |
 | CA-02 y CA-03 | Intentar anular sobre `DESPACHADO`/`ENTREGADO`, o enviar solicitud sin motivo. | Unitaria e integración | Códigos de error `409 Conflict` y `400 Bad Request` respectivamente. |
-| CA-04 y CA-05 | Simular aprobación y rechazo del Gestor en un pedido `EN PREPARACIÓN`. | Integración | Transición aplicada solo si se aprueba; estado conservado si se rechaza. |
+| CA-04 y CA-05 | Simular aprobación y rechazo del Gestor en un pedido `EN_PREPARACION`. | Integración | Transición aplicada solo si se aprueba; estado conservado si se rechaza. |
 | CA-06 y CA-07 | Anular un pedido con despacho programado y con pago confirmado, incluyendo un reintento. | Integración | Stock repuesto, despacho cancelado, una sola solicitud de reembolso generada hacia F4. |
 | CA-08 | Simular una falla de Despacho (E) durante la anulación. | Integración | Inconsistencia registrada y visible para el Gestor. |
 
@@ -178,7 +178,7 @@ La funcionalidad se considera completa cuando:
 
 - Los criterios `CA-01` a `CA-08` (incluyendo `CA-01b`) están implementados y cuentan con pruebas automatizadas exitosas.
 - Ninguna anulación puede ejecutarse sobre un pedido `DESPACHADO` o `ENTREGADO`.
-- Toda anulación en `EN PREPARACIÓN` sin autorización explícita del Gestor queda bloqueada.
+- Toda anulación en `EN_PREPARACION` sin autorización explícita del Gestor queda bloqueada.
 - Las anulaciones en `CREADO` por el Canal con motivo `PAGO_NO_COMPLETADO` se ejecutan sin intervención humana.
 - Los reintentos no duplican reembolsos ni historial.
 - Las fallas parciales de stock/despacho quedan siempre visibles, nunca ocultas.

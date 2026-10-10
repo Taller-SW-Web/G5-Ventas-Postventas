@@ -104,7 +104,7 @@ La entrega permite iniciar los procesos de postventa que cumplan sus condiciones
 
 F2 recibe la solicitud y verifica el estado del pedido, el motivo y la autorización necesaria antes de resolverla
 
-Los pedidos **CREADO** y **PAGADO** admiten la revisión de anulación desde el canal, **EN PREPARACIÓN** requiere autorización del Gestor y **DESPACHADO** ya no permite anulación
+Los pedidos **CREADO** y **PAGADO** admiten la revisión de anulación desde el canal, **EN_PREPARACION** requiere autorización del Gestor y **DESPACHADO** ya no permite anulación
 
 El recorrido de revisión es **Iniciar anulación → Revisar solicitud → Validar estado y motivo → Aprobar o rechazar → Confirmar decisión**
 

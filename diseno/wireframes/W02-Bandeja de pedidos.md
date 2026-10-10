@@ -109,7 +109,7 @@ El wireframe muestra estados como:
 
 - `CREADO`
 - `PAGADO`
-- `EN PREPARACIÓN`
+- `EN_PREPARACION`
 - `DESPACHADO`
 - `ENTREGADO`
 - `ANULADO`
@@ -130,7 +130,7 @@ En el ejemplo del wireframe se visualiza el pedido `PED-2026-1042` en estado `PA
 
 La acción **Ver detalle completo** dirige hacia W03, donde se consulta la información completa del pedido, incluidos sus datos asociados e historial de estados
 
-La acción **Iniciar anulación** se relaciona con F2 y debe estar disponible únicamente cuando el estado permita iniciar dicho proceso. De acuerdo con las reglas del módulo, los pedidos `CREADO`, `PAGADO` o `EN PREPARACIÓN` pueden participar en un flujo de anulación según las condiciones establecidas, mientras que un pedido `DESPACHADO` o `ENTREGADO` debe derivarse al flujo correspondiente de postventa
+La acción **Iniciar anulación** se relaciona con F2 y debe estar disponible únicamente cuando el estado permita iniciar dicho proceso. De acuerdo con las reglas del módulo, los pedidos `CREADO`, `PAGADO` o `EN_PREPARACION` pueden participar en un flujo de anulación según las condiciones establecidas, mientras que un pedido `DESPACHADO` o `ENTREGADO` debe derivarse al flujo correspondiente de postventa
 
 La interfaz puede ocultar o deshabilitar acciones que sean claramente inválidas según el estado actual, pero el backend debe volver a validar siempre la regla antes de ejecutar cualquier transición
 

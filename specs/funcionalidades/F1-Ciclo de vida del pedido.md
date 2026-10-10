@@ -31,7 +31,7 @@ Esta funcionalidad incluye:
                [PAGADO] ──────────(Anulación F2: directa)──────────────────┤
                   │                                                        │
                   ▼                                                        │
-           [EN PREPARACIÓN] ───(Anulación F2: requiere Gestor)─────────────┘
+           [EN_PREPARACION] ───(Anulación F2: requiere Gestor)─────────────┘
                   │
                   ▼
             [DESPACHADO] ──────(Entrega fallida / Logística E)────────► [ANULADO]
@@ -62,7 +62,7 @@ Esta funcionalidad **no incluye**: carrito/checkout de los canales (responsabili
 |---|---|
 | Seguridad y Usuarios (G) | Emitir el token JWT, validar rol y aportar datos de contacto del cliente. |
 | Productos y Ofertas (F) | Confirmar precio/disponibilidad al crear el pedido y recibir aviso de movimientos de stock al anular. |
-| Despacho y Entrega (E) | Recibir la solicitud de despacho cuando el pedido pasa a `EN PREPARACIÓN`/`DESPACHADO`, y notificar por evento/endpoint cuando el pedido fue `ENTREGADO` o falló la entrega. F1 **nunca** asigna repartidor, ruta ni zona — solo consume el evento. |
+| Despacho y Entrega (E) | Recibir la solicitud de despacho cuando el pedido pasa a `EN_PREPARACION`/`DESPACHADO`, y notificar por evento/endpoint cuando el pedido fue `ENTREGADO` o falló la entrega. F1 **nunca** asigna repartidor, ruta ni zona — solo consume el evento. |
 | Pasarela de Pagos (Externa) | Emitir la notificación de cobro exitoso (`CREADO → PAGADO`) o fallo. |
 | Canales A/B/C | Crear y consultar pedidos; solicitar anulación directa de pedidos `CREADO` por abandono o timeout de pago. |
 | F2 — Anulación de pedidos | Orquestar y solicitar a F1 la transición a `ANULADO` en estados pagados o en preparación. |
@@ -125,7 +125,7 @@ El sistema DEBE permitir consultar un pedido por identificador y listar pedidos 
 
 ### RF-03. Transición de estados según la máquina de estados
 
-El sistema DEBE aplicar únicamente las transiciones dibujadas en la máquina de estados (`CREADO → PAGADO → EN PREPARACIÓN → DESPACHADO → ENTREGADO`, con ramas hacia `ANULADO`) y registrar cada cambio.
+El sistema DEBE aplicar únicamente las transiciones dibujadas en la máquina de estados (`CREADO → PAGADO → EN_PREPARACION → DESPACHADO → ENTREGADO`, con ramas hacia `ANULADO`) y registrar cada cambio.
 
 #### CA-07. Transición válida (pago confirmado)
 
