@@ -78,28 +78,16 @@ erDiagram
         date fecha "not null"
     }
     OUTBOX_EVENTO {
-<<<<<<< HEAD
         uuid id_evento PK "not null, lo genera M1"
         bigint id_pedido FK "not null"
         varchar(40) tipo "not null"
-=======
-        bigint id PK "identity, not null"
-        bigint id_pedido FK "not null"
-        uuid id_evento UK "not null"
-        varchar(30) tipo "not null"
->>>>>>> 8dce20fefa9c25104ca0401df25ed3a82d636bc1
         jsonb payload "not null"
         timestamptz creado_en "not null, default now()"
         timestamptz enviado_en "null"
         integer intentos "not null, default 0"
     }
     EVENTO_RECIBIDO {
-<<<<<<< HEAD
         varchar(100) id_evento PK "not null"
-=======
-        bigint id PK "identity, not null"
-        varchar(100) id_evento UK "not null"
->>>>>>> 8dce20fefa9c25104ca0401df25ed3a82d636bc1
         varchar(30) origen "not null"
         timestamptz recibido_en "not null, default now()"
     }
@@ -142,11 +130,7 @@ erDiagram
         bigint id PK "identity, not null"
         bigint id_origen "referencia sin FK, not null"
         varchar(20) tipo_origen "not null"
-<<<<<<< HEAD
         bigint id_pedido "referencia sin FK, null"
-=======
-        bigint id_pedido "referencia sin FK, not null"
->>>>>>> 8dce20fefa9c25104ca0401df25ed3a82d636bc1
         varchar(100) idempotency_key UK "not null"
         numeric(12-2) monto "not null"
         char(3) moneda "not null, default PEN"
@@ -181,11 +165,7 @@ erDiagram
         timestamptz fecha_registro "not null, default now()"
         date fecha_limite_respuesta "not null"
         timestamptz fecha_atencion "null"
-<<<<<<< HEAD
         varchar(50) atendido_por "null"
-=======
-        varchar(30) atendido_por "null"
->>>>>>> 8dce20fefa9c25104ca0401df25ed3a82d636bc1
         text respuesta_visible_cliente "null"
         varchar(20) canal "not null"
     }
@@ -208,11 +188,7 @@ erDiagram
     }
     AGREGADO_METRICAS {
         date fecha PK "not null"
-<<<<<<< HEAD
         varchar(20) canal PK "not null"
-=======
-        varchar(30) canal PK "not null"
->>>>>>> 8dce20fefa9c25104ca0401df25ed3a82d636bc1
         integer pedidos_pagados "not null, default 0"
         integer pedidos_anulados "not null, default 0"
         integer pedidos_entregados "not null, default 0"
@@ -225,13 +201,8 @@ erDiagram
         timestamptz actualizado_en "not null, default now()"
     }
     EVENTO_RECIBIDO {
-<<<<<<< HEAD
         uuid id_evento PK "not null, el idEvento de M1"
         varchar(40) tipo "not null"
-=======
-        bigint id PK "identity, not null"
-        uuid id_evento UK "not null"
->>>>>>> 8dce20fefa9c25104ca0401df25ed3a82d636bc1
         timestamptz recibido_en "not null, default now()"
     }
 ```
@@ -292,11 +263,7 @@ No hay claves foráneas entre los dos esquemas.
 
 ## 5. Restricciones
 
-<<<<<<< HEAD
 Claves primarias: todas las tablas usan `id`, salvo agregado_ventas (clave compuesta periodo, canal, id_vendedor, id_producto), agregado_metricas (clave compuesta fecha, canal) y las tablas de eventos (`ventas.outbox_evento`, `ventas.evento_recibido` y `postventa.evento_recibido`), cuya clave primaria es `id_evento`.
-=======
-Claves primarias: todas las tablas usan `id`, salvo agregado_ventas (clave compuesta periodo, canal, id_vendedor, id_producto) y agregado_metricas (clave compuesta fecha, canal).
->>>>>>> 8dce20fefa9c25104ca0401df25ed3a82d636bc1
 
 Claves foráneas (todas con `ON DELETE CASCADE`):
 
@@ -317,14 +284,11 @@ Valores únicos:
 |---|---|---|
 | pedido_codigo_key | ventas.pedido | codigo |
 | anulacion_id_pedido_key | ventas.anulacion | id_pedido |
-| outbox_evento_id_evento_key | ventas.outbox_evento | id_evento |
-| evento_recibido_id_evento_key | ventas.evento_recibido | id_evento |
 | reclamo_codigo_key | postventa.reclamo | codigo |
 | reembolso_idempotency_key_key | postventa.reembolso | idempotency_key |
 | uq_reembolso_origen | postventa.reembolso | tipo_origen, id_origen |
 | uq_reembolso_intento | postventa.reembolso_intento | id_reembolso, numero_intento |
 | calificacion_id_pedido_key | postventa.calificacion | id_pedido |
-| evento_recibido_id_evento_key (postventa) | postventa.evento_recibido | id_evento |
 
 CHECK:
 
@@ -336,17 +300,11 @@ CHECK:
 | ck_detalle_cantidad | ventas.detalle_pedido | cantidad > 0 |
 | ck_detalle_montos | ventas.detalle_pedido | precio_unitario, descuento e importe ≥ 0 |
 | ck_pago_monto | ventas.pago | monto ≥ 0 |
-<<<<<<< HEAD
 | ck_pago_estado | ventas.pago | estado IN (PENDIENTE, CONFIRMADO, RECHAZADO) |
 | ck_historial_actor | ventas.historial_estado | actor IN (CLIENTE, GESTOR, CANAL_CHATBOT, PASARELA_PAGOS, SISTEMA_LOGISTICA) |
 | ck_anulacion_estado | ventas.anulacion | estado IN (PENDIENTE_AUTORIZACION, EJECUTADA, RECHAZADA) |
 | ck_outbox_tipo | ventas.outbox_evento | tipo IN (pedido.pagado, pedido.anulado, pedido.entregado) |
 | ck_evento_recibido_origen | ventas.evento_recibido | origen IN (PASARELA_PAGOS, SISTEMA_LOGISTICA) |
-=======
-| ck_pago_estado | ventas.pago | estado IN (PENDIENTE, APROBADO, RECHAZADO) |
-| ck_historial_actor | ventas.historial_estado | actor IN (CLIENTE, GESTOR, CANAL_CHATBOT, PASARELA_PAGOS, SISTEMA_LOGISTICA) |
-| ck_anulacion_estado | ventas.anulacion | estado IN (PENDIENTE_AUTORIZACION, EJECUTADA, RECHAZADA) |
->>>>>>> 8dce20fefa9c25104ca0401df25ed3a82d636bc1
 | ck_devolucion_estado | postventa.devolucion | estado IN (SOLICITADA, EN_EVALUACION, APROBADA, RECHAZADA, COMPLETADA) |
 | ck_devolucion_item_cantidad | postventa.devolucion_item | cantidad > 0 |
 | ck_reembolso_tipo_origen | postventa.reembolso | tipo_origen IN (ANULACION, DEVOLUCION) |
@@ -355,18 +313,11 @@ CHECK:
 | ck_reembolso_intento_estado | postventa.reembolso_intento | estado IN (PENDIENTE, EXITOSO, FALLIDO) |
 | ck_reclamo_plazo | postventa.reclamo | plazo_dias_habiles > 0 |
 | ck_reclamo_estado | postventa.reclamo | estado IN (REGISTRADO, EN_PROCESO, ATENDIDO, DERIVADO) |
-<<<<<<< HEAD
 | ck_reclamo_canal | postventa.reclamo | canal IN (MARKETPLACE, CHATBOT, RETAIL) |
 | ck_calificacion_puntaje | postventa.calificacion | puntaje entre 1 y 5 |
 | ck_calificacion_canal | postventa.calificacion | canal IN (MARKETPLACE, CHATBOT, RETAIL) |
 | ck_agregado_metricas_canal | postventa.agregado_metricas | canal IN (MARKETPLACE, CHATBOT, RETAIL) |
 
-=======
-| ck_calificacion_puntaje | postventa.calificacion | puntaje entre 1 y 5 |
-| ck_calificacion_canal | postventa.calificacion | canal IN (MARKETPLACE, CHATBOT, RETAIL) |
-
-`reclamo.canal` todavía no tiene CHECK porque la columna ni siquiera existe en este modelo — ver "Pendientes".
->>>>>>> 8dce20fefa9c25104ca0401df25ed3a82d636bc1
 
 ## 6. Índices
 
@@ -380,21 +331,12 @@ Además de los que PostgreSQL crea para las claves primarias y únicas:
 | ix_evidencia_id_devolucion | postventa.evidencia_devolucion | id_devolucion |
 | ix_devolucion_id_pedido | postventa.devolucion | id_pedido |
 | ix_reclamo_id_pedido | postventa.reclamo | id_pedido |
-<<<<<<< HEAD
 | ix_outbox_pendientes | ventas.outbox_evento | creado_en, solo filas con enviado_en null (índice parcial) |
 | ix_devolucion_id_cliente | postventa.devolucion | id_cliente |
 | ix_reembolso_id_pedido | postventa.reembolso | id_pedido |
 | ix_devolucion_item_id_devolucion | postventa.devolucion_item | id_devolucion |
 
 Los tres primeros sirven para buscar por pedido en M2 aunque esas columnas no sean claves foráneas. `ix_outbox_pendientes` sirve al `EnvioEventosScheduler` para traer los eventos no enviados más antiguos. `ix_reembolso_id_pedido` sirve para calcular el saldo reembolsable de un pedido (ESP-09).
-=======
-| ix_outbox_evento_pendientes | ventas.outbox_evento | id_pedido, enviado_en |
-| ix_reembolso_id_pedido | postventa.reembolso | id_pedido |
-| ix_devolucion_item_id_devolucion | postventa.devolucion_item | id_devolucion |
-| ix_reembolso_intento_id_reembolso | postventa.reembolso_intento | id_reembolso |
-
-Los tres primeros sirven para buscar por pedido en M2 aunque esas columnas no sean claves foráneas. `ix_outbox_evento_pendientes` sirve al `EnvioEventosScheduler` para traer los eventos no enviados más antiguos. `ix_reembolso_id_pedido` sirve para calcular el saldo reembolsable de un pedido (ESP-09).
->>>>>>> 8dce20fefa9c25104ca0401df25ed3a82d636bc1
 
 ## 7. Seguridad
 
@@ -404,10 +346,6 @@ Los tres primeros sirven para buscar por pedido en M2 aunque esas columnas no se
 
 ## 8. Pendientes
 
-<<<<<<< HEAD
-=======
-- `reclamo.canal`: el contrato (`api-postventas.md` 2.8) ya lo envía al registrar un reclamo, pero la columna no existe todavía en ninguna versión de este modelo — falta decidirlo con el equipo.
->>>>>>> 8dce20fefa9c25104ca0401df25ed3a82d636bc1
 - El `.drawio` de este diagrama todavía no incluye `outbox_evento`, `evento_recibido` (ambos esquemas), `devolucion_item`, `reembolso_intento` ni `agregado_metricas`, ni sus índices y CHECK — pendiente de que quien lo mantiene lo actualice y reexporte las imágenes.
 
 ## 9. Otros modelos
