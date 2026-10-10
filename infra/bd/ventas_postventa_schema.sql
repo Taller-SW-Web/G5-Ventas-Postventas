@@ -1,6 +1,9 @@
 -- =====================================================================
 -- Módulo D — Ventas y Postventa
 -- Traducción a PostgreSQL del "Diagrama ER - VentasPostventas.drawio"
+-- Actualizado el 10/10/2026 para reflejar exactamente lo que hay en Supabase
+-- (migraciones crear_esquemas_ventas_postventa, decisiones_estados_canal_eventos
+-- y huecos_h2_h3_h5_h6_postventa).
 --
 -- Esquema ventas    = M1 (Ventas)
 -- Esquema postventa = M2 (Postventa)
@@ -11,8 +14,8 @@
 create schema if not exists ventas;
 create schema if not exists postventa;
 
-comment on schema ventas    is 'M1 - Ventas: pedido, detalle, pago, historial de estados y anulación.';
-comment on schema postventa is 'M2 - Postventa: devolución, evidencia, reclamo, reembolso, calificación y agregados.';
+comment on schema ventas    is 'M1 - Ventas: pedido, detalle, pago, historial de estados, anulación y eventos.';
+comment on schema postventa is 'M2 - Postventa: devolución, evidencia, reclamo, reembolso, calificación, agregados y eventos.';
 
 -- =====================================================================
 -- ESQUEMA M1 — VENTAS
@@ -43,6 +46,7 @@ create table ventas.pedido (
     id_cliente            bigint,   -- referencia externa: módulo G (Seguridad y Usuarios)
     id_vendedor           bigint,   -- referencia externa: módulo G (Seguridad y Usuarios)
     id_direccion_entrega  bigint,   -- referencia externa: módulo E (Despacho y Entrega)
+    constraint ck_pedido_canal check (canal in ('MARKETPLACE','CHATBOT','RETAIL')),
     constraint ck_pedido_estado check (estado in
         ('CREADO','PAGADO','EN_PREPARACION','DESPACHADO','ENTREGADO','ANULADO')),
     constraint ck_pedido_montos check (
@@ -77,7 +81,8 @@ create table ventas.pago (
     monto          numeric(12,2) not null,
     estado         varchar(20)   not null,
     fecha_proceso  timestamptz,
-    constraint ck_pago_monto check (monto >= 0)
+    constraint ck_pago_monto  check (monto >= 0),
+    constraint ck_pago_estado check (estado in ('PENDIENTE','CONFIRMADO','RECHAZADO'))
 );
 
 create table ventas.historial_estado (
@@ -101,13 +106,36 @@ create table ventas.anulacion (
     id_solicitante  bigint,
     id_autorizador  bigint,
     estado          varchar(20)  not null,
-    fecha           date         not null default current_date
+    fecha           date         not null default current_date,
+    constraint ck_anulacion_estado check (estado in ('PENDIENTE_AUTORIZACION','EJECUTADA','RECHAZADA'))
+);
+
+-- Eventos de M1 (ESP-04): se guardan en la misma transacción del cambio de estado
+-- y EnvioEventosScheduler los envía a M2.
+create table ventas.outbox_evento (
+    id_evento   uuid         primary key,   -- lo genera M1 y viaja como idEvento en el payload
+    tipo        varchar(40)  not null,
+    id_pedido   bigint       not null references ventas.pedido(id) on delete cascade,
+    payload     jsonb        not null,
+    creado_en   timestamptz  not null default now(),
+    enviado_en  timestamptz,                -- null mientras no se envíe a M2
+    intentos    integer      not null default 0,
+    constraint ck_outbox_tipo check (tipo in ('pedido.pagado','pedido.anulado','pedido.entregado'))
+);
+
+-- Notificaciones externas ya procesadas (idempotencia de 1.2 y 1.6)
+create table ventas.evento_recibido (
+    id_evento    varchar(100) primary key,  -- transaccionId de la pasarela o guiaRemision:evento
+    origen       varchar(30)  not null,
+    recibido_en  timestamptz  not null default now(),
+    constraint ck_evento_recibido_origen check (origen in ('PASARELA_PAGOS','SISTEMA_LOGISTICA'))
 );
 
 -- Índices para las claves foráneas de M1
 create index ix_detalle_pedido_id_pedido   on ventas.detalle_pedido(id_pedido);
 create index ix_pago_id_pedido             on ventas.pago(id_pedido);
 create index ix_historial_estado_id_pedido on ventas.historial_estado(id_pedido);
+create index ix_outbox_pendientes          on ventas.outbox_evento(creado_en) where enviado_en is null;
 
 -- =====================================================================
 -- ESQUEMA M2 — POSTVENTA
@@ -122,10 +150,22 @@ create table postventa.devolucion (
     resolucion          varchar(30),
     id_autorizador      bigint,
     fundamento_rechazo  text,
-    fecha               date         not null default current_date
+    fecha               date         not null default current_date,
+    descripcion         text,
+    id_cliente          bigint,      -- referencia externa: módulo G
+    constraint ck_devolucion_estado check (estado in
+        ('SOLICITADA','EN_EVALUACION','APROBADA','RECHAZADA','COMPLETADA'))
 );
 
 comment on column postventa.devolucion.id_pedido is 'Referencia API - el pedido vive en M1, sin FK física';
+
+create table postventa.devolucion_item (
+    id             bigint generated always as identity primary key,
+    id_devolucion  bigint  not null references postventa.devolucion(id) on delete cascade,
+    id_producto    bigint  not null,   -- referencia externa: módulo F
+    cantidad       integer not null,
+    constraint ck_devolucion_item_cantidad check (cantidad > 0)
+);
 
 create table postventa.evidencia_devolucion (
     id             bigint generated always as identity primary key,
@@ -150,7 +190,14 @@ create table postventa.reclamo (
     plazo_dias_habiles          integer      not null default 15,
     fecha_limite_respuesta      date         not null,
     respuesta_visible_cliente   text,
-    constraint ck_reclamo_plazo check (plazo_dias_habiles > 0)
+    canal                       varchar(20)  not null,
+    id_cliente                  bigint,      -- referencia externa: módulo G
+    fecha_registro              timestamptz  not null default now(),
+    fecha_atencion              timestamptz,
+    atendido_por                varchar(50),
+    constraint ck_reclamo_plazo  check (plazo_dias_habiles > 0),
+    constraint ck_reclamo_canal  check (canal in ('MARKETPLACE','CHATBOT','RETAIL')),
+    constraint ck_reclamo_estado check (estado in ('REGISTRADO','EN_PROCESO','ATENDIDO','DERIVADO'))
 );
 
 comment on column postventa.reclamo.id_pedido is 'Referencia API opcional - el pedido vive en M1, sin FK física';
@@ -166,6 +213,7 @@ create table postventa.reembolso (
     estado           varchar(20)   not null default 'PENDIENTE',
     id_autorizador   bigint,
     fecha            date          not null default current_date,
+    id_pedido        bigint,       -- referencia API: el pedido vive en M1 (control de saldo)
     constraint ck_reembolso_tipo_origen check (tipo_origen in ('ANULACION','DEVOLUCION')),
     constraint ck_reembolso_estado      check (estado in ('PENDIENTE','EXITOSO','FALLIDO')),
     constraint ck_reembolso_monto       check (monto > 0),
@@ -174,6 +222,19 @@ create table postventa.reembolso (
 
 comment on column postventa.reembolso.id_origen is 'Referencia API - anulación (M1) o devolución (M2), sin FK física';
 
+-- Historial de intentos de cada reembolso (ESP-10). Nunca se edita ni se borra un intento.
+create table postventa.reembolso_intento (
+    id              bigint generated always as identity primary key,
+    id_reembolso    bigint       not null references postventa.reembolso(id) on delete cascade,
+    numero_intento  integer      not null,
+    estado          varchar(20)  not null,
+    id_transaccion  varchar(100),
+    resultado       text,
+    fecha_hora      timestamptz  not null default now(),
+    constraint ck_reembolso_intento_estado check (estado in ('PENDIENTE','EXITOSO','FALLIDO')),
+    constraint uq_reembolso_intento unique (id_reembolso, numero_intento)
+);
+
 create table postventa.calificacion (
     id          bigint generated always as identity primary key,
     id_pedido   bigint       not null unique,  -- referencia API: el pedido vive en M1
@@ -181,7 +242,8 @@ create table postventa.calificacion (
     comentario  text,
     canal       varchar(30)  not null,
     fecha       date         not null default current_date,
-    constraint ck_calificacion_puntaje check (puntaje between 1 and 5)
+    constraint ck_calificacion_puntaje check (puntaje between 1 and 5),
+    constraint ck_calificacion_canal   check (canal in ('MARKETPLACE','CHATBOT','RETAIL'))
 );
 
 comment on column postventa.calificacion.id_pedido is 'Referencia API - el pedido vive en M1, sin FK física';
@@ -197,10 +259,38 @@ create table postventa.agregado_ventas (
     primary key (periodo, canal, id_vendedor, id_producto)
 );
 
+-- Métricas del dashboard por día y canal (ESP-15, ESP-16). Se actualiza con upsert.
+create table postventa.agregado_metricas (
+    fecha                   date          not null,
+    canal                   varchar(20)   not null,
+    pedidos_pagados         integer       not null default 0,
+    pedidos_anulados        integer       not null default 0,
+    pedidos_entregados      integer       not null default 0,
+    devoluciones_aprobadas  integer       not null default 0,
+    monto_reembolsado_pen   numeric(14,2) not null default 0,
+    csat_suma               integer       not null default 0,
+    csat_cantidad           integer       not null default 0,
+    reclamos_registrados    integer       not null default 0,
+    reclamos_atendidos      integer       not null default 0,
+    actualizado_en          timestamptz   not null default now(),
+    primary key (fecha, canal),
+    constraint ck_agregado_metricas_canal check (canal in ('MARKETPLACE','CHATBOT','RETAIL'))
+);
+
+-- Eventos de M1 ya aplicados a los agregados (idempotencia del receptor 2.13)
+create table postventa.evento_recibido (
+    id_evento    uuid         primary key,  -- el mismo idEvento que genera M1
+    tipo         varchar(40)  not null,
+    recibido_en  timestamptz  not null default now()
+);
+
 -- Índices de M2
 create index ix_evidencia_id_devolucion on postventa.evidencia_devolucion(id_devolucion);
 create index ix_devolucion_id_pedido    on postventa.devolucion(id_pedido);
 create index ix_reclamo_id_pedido       on postventa.reclamo(id_pedido);
+create index ix_devolucion_id_cliente   on postventa.devolucion(id_cliente);
+create index ix_devolucion_item_id_devolucion on postventa.devolucion_item(id_devolucion);
+create index ix_reembolso_id_pedido     on postventa.reembolso(id_pedido);
 
 -- =====================================================================
 -- Seguridad en Supabase
@@ -214,9 +304,15 @@ alter table ventas.detalle_pedido          enable row level security;
 alter table ventas.pago                    enable row level security;
 alter table ventas.historial_estado        enable row level security;
 alter table ventas.anulacion               enable row level security;
+alter table ventas.outbox_evento           enable row level security;
+alter table ventas.evento_recibido         enable row level security;
 alter table postventa.devolucion           enable row level security;
 alter table postventa.evidencia_devolucion enable row level security;
 alter table postventa.reclamo              enable row level security;
 alter table postventa.reembolso            enable row level security;
 alter table postventa.calificacion         enable row level security;
 alter table postventa.agregado_ventas      enable row level security;
+alter table postventa.devolucion_item      enable row level security;
+alter table postventa.reembolso_intento    enable row level security;
+alter table postventa.agregado_metricas    enable row level security;
+alter table postventa.evento_recibido      enable row level security;
