@@ -182,7 +182,7 @@ Por definir en equipo:
 
 - En el ER se dibuja la relación devolución-reembolso, pero `reembolso` usa `id_origen` y `tipo_origen`, que puede apuntar a una anulación (M1) o a una devolución (M2). Se dejó sin clave foránea.
 - En la base el estado se guarda como `EN_PREPARACION`; el enum en Java debe usar el mismo valor.
-- Faltan definir los valores válidos de `pago.estado`, `devolucion.estado`, `reclamo.estado` y `canal`.
+- Faltan definir los valores válidos de `devolucion.estado`, `reclamo.estado` y `canal`. `pago.estado` ya está confirmado como `PENDIENTE, APROBADO, RECHAZADO` en el código de `servicio-ventas` (enum `EstadoPago`).
 
 Trabajo técnico:
 

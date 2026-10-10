@@ -40,7 +40,7 @@ La publicación de eventos de dominio derivada de estas transiciones corresponde
 | -------------------------------------- | ------------------------------------ | ----------------------------------------------------------------------------------- |
 | **Pasarela de pago (notificación)**    | `PASARELA_PAGOS` | Notifica la confirmación o el rechazo del pago, disparando `CREADO → PAGADO` o `CREADO → ANULADO`. |
 | **Canal**                               | `CANAL_CHATBOT` | Dispara la anulación por `PAGO_NO_COMPLETADO` cuando la pasarela reporta el fallo, sin intervención del Gestor. |
-| **Gestor**                              | `GESTOR` | Autoriza anulaciones desde `EN PREPARACIÓN` (ver F2); consulta el historial.        |
+| **Gestor**                              | `GESTOR` | Autoriza anulaciones desde `EN_PREPARACION` (ver F2); consulta el historial.        |
 | **Despacho y Entrega (E)**              | `SISTEMA_LOGISTICA` | Notifica `DESPACHADO` y `ENTREGADO` (o entrega fallida) mediante su llamada a la API de F1. |
 | **M1 — Ventas**                        | — | Valida cada transición contra la máquina de estados y registra el historial.        |
 
@@ -73,11 +73,13 @@ Aplica el cambio y registra el historial
 ### 7.1 Máquina de estados
 
 ```text
-CREADO ──────► PAGADO ──────► EN PREPARACIÓN ──────► DESPACHADO ──────► ENTREGADO
-  │               │
-  │               └──► ANULADO  (EN PREPARACIÓN → ANULADO requiere autorización del Gestor, ver F2)
-  │
-  └──► ANULADO  (por CANAL, motivo PAGO_NO_COMPLETADO, sin Gestor)
+CREADO ──────► PAGADO ──────► EN_PREPARACION ──────► DESPACHADO ──────► ENTREGADO
+
+Anulaciones (ver F2):
+  CREADO          ──► ANULADO  (por CANAL, motivo PAGO_NO_COMPLETADO, sin Gestor)
+  PAGADO          ──► ANULADO  (directa, por CLIENTE o GESTOR, sin autorización adicional)
+  EN_PREPARACION  ──► ANULADO  (requiere autorización del GESTOR)
+  DESPACHADO      ──► ANULADO  (entrega fallida definitiva, por SISTEMA_LOGISTICA, sin Gestor)
 ```
 
 ### 7.2 Matriz de transiciones
@@ -86,10 +88,12 @@ CREADO ──────► PAGADO ──────► EN PREPARACIÓN ──
 | --------------------- | ---------------- | ------------------------------------------ | ---------- | ------------------------ | :------------------: |
 | `CREADO`               | `PAGADO`          | Notificación de la pasarela de pago         | `PASARELA_PAGOS`   | —                          | No                    |
 | `CREADO`               | `ANULADO`         | Notificación de pago no completado          | `CANAL_CHATBOT`      | `PAGO_NO_COMPLETADO`      | No                    |
-| `PAGADO`               | `EN PREPARACIÓN`  | Acción interna del flujo de preparación     | `SISTEMA_LOGISTICA`    | —                          | No                    |
-| `EN PREPARACIÓN`       | `DESPACHADO`      | Confirmación de Despacho (E)                | `SISTEMA_LOGISTICA`   | —                          | No                    |
-| `EN PREPARACIÓN`       | `ANULADO`         | Solicitud de anulación (ver F2)             | `GESTOR`     | Tipificado (F2)           | **Sí**                |
+| `PAGADO`               | `EN_PREPARACION`  | Acción interna del flujo de preparación     | `SISTEMA_LOGISTICA`    | —                          | No                    |
+| `PAGADO`               | `ANULADO`         | Solicitud de anulación directa (ver F2)     | `CLIENTE` o `GESTOR`     | Tipificado (F2)           | No                    |
+| `EN_PREPARACION`       | `DESPACHADO`      | Confirmación de Despacho (E)                | `SISTEMA_LOGISTICA`   | —                          | No                    |
+| `EN_PREPARACION`       | `ANULADO`         | Solicitud de anulación (ver F2)             | `GESTOR`     | Tipificado (F2)           | **Sí**                |
 | `DESPACHADO`           | `ENTREGADO`       | Notificación de entrega de Despacho (E)     | `SISTEMA_LOGISTICA`   | —                          | No                    |
+| `DESPACHADO`           | `ANULADO`         | Entrega fallida definitiva (Despacho, ver api-ventas.md 1.6) | `SISTEMA_LOGISTICA` | `ENTREGA_FALLIDA_DEFINITIVA` | No         |
 
 > Los valores de `Actor` corresponden al enum real de `historial_estado.actor` en base de datos: `CLIENTE`, `GESTOR`, `CANAL_CHATBOT`, `PASARELA_PAGOS`, `SISTEMA_LOGISTICA` (ver [diagrama-fisico.md](../../../diseno/diagramas/bd/diagrama-fisico.md)).
 
@@ -160,10 +164,12 @@ Cualquier transición fuera de esta tabla se rechaza, incluso con permisos de `A
 
 1. M1 es el único dueño del estado del pedido; ninguna transición fuera de la matriz de la sección 7.2 está permitida, ni siquiera con permisos de `ADMIN`.
 2. La transición `CREADO → PAGADO` solo puede dispararla la notificación de la pasarela de pago.
-3. La transición `CREADO → ANULADO` por `PAGO_NO_COMPLETADO` la dispara el Canal a partir de la notificación de la pasarela, **sin requerir autorización del Gestor** — a diferencia de la anulación desde `EN PREPARACIÓN`, que sí la requiere (ver F2).
-4. Toda transición a `ANULADO` exige un motivo tipificado.
-5. Toda transición queda registrada en el historial con actor, motivo (si aplica) y fecha/hora en UTC.
-6. Las notificaciones externas (pasarela, Despacho) deben procesarse de forma idempotente.
+3. La transición `CREADO → ANULADO` por `PAGO_NO_COMPLETADO` la dispara el Canal a partir de la notificación de la pasarela, **sin requerir autorización del Gestor** — a diferencia de la anulación desde `EN_PREPARACION`, que sí la requiere (ver F2).
+4. La transición `PAGADO → ANULADO` es directa (Cliente o Gestor, ver F2) y tampoco requiere autorización adicional, a diferencia de la anulación desde `EN_PREPARACION`.
+5. La transición `DESPACHADO → ANULADO` solo la dispara Despacho (`SISTEMA_LOGISTICA`) por `ENTREGA_FALLIDA_DEFINITIVA` (ver api-ventas.md, 1.6), sin intervención del Gestor.
+6. Toda transición a `ANULADO` exige un motivo tipificado.
+7. Toda transición queda registrada en el historial con actor, motivo (si aplica) y fecha/hora en UTC.
+8. Las notificaciones externas (pasarela, Despacho) deben procesarse de forma idempotente.
 
 ---
 
@@ -180,7 +186,7 @@ Cualquier transición fuera de esta tabla se rechaza, incluso con permisos de `A
 
 ## 11. Estado y trazabilidad
 
-El historial debe quedar siempre ordenado cronológicamente y debe permitir distinguir, para la transición `CREADO → ANULADO`, si fue disparada por `PAGO_NO_COMPLETADO` (sin Gestor) o por una anulación autorizada desde `EN PREPARACIÓN` (con Gestor, ver F2) — ambas terminan en `ANULADO`, pero con actor y motivo distintos.
+El historial debe quedar siempre ordenado cronológicamente y debe permitir distinguir, para cualquier transición `→ ANULADO`, cuál de los cuatro orígenes la disparó — `CREADO` (`PAGO_NO_COMPLETADO`, sin Gestor), `PAGADO` (directa, sin Gestor), `EN_PREPARACION` (con autorización del Gestor, ver F2) o `DESPACHADO` (`ENTREGA_FALLIDA_DEFINITIVA`, sin Gestor) — todas terminan en `ANULADO`, pero con actor y motivo distintos.
 
 ---
 

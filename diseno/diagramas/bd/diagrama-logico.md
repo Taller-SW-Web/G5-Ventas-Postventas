@@ -249,6 +249,7 @@ M1:
 3. Un pedido tiene como máximo una anulación.
 4. detalle_pedido.cantidad es mayor que cero y los montos no pueden ser negativos.
 5. historial_estado solo recibe inserciones.
+6. pago.estado solo admite PENDIENTE, APROBADO y RECHAZADO (confirmado en el código de `servicio-ventas`, enum `EstadoPago`).
 
 M2:
 
@@ -275,7 +276,7 @@ M2:
 
 ## 7. Pendientes
 
-- pago.estado, devolucion.estado, anulacion.estado y pedido.canal no tienen lista de valores definida.
+- devolucion.estado, anulacion.estado y pedido.canal no tienen lista de valores definida.
 
 ## 8. Otros modelos
 

@@ -227,6 +227,7 @@ CHECK:
 | ck_detalle_cantidad | ventas.detalle_pedido | cantidad > 0 |
 | ck_detalle_montos | ventas.detalle_pedido | precio_unitario, descuento e importe ≥ 0 |
 | ck_pago_monto | ventas.pago | monto ≥ 0 |
+| ck_pago_estado | ventas.pago | estado IN (PENDIENTE, APROBADO, RECHAZADO) |
 | ck_historial_actor | ventas.historial_estado | actor IN (CLIENTE, GESTOR, CANAL_CHATBOT, PASARELA_PAGOS, SISTEMA_LOGISTICA) |
 | ck_reembolso_tipo_origen | postventa.reembolso | tipo_origen IN (ANULACION, DEVOLUCION) |
 | ck_reembolso_estado | postventa.reembolso | estado IN (PENDIENTE, EXITOSO, FALLIDO) |
@@ -257,7 +258,7 @@ Los tres últimos sirven para buscar por pedido en M2 aunque esas columnas no se
 
 ## 8. Pendientes
 
-- pago.estado, devolucion.estado, anulacion.estado y pedido.canal no tienen CHECK porque sus valores aún no están definidos.
+- devolucion.estado, anulacion.estado y pedido.canal no tienen CHECK porque sus valores aún no están definidos.
 
 ## 9. Otros modelos
 
