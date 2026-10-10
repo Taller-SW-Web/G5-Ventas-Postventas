@@ -17,6 +17,8 @@ Este documento es el **punto de entrada formal** al contrato de API del Módulo 
 
 Códigos y condiciones de error de ambos contratos, consolidados: [specs/api/catalogo-errores.md](api/catalogo-errores.md).
 
+Eventos de dominio que M1 publica hacia M2 y Productos (F), consolidados: [specs/api/catalogo-eventos.md](api/catalogo-eventos.md).
+
 Cualquier referencia a `specs/api-contract.md` en el resto del repositorio (README, CONTRIBUTING, especificaciones funcionales y no funcionales) debe entenderse como una referencia a este índice y, a través de él, a los dos contratos específicos.
 
 ---
