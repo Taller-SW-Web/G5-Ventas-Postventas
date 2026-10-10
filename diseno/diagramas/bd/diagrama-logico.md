@@ -276,7 +276,6 @@ M2:
 ## 7. Pendientes
 
 - pago.estado, devolucion.estado, anulacion.estado y pedido.canal no tienen lista de valores definida.
-- anulacion está en M1 porque cambia el estado del pedido, pero el C4 nivel 2 pone F2 en M2. Hay que alinear ambos documentos.
 
 ## 8. Otros modelos
 
