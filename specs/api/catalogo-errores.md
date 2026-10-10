@@ -98,7 +98,6 @@ Definidos en la guía de implementación del backend (sección 3.3), además de 
 ## 6. Pendientes
 
 - Algunas condiciones (marcadas `—` en las tablas 4 y 5) todavía no tienen un `codigo` de negocio propio ni en los contratos ni en la guía — por ejemplo, datos de pago inconsistentes, token ausente/inválido, rechazo de devolución sin fundamento, o estructura de reembolso inválida. Asignarles un código es una decisión de equipo que no corresponde inventar en este documento.
-- Estas filas vienen de la guía de implementación, pero los contratos (`api-ventas.md`/`api-postventas.md`) todavía no las documentan explícitamente — falta agregarlas ahí: la bandeja de anulaciones pendientes (`GET`/`PATCH .../anulaciones/{anulacionId}`), `SIN_STOCK` en la resolución de devolución, `SALDO_INSUFICIENTE` en reembolsos, `PEDIDO_NO_ENTREGADO` en CSAT, el `409` de reclamo ya `ATENDIDO`, y `POST /api/v2/eventos`.
 
 ---
 

@@ -243,6 +243,7 @@
     -   **`200 OK`**: Actualizado exitosamente.
     -   **`400 Bad Request`**: Rechazo sin fundamento explicativo.
     -   **`404 Not Found`**: Expediente no encontrado.
+    -   **`409 Conflict`** (`SIN_STOCK`): Aprobación con `tipo: CAMBIO` sin stock disponible en Productos (F). El Gestor puede volver a resolver como reembolso o rechazo.
 
 ### F4: Reembolsos y Extornos (Responsable: Luis Alejandro)
 
@@ -287,9 +288,10 @@
 ```
 
 -   **`400 Bad Request`**: Monto fuera de rango o estructura inválida.
--   **`403 Forbidden`**: Solicitud con origen no permitido (distinto de
+-   **`403 Forbidden`** (`ORIGEN_NO_PERMITIDO`): Solicitud con origen no permitido (distinto de
     `ANULACION` o `DEVOLUCION`).
--   **`409 Conflict`**: Conflicto de idempotencia o fallo de pasarela.
+-   **`409 Conflict`** (`CLAVE_IDEMPOTENCIA_EN_CONFLICTO`): La `X-Idempotency-Key` ya existe para una solicitud con datos distintos (origen, monto, moneda), o la pasarela respondió con error.
+-   **`409 Conflict`** (`SALDO_INSUFICIENTE`): El monto, sumado a los reembolsos `EXITOSO`/`PENDIENTE` ya registrados para el mismo pedido, supera el total pagado.
 
 ### F5: Calificación de Experiencia / CSAT (Responsable: Johan)
 
@@ -311,7 +313,8 @@
 -   **Respuestas:**
     -   **`201 Created`**: Encuesta guardada.
     -   **`400 Bad Request`**: Puntuación fuera de rango (1 al 5).
-    -   **`409 Conflict`**: Encuesta ya registrada para ese pedido.
+    -   **`409 Conflict`** (`PEDIDO_NO_ENTREGADO`): El pedido todavía no está en estado `ENTREGADO`.
+    -   **`409 Conflict`** (`CALIFICACION_DUPLICADA`): Encuesta ya registrada para ese pedido.
 
 ### F6: Reclamos y Dashboard (Responsable: Fabrizio)
 
@@ -456,7 +459,8 @@
 }
 ```
 
--   **`400 Bad Request`**: Campo `respuestaVisibleCliente` vacío o nulo.
+-   **`400 Bad Request`** (`RESPUESTA_VACIA`): Campo `respuestaVisibleCliente` vacío o nulo.
+-   **`409 Conflict`**: El reclamo ya está `ATENDIDO`.
 
 #### 2.12 Consultar Métricas del Dashboard
 
@@ -511,18 +515,24 @@
 ``` json
 {
   "idEvento": "3f2c9a10-6b7d-4e21-9c55-1a2b3c4d5e6f",
-  "tipo": "pedido.entregado",
+  "tipo": "pedido.pagado",
   "pedidoId": "PED-2026-00981",
   "fecha": "2026-09-27T15:40:00Z",
   "datos": {
     "canal": "MARKETPLACE",
     "clienteId": "CLI-8841",
+    "vendedorId": 12,
     "total": 129.90,
-    "moneda": "PEN"
+    "moneda": "PEN",
+    "motivo": null,
+    "items": [
+      { "productoId": 101, "cantidad": 1, "importe": 129.90 }
+    ]
   }
 }
 ```
 
+-   `datos.vendedorId` y `datos.items` solo vienen en `pedido.pagado` (se usan para `agregado_ventas`); en `pedido.anulado` y `pedido.entregado` pueden omitirse. `datos.motivo` es obligatorio solo en `pedido.anulado`.
 -   `tipo`: `pedido.pagado | pedido.anulado | pedido.entregado`.
 -   `idEvento`: UUID generado por M1. Si M1 reintenta, envía el mismo
     valor.
