@@ -200,8 +200,8 @@ Ejemplo de respuesta:
 
 ```json
 {
-  "devolucionId": "DEV-000123",
-  "pedidoId": "PED-000456",
+  "devolucionId": "DEV-2026-0042",
+  "pedidoId": "PED-2026-00981",
   "estado": "SOLICITADA",
   "motivo": "PRODUCTO_DEFECTUOSO",
   "fechaCreacion": "2026-09-20T15:30:00Z"
