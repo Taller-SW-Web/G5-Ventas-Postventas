@@ -4,7 +4,7 @@
 **Funcionalidad:** F2 — Anulación de pedidos
 **Estado:** En especificación
 **Actor principal:** Cliente (solicitante), Canal (sistema iniciador) y Gestor (autoriza condicionalmente)
-**Microservicio:** M1 — Pedidos
+**Microservicio:** M1 — Ventas
 **Lineamiento:** "Anulación de pedidos según reglas de negocio (con autorización)" (Módulo D — Ventas y Postventa)
 
 ## 1. Contexto
@@ -19,17 +19,17 @@ Registrar y validar toda solicitud de anulación, ya sea iniciada por el Cliente
 
 - Todo pedido `DESPACHADO` o `ENTREGADO` quede bloqueado (409) y derivado a Devoluciones (F3).
 - Toda solicitud sin motivo tipificado sea rechazada (400).
-- Las anulaciones en `CREADO`/`PAGADO` se ejecuten sin intervención humana, y las de `EN PREPARACIÓN` queden condicionadas a la aprobación del Gestor.
+- Las anulaciones en `CREADO`/`PAGADO` se ejecuten sin intervención humana, y las de `EN_PREPARACION` queden condicionadas a la aprobación del Gestor.
 
 ## 3. Alcance
 
 Incluye:
 
 - Endpoint `POST /api/v1/pedidos/{pedidoId}/anulaciones`.
-- Validación de estado anulable (`CREADO`, `PAGADO`, `EN PREPARACIÓN`).
+- Validación de estado anulable (`CREADO`, `PAGADO`, `EN_PREPARACION`).
 - Validación de motivo tipificado obligatorio, contra el catálogo cerrado definido en la sección 3.2.
 - Matriz de autorización según estado y actor disparador (ver tabla 3.1).
-- Bandeja de autorizaciones pendientes para el Gestor cuando el pedido está `EN PREPARACIÓN`.
+- Bandeja de autorizaciones pendientes para el Gestor cuando el pedido está `EN_PREPARACION`.
 - Registro del solicitante, autorizador (si aplica), motivo y resultado en el historial de la anulación.
 
 **No incluye:** la coordinación de reposición de stock, cancelación de despacho ni el origen de la solicitud de reembolso a F4 (eso es ESP-06); la ejecución de la transición de estado en sí (la ejecuta F1); el procesamiento contable del reembolso (F4).
@@ -41,7 +41,7 @@ Incluye:
 | `CREADO` | **Canal** (Chatbot / Marketplace / Retail) | `PAGO_NO_COMPLETADO` | **NO** (automática e inmediata) | `200 OK` → `ANULADO` |
 | `CREADO` | Cliente | `ERROR_SELECCION_PRODUCTO`, `ARREPENTIMIENTO_COMPRA` | **NO** (directa) | `200 OK` → `ANULADO` |
 | `PAGADO` | Cliente / Gestor | Motivo tipificado de anulación | **NO** (directa) | `200 OK` → `ANULADO` |
-| `EN PREPARACIÓN` | Cliente | Motivo tipificado de anulación | **SÍ** (bandeja de aprobación) | `202 Accepted` → pendiente |
+| `EN_PREPARACION` | Cliente | Motivo tipificado de anulación | **SÍ** (bandeja de aprobación) | `202 Accepted` → pendiente |
 | `DESPACHADO` / `ENTREGADO` | Cualquiera | Cualquiera | Bloqueado | `409 Conflict` → deriva a F3 |
 
 ### 3.2. Catálogo de motivos tipificados
@@ -51,8 +51,8 @@ Incluye:
 | `PAGO_NO_COMPLETADO` | Canal (automático) | `CREADO` |
 | `ERROR_SELECCION_PRODUCTO` | Cliente | `CREADO`, `PAGADO` |
 | `ARREPENTIMIENTO_COMPRA` | Cliente | `CREADO`, `PAGADO` |
-| `SOLICITUD_CLIENTE` | Cliente | `CREADO`, `PAGADO`, `EN PREPARACIÓN` |
-| `ERROR_DATOS_ENVIO` | Cliente | `CREADO`, `PAGADO`, `EN PREPARACIÓN` |
+| `SOLICITUD_CLIENTE` | Cliente | `CREADO`, `PAGADO`, `EN_PREPARACION` |
+| `ERROR_DATOS_ENVIO` | Cliente | `CREADO`, `PAGADO`, `EN_PREPARACION` |
 | `DUPLICADO` | Cliente / Gestor | `CREADO`, `PAGADO` |
 
 Este catálogo es cerrado: una solicitud con un valor de `motivo` fuera de esta lista se rechaza con `400 Bad Request` (ver CA-04).
@@ -61,7 +61,7 @@ Este catálogo es cerrado: una solicitud con un valor de `motivo` fuera de esta 
 
 ### 4.1. Precondiciones
 
-- El pedido existe y está en un estado anulable (`CREADO`, `PAGADO` o `EN PREPARACIÓN`).
+- El pedido existe y está en un estado anulable (`CREADO`, `PAGADO` o `EN_PREPARACION`).
 - El solicitante está identificado (cliente autenticado, sistema del canal, o Gestor autenticado con rol administrativo).
 - El motivo de anulación es obligatorio y pertenece al catálogo tipificado.
 
@@ -71,13 +71,13 @@ Este catálogo es cerrado: una solicitud con un valor de `motivo` fuera de esta 
 |---|---|
 | F1 — Ciclo de vida del pedido | Ejecuta la transición real a `ANULADO` vía `PATCH /api/v1/pedidos/{id}/estado`; ESP-05 nunca escribe directamente sobre las tablas de pedido. |
 | Canales A/B/C | Inician la anulación automática sobre pedidos `CREADO` cuando el checkout se abandona o la pasarela rechaza el cobro definitivamente. |
-| Gestor | Autoriza o rechaza la anulación exclusivamente cuando el pedido está `EN PREPARACIÓN`. |
+| Gestor | Autoriza o rechaza la anulación exclusivamente cuando el pedido está `EN_PREPARACION`. |
 | Seguridad (G) | Provee el token JWT y el rol del solicitante para validar identidad y permisos. |
 
 ### 4.3. Resultados
 
 - Una anulación válida deja registrado el solicitante, el motivo y (si aplica) el autorizador, y dispara la solicitud de transición a F1.
-- Una anulación en `EN PREPARACIÓN` sin resolución del Gestor queda en estado pendiente, sin modificar el pedido.
+- Una anulación en `EN_PREPARACION` sin resolución del Gestor queda en estado pendiente, sin modificar el pedido.
 - Una solicitud inválida (motivo faltante o estado no anulable) no genera ningún efecto ni transición.
 
 ## 5. Requisitos y criterios de aceptación
@@ -116,17 +116,17 @@ El sistema DEBE validar que el pedido esté en un estado anulable antes de proce
 
 ### RF-02. Autorización condicional del Gestor
 
-El sistema DEBE exigir autorización explícita del Gestor cuando el pedido está `EN PREPARACIÓN`.
+El sistema DEBE exigir autorización explícita del Gestor cuando el pedido está `EN_PREPARACION`.
 
 #### CA-05. Autorización requerida y aprobada
 
-- **DADO** un pedido en estado `EN PREPARACIÓN`.
+- **DADO** un pedido en estado `EN_PREPARACION`.
 - **CUANDO** el Gestor aprueba la anulación desde su bandeja.
 - **ENTONCES** el sistema ejecuta la transición a `ANULADO` y registra al Gestor como autorizador en el historial.
 
 #### CA-06. Autorización requerida y rechazada
 
-- **DADO** un pedido en estado `EN PREPARACIÓN`.
+- **DADO** un pedido en estado `EN_PREPARACION`.
 - **CUANDO** el Gestor rechaza la solicitud.
 - **ENTONCES** el pedido conserva su estado operativo anterior y se registra la decisión de rechazo con su motivo.
 
@@ -135,7 +135,7 @@ El sistema DEBE exigir autorización explícita del Gestor cuando el pedido est�
 | Elemento | Responsabilidad |
 |---|---|
 | Acción "Anular pedido" | Disponible solo cuando el estado del pedido lo permite; exige motivo tipificado obligatorio. |
-| Bandeja de autorizaciones pendientes | Lista exclusivamente los pedidos `EN PREPARACIÓN` con solicitud de anulación esperando decisión del Gestor. |
+| Bandeja de autorizaciones pendientes | Lista exclusivamente los pedidos `EN_PREPARACION` con solicitud de anulación esperando decisión del Gestor. |
 | Detalle de la anulación | Muestra motivo, solicitante (cliente, canal o gestor), autorizador (si aplica) y resultado. |
 
 ## 7. Backend
@@ -165,7 +165,7 @@ El sistema DEBE exigir autorización explícita del Gestor cuando el pedido est�
 |---|---|---|---|
 | CA-01 y CA-02 | Anular directamente desde `CREADO` (cliente y canal con `PAGO_NO_COMPLETADO`) y desde `PAGADO`. | Unitaria e integración | Transición inmediata a `ANULADO`, sin tareas pendientes de aprobación. |
 | CA-03 y CA-04 | Intentar anular sobre `DESPACHADO`/`ENTREGADO`, o enviar solicitud sin motivo. | Unitaria e integración | `409 Conflict` y `400 Bad Request` respectivamente. |
-| CA-05 y CA-06 | Simular aprobación y rechazo del Gestor sobre un pedido `EN PREPARACIÓN`. | Integración | Transición aplicada solo si se aprueba; estado conservado si se rechaza. |
+| CA-05 y CA-06 | Simular aprobación y rechazo del Gestor sobre un pedido `EN_PREPARACION`. | Integración | Transición aplicada solo si se aprueba; estado conservado si se rechaza. |
 
 ## 11. Criterio de completitud
 
@@ -174,4 +174,4 @@ ESP-05 se considera completo cuando:
 - Los criterios `CA-01` a `CA-06` están implementados y cuentan con pruebas automatizadas exitosas.
 - Ninguna anulación puede ejecutarse sobre un pedido `DESPACHADO` o `ENTREGADO`.
 - Las anulaciones en `CREADO` por el Canal con motivo `PAGO_NO_COMPLETADO` se ejecutan sin intervención humana ni generan solicitud de reembolso.
-- Toda anulación en `EN PREPARACIÓN` sin autorización explícita del Gestor queda bloqueada.
+- Toda anulación en `EN_PREPARACION` sin autorización explícita del Gestor queda bloqueada.

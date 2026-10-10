@@ -41,6 +41,22 @@
 * *RECHAZADA:* Dictamen desestimado por el Gestor, el cual exige obligatoriamente un texto de fundamento legal o técnico.
 * *COMPLETADA:* Ciclo postventa cerrado (mercadería de cambio entregada o dinero efectivamente acreditado).
 
+### 2.4. Estados del Pago (M1)
+* *PENDIENTE:* El pedido fue creado y la pasarela todavía no informa el resultado del cobro.
+* *CONFIRMADO:* La pasarela aprobó el cobro (envía `resultado: APROBADO`). El pedido pasa a `PAGADO`.
+* *RECHAZADO:* La pasarela rechazó el cobro (envía `resultado: RECHAZADO`). El pedido pasa a `ANULADO` con motivo `PAGO_NO_COMPLETADO`.
+
+### 2.5. Estados de la Anulación (M1)
+* *PENDIENTE_AUTORIZACION:* Solicitud sobre un pedido en `EN_PREPARACION`, en espera del dictamen del Gestor.
+* *EJECUTADA:* La anulación se aplicó y el pedido pasó a `ANULADO`. En `CREADO` y `PAGADO` se registra directamente en este estado.
+* *RECHAZADA:* El Gestor no autorizó la anulación; el pedido sigue en `EN_PREPARACION`.
+
+### 2.6. Estados del Reclamo (M2)
+* *REGISTRADO:* Reclamo o queja recién ingresado al Libro de Reclamaciones.
+* *EN_PROCESO:* El Gestor está atendiendo el reclamo.
+* *ATENDIDO:* El Gestor emitió la respuesta visible al cliente.
+* *DERIVADO:* El reclamo escaló a mediación externa; el proceso de mediación no es parte del sistema.
+
 ---
 
 ## 3. Actores del Sistema

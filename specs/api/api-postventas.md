@@ -338,6 +338,8 @@
 }
 ```
 
+-   `canal`: `MARKETPLACE | CHATBOT | RETAIL`.
+
 -   **Respuestas:**
     -   **`201 Created`**
 
@@ -483,3 +485,47 @@
   }
 }
 ```
+
+---
+
+## Endpoint interno de M2
+
+### Eventos de M1
+
+#### 2.13 Recibir Evento de Pedido
+
+-   **Endpoint:** `POST /api/v2/eventos`
+-   **Descripción:** Recibe los eventos que publica M1 cuando cambia el
+    estado de un pedido (ESP-04). Alimenta CSAT (F5, con
+    `pedido.entregado`) y los agregados del dashboard (F6). Es interno:
+    el API Gateway no lo publica y solo acepta la credencial de servicio
+    de M1.
+-   **Headers:**
+    -   `Authorization: Bearer <token_servicio_m1>`
+    -   `Content-Type: application/json`
+-   **Request Body:**
+
+``` json
+{
+  "idEvento": "3f2c9a10-6b7d-4e21-9c55-1a2b3c4d5e6f",
+  "tipo": "pedido.entregado",
+  "pedidoId": "PED-2026-00981",
+  "fecha": "2026-09-27T15:40:00Z",
+  "datos": {
+    "canal": "MARKETPLACE",
+    "clienteId": "CLI-8841",
+    "total": 129.90,
+    "moneda": "PEN"
+  }
+}
+```
+
+-   `tipo`: `pedido.pagado | pedido.anulado | pedido.entregado`.
+-   `idEvento`: UUID generado por M1. Si M1 reintenta, envía el mismo
+    valor.
+-   **Respuestas:**
+    -   **`200 OK`**: Evento procesado, o ya había sido procesado antes
+        (se guarda en `postventa.evento_recibido` y no se procesa dos
+        veces).
+    -   **`400 Bad Request`**: `tipo` desconocido o estructura inválida.
+    -   **`401 Unauthorized`**: Credencial distinta a la de M1.

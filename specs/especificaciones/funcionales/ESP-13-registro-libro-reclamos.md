@@ -23,7 +23,7 @@ Registrar un reclamo o una queja en el Libro de Reclamaciones, asignarle un iden
 |---|---|---:|---|
 | `pedidoId` | string | No | Identificador del pedido relacionado. Es opcional cuando se registra una queja general no asociada a un pedido. |
 | `tipo` | string | Sí | Solo admite `RECLAMO` o `QUEJA`. |
-| `canal` | string | Sí | Solo admite `CHATBOT`, `WEB` o `RETAIL`. |
+| `canal` | string | Sí | Solo admite `MARKETPLACE`, `CHATBOT` o `RETAIL`. |
 | `motivo` | string | Sí | Debe pertenecer al catálogo de motivos permitido. |
 | `detalle` | string | Sí | Descripción detallada de la disconformidad comunicada por el consumidor; no puede estar vacío. |
 | `consumidor` | object | Sí | Datos necesarios para identificar y contactar al consumidor. |
@@ -43,8 +43,8 @@ El tipo clasifica la disconformidad registrada por el consumidor y debe conserva
 
 ### 3.2. Valores permitidos para `canal`
 
+- `MARKETPLACE`
 - `CHATBOT`
-- `WEB`
 - `RETAIL`
 
 ### 3.3. Motivos permitidos

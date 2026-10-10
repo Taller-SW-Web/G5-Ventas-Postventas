@@ -26,8 +26,18 @@ Estas decisiones están vigentes en la documentación aprobada. Si un documento 
    - Los documentos de `arquitectura/` (C4 niveles 1, 2 y 3) ya ubican F2 en M1.
 2. **El UI Kit del frontend es Mantine UI**, no Tailwind CSS. Así lo dicen README.md, CONTRIBUTING.md y específicamente specs/stack-frontend.md (documento detallado y vigente). El C4 nivel 2 ya usa Mantine UI.
 3. **Valores de `historial_estado.actor`**: únicamente `CLIENTE`, `GESTOR`, `CANAL_CHATBOT`, `PASARELA_PAGOS`, `SISTEMA_LOGISTICA` (el `CHECK` real en base de datos, ver diseno/diagramas/bd/diagrama-fisico.md). ESP-03 ya está alineado a esta lista — no usar `PASARELA`, `CANAL`, `DESPACHO` ni `SISTEMA` sueltos.
+4. **Valores cerrados de estados y canal** (cada uno con su `CHECK` en la base y su enum en Java):
+   - `pedido.canal`, `reclamo.canal`, `calificacion.canal`: `MARKETPLACE`, `CHATBOT`, `RETAIL`. El canal web se llama `MARKETPLACE`, nunca `WEB`.
+   - `pago.estado`: `PENDIENTE`, `CONFIRMADO`, `RECHAZADO`. La pasarela envía `resultado: APROBADO` y se guarda `CONFIRMADO`.
+   - `anulacion.estado`: `PENDIENTE_AUTORIZACION`, `EJECUTADA`, `RECHAZADA`.
+   - `devolucion.estado`: `SOLICITADA`, `EN_EVALUACION`, `APROBADA`, `RECHAZADA`, `COMPLETADA`.
+   - `reclamo.estado`: `REGISTRADO`, `EN_PROCESO`, `ATENDIDO`, `DERIVADO`.
+   - Los estados se escriben con guion bajo: `EN_PREPARACION`, no `EN PREPARACIÓN`.
+5. **Matriz de transiciones del pedido**: la de ESP-03 sección 7.2. Incluye `CREADO → ANULADO` y `PAGADO → ANULADO` directas (sin Gestor) para las solicitudes de F2; solo `EN_PREPARACION → ANULADO` requiere autorización del Gestor.
+6. **Gateway**: rutea por recurso (`/api/*/pedidos/**` a M1; devoluciones, reembolsos, csat, reclamos y dashboard a M2). `POST /api/v2/eventos` es interno y no pasa por el Gateway.
+7. **Integraciones**: cada servicio tiene un paquete `integracion/` con un cliente por sistema externo. Los eventos de M1 salen por `ventas.outbox_evento` y M2 descarta duplicados con `postventa.evento_recibido`.
 
-Si necesitas tocar cualquiera de estos tres puntos, pregunta antes de asumir que el C4 "propuesta" ya es la versión vigente.
+Si necesitas tocar cualquiera de estos puntos, pregunta antes de asumir que el C4 "propuesta" ya es la versión vigente.
 
 ---
 
@@ -52,7 +62,6 @@ Los documentos bajo `arquitectura/` (C4 niveles 1, 2 y 3) siguen siendo **propue
 
 No inventes valores para estos campos; si hace falta, pregunta o deja el gap explícito:
 
-- `pago.estado`, `devolucion.estado`, `anulacion.estado` y `pedido.canal` no tienen lista de valores cerrada (ver "Pendientes" en diseno/diagramas/bd/diagrama-logico.md y diagrama-fisico.md).
 - M1 se llama "M1 — Ventas" en README, overview, modelo de datos y C4, pero "M1 — Pedidos" en mockups, wireframes, RNF y algunas ESP. Falta unificar el nombre en esos documentos.
 
 ---
