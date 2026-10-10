@@ -50,10 +50,10 @@ Los documentos bajo `arquitectura/` (C4 niveles 1, 2 y 3) siguen siendo **propue
 
 ## 4. Puntos todavía sin definir
 
-No inventes valores para estos campos; si hace falta, pregunta o deja el gap explícito:
+No inventes valores ni contenido para estos puntos; si hace falta, pregunta o deja el gap explícito:
 
-- `pago.estado`, `devolucion.estado`, `anulacion.estado` y `pedido.canal` no tienen lista de valores cerrada (ver "Pendientes" en diseno/diagramas/bd/diagrama-logico.md y diagrama-fisico.md).
-- Dónde corre el simulador de pasarela de pagos (servicio propio en Render o embebido en `servicio-postventa`) — ver `arquitectura/c4-nivel-2-contenedores-ventas-postventa.md`, sección 8. No aparece todavía en la estructura real de `backend/`.
+- `reclamo.canal`: el contrato (`api-postventas.md` 2.8) ya lo envía al registrar un reclamo, pero ninguna tabla tiene todavía la columna — ver "Pendientes" en diseno/diagramas/bd/diagrama-logico.md y diagrama-fisico.md. Es el único valor de enum que sigue sin definirse; `pago.estado`, `devolucion.estado`, `anulacion.estado`, `reclamo.estado` y `pedido.canal`/`calificacion.canal` ya están confirmados (ver diagrama-fisico.md, sección 5).
+- `integraciones/` (acuerdos con G1/G2/G3): en pausa. Solo crear contenido ahí si existe una negociación real que documentar — nunca como placeholder vacío.
 
 ---
 
