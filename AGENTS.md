@@ -63,7 +63,8 @@ Los documentos bajo `arquitectura/` (C4 niveles 1, 2 y 3) siguen siendo **propue
 No inventes valores ni contenido para estos puntos; si hace falta, pregunta o deja el gap explícito:
 
 - Dónde se despliega `simulador-pasarela` (Render u otro). En local corre como aplicación propia en el puerto 8083 (ver la guía del backend, sección 9.3).
-- `integraciones/` (acuerdos con G1/G2/G3): en pausa. Solo crear contenido ahí si existe una negociación real que documentar — nunca como placeholder vacío.
+- Mecanismo técnico de entrega del webhook `pedidos.envio.estado_actualizado` hacia Marketplace (acuerdo H-05, ver `api-ventas.md` 1.10) — reintentos, backoff, cola de salida. El contrato ya está cerrado; falta el diseño de implementación, a cargo de quien construya F1.
+- `integraciones/` (acuerdos con otros módulos): con G1 (Marketplace) ya hay contenido real — ver `integraciones/ACUERDO_G1_MARKETPLACE.md`. Con G2, G3, G6 y G7 sigue en pausa: solo crear su documento si existe una negociación real que documentar, nunca como placeholder vacío.
 
 ---
 

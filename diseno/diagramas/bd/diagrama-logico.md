@@ -41,6 +41,7 @@ erDiagram
         varchar(80) distrito
         varchar(255) direccion
         varchar(40) codigo_cupon
+        varchar(128) idempotency_key UK
         timestamp creado_en "NN"
         bigint id_cliente "referencia sin FK"
         bigint id_vendedor "referencia sin FK"
@@ -240,7 +241,8 @@ ventas (M1):
 pedido           ([id], codigo UK, canal, fecha, estado, moneda, subtotal, descuento, total,
                   nombre_contacto, tipo_documento, numero_documento, telefono, email,
                   modalidad_envio, costo_envio, destinatario, distrito, direccion, codigo_cupon,
-                  creado_en, id_cliente ⇢ G, id_vendedor ⇢ G, id_direccion_entrega ⇢ E)
+                  idempotency_key UK, creado_en, id_cliente ⇢ G, id_vendedor ⇢ G,
+                  id_direccion_entrega ⇢ E)
 
 detalle_pedido   ([id], id_pedido → pedido.id, id_producto ⇢ F, sku, descripcion, cantidad,
                   precio_unitario, descuento, importe)
@@ -339,6 +341,7 @@ M1:
 8. anulacion.estado solo admite PENDIENTE_AUTORIZACION, EJECUTADA y RECHAZADA.
 9. outbox_evento.id_evento es la clave primaria (la genera M1); un evento no se marca `enviado_en` hasta que M2 confirma la recepción (ver evento_recibido en postventa).
 10. evento_recibido.id_evento es la clave primaria; evita que una misma notificación externa (pasarela o Despacho) duplique una transición.
+11. pedido.idempotency_key es única; una clave repetida con el mismo payload devuelve el pedido ya creado, con payload distinto responde `409 IDEMPOTENCY_KEY_REUSED` (acuerdo H-02 con Marketplace, ver `api-ventas.md` 1.1).
 
 M2:
 

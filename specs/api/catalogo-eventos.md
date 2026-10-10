@@ -6,6 +6,8 @@ Consolidar en un solo lugar los eventos de dominio que M1 publica hacia M2 y hac
 
 No se usa **AsyncAPI** a propósito: ese formato describe sistemas con broker (canales, tópicos, colas), y el módulo decidió explícitamente no usar uno (ver sección 2).
 
+Este catálogo cubre solo los eventos **internos** M1 → M2. El webhook `pedidos.envio.estado_actualizado` que M1 envía hacia **Marketplace** (acuerdo H-05) es un evento saliente distinto, hacia un consumidor externo al módulo — está documentado en [api-ventas.md](api-ventas.md), sección 1.10, no aquí.
+
 ---
 
 ## 2. Mecanismo de entrega (sin broker de mensajería)

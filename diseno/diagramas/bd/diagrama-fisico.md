@@ -34,6 +34,7 @@ erDiagram
         varchar(80) distrito "null"
         varchar(255) direccion "null"
         varchar(40) codigo_cupon "null"
+        varchar(128) idempotency_key UK "null"
         timestamptz creado_en "not null, default now()"
         bigint id_cliente "referencia sin FK, null"
         bigint id_vendedor "referencia sin FK, null"
@@ -283,6 +284,7 @@ Valores únicos:
 | Nombre | Tabla | Columnas |
 |---|---|---|
 | pedido_codigo_key | ventas.pedido | codigo |
+| pedido_idempotency_key_key | ventas.pedido | idempotency_key |
 | anulacion_id_pedido_key | ventas.anulacion | id_pedido |
 | reclamo_codigo_key | postventa.reclamo | codigo |
 | reembolso_idempotency_key_key | postventa.reembolso | idempotency_key |

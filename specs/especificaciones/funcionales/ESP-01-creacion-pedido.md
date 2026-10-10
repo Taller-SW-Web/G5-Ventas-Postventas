@@ -61,6 +61,7 @@ Antes de crear un pedido se debe cumplir lo siguiente:
 5. La solicitud debe incluir el bloque `contacto` con al menos un medio de contacto del cliente.
 6. El precio y la disponibilidad de cada ítem deben validarse contra Productos (F).
 7. Si se envía el bloque `cupon`, el código debe existir y estar vigente.
+8. La solicitud debe incluir una cabecera `Idempotency-Key` (UUID v4, máximo 128 caracteres) — ver sección 9, regla 11 (acuerdo H-02 con Marketplace).
 
 ---
 
@@ -218,6 +219,7 @@ El pedido debe conservar como mínimo:
 8. Si se envía un cupón, debe validarse su vigencia antes de aplicar el descuento; un cupón inválido rechaza toda la solicitud.
 9. Todo pedido creado debe iniciar en estado `CREADO`, sin excepción.
 10. El primer registro de historial se genera en la misma operación que la creación, nunca por separado.
+11. La cabecera `Idempotency-Key` es obligatoria (acuerdo H-02 con Marketplace). Misma clave + mismo payload devuelve el pedido ya creado sin duplicar ni reservar stock dos veces; misma clave + payload distinto rechaza con `409 Conflict` (`IDEMPOTENCY_KEY_REUSED`); si la solicitud falla por validación, la clave no se persiste y puede reintentarse.
 
 ---
 
@@ -232,6 +234,8 @@ El pedido debe conservar como mínimo:
 | Bloque `envio` inválido   | `direccionId` ausente o inexistente                    | `400 Bad Request`     |
 | Bloque `contacto` inválido| `telefono` y `email` ambos ausentes                    | `400 Bad Request`     |
 | Cupón inválido            | Código de cupón inexistente o vencido                 | `409 Conflict`        |
+| Cabecera de idempotencia ausente | `Idempotency-Key` no enviada o con formato inválido | `400 Bad Request` (`CABECERA_FALTANTE`) |
+| Clave de idempotencia reutilizada | Misma `Idempotency-Key`, payload distinto al original | `409 Conflict` (`IDEMPOTENCY_KEY_REUSED`) |
 | Error de dependencia      | Fallo al consultar Productos (F) o Seguridad (G)      | Error controlado según contrato API |
 
 Los mensajes de error deben ser claros para el canal y no deben exponer información interna del sistema.

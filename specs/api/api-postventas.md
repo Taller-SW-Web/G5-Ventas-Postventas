@@ -298,6 +298,7 @@
 #### 2.7 Registrar Encuesta CSAT
 
 -   **Endpoint:** `POST /api/v2/csat`
+-   **Acuerdo H-04 con Marketplace:** Marketplace usa una escala de 3 botones (Mal/Regular/Bien), con mapeo interno `1 (Mal) → sentiment: "NEGATIVE"`, `3 (Regular) → sentiment: "NEUTRAL"`, `5 (Bien) → sentiment: "POSITIVE"` — el campo `sentiment` es una etiqueta propia de Marketplace, no se guarda de nuestro lado; nosotros solo recibimos `puntuacion` (siempre `1`, `3` o `5`, nunca `2` ni `4`). No requiere cambio de esquema de nuestro lado. Mientras consolidan su propia tabla de motivos estructurados, Marketplace puede incluir motivos concatenados dentro de `comentario` con el prefijo `"Motivos: [RAZON_1, RAZON_2] - "` seguido del comentario libre — se guarda tal cual en `calificacion.comentario` (texto libre, sin parseo de nuestro lado).
 -   **Request Body:**
 
 ``` json
@@ -313,8 +314,9 @@
 -   **Respuestas:**
     -   **`201 Created`**: Encuesta guardada.
     -   **`400 Bad Request`**: Puntuación fuera de rango (1 al 5).
-    -   **`409 Conflict`** (`PEDIDO_NO_ENTREGADO`): El pedido todavía no está en estado `ENTREGADO`.
-    -   **`409 Conflict`** (`CALIFICACION_DUPLICADA`): Encuesta ya registrada para ese pedido.
+    -   **`403 Forbidden`**: El `pedidoId` no pertenece al `sub` del usuario autenticado en el JWT (acuerdo H-04).
+    -   **`422 Unprocessable Entity`** (`ORDER_NOT_DELIVERED`): El pedido no está en estado terminal `ENTREGADO`. *(Excepción al código `PEDIDO_NO_ENTREGADO`/`409` que usa el resto de este contrato — para este endpoint específico se usó literalmente el código y HTTP status acordados con Marketplace en H-04; ver nota en [catalogo-errores.md](catalogo-errores.md).)*
+    -   **`409 Conflict`** (`CSAT_ALREADY_SUBMITTED`): Ya existe una encuesta registrada para ese pedido. *(Mismo caso que `CALIFICACION_DUPLICADA` en el resto del repo; aquí se usa el nombre acordado con Marketplace.)*
 
 ### F6: Reclamos y Dashboard (Responsable: Fabrizio)
 

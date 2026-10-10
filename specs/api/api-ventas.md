@@ -26,7 +26,7 @@
 }
 ## Catálogo de Scopes OAuth2 / JWT Expuestos por M1
 - **`ventas:pedidos:escribir`**: Registro de nuevos pedidos (`POST /api/v1/pedidos`). Utilizado por Canales A, B y C.
-- **`ventas:pedidos:leer`**: Consulta de estado, detalle y tracking (`GET /api/v1/pedidos/{id}`). Utilizado por Canales A, B y C.
+- **`ventas:pedidos:leer`**: Consulta de estado, detalle y tracking (`GET /api/v1/pedidos/{id}`, `GET /api/v1/pedidos/me`). Utilizado por Canales A, B y C.
 - **`ventas:pedidos:anular`**: Cancelación directa en estado inicial por falta de pago (`POST /api/v1/pedidos/{id}/anulaciones`). Utilizado por Canales A, B y C.
 - **`ventas:pedidos:estado`**: Actualización del ciclo de vida y recepción de eventos logísticos (`PATCH /api/v1/pedidos/{id}/estado`, `POST /api/v1/pedidos/{id}/eventos-logistica`). Utilizado por Módulo E (Despacho / Logística).
 - **`ventas:pagos:webhook`**: Confirmación o rechazo de transacciones monetarias (`POST /api/v1/pedidos/{id}/pagos/notificacion`). Utilizado por Pasarela de Pagos.
@@ -39,6 +39,16 @@ Descripción: Registra un nuevo pedido proveniente de Canales A (Marketplace), B
 ### Headers
   - `Authorization: Bearer <token_canal>`
   - `Content-Type: application/json`
+  - `Idempotency-Key: <UUID v4>` — **obligatorio**, máximo 128 caracteres.
+
+### Idempotencia (acuerdo H-02 con Marketplace)
+
+- **Mismo titular + misma clave + mismo payload:** responde `200 OK` o `201 Created` con el pedido ya creado (mismo `pedidoId`), sin volver a reservar stock.
+- **Misma clave + payload distinto:** `409 Conflict`, código `IDEMPOTENCY_KEY_REUSED`.
+- **Peticiones concurrentes con la misma clave:** el primer hilo en procesar adquiere el bloqueo transaccional; las solicitudes paralelas reciben la respuesta de la primera, sin duplicar el pedido.
+- **Error de validación (`400 Bad Request`):** la clave no se persiste; el canal puede reintentar tras corregir los datos.
+- M1 valida y retiene la reserva de stock asociada a la clave ya procesada exitosamente — un reintento con la misma clave no vuelve a reservar ni libera lo ya reservado.
+- La clave se guarda en `pedido.idempotency_key` (única por fila).
 ### Especificación de Validación del Objeto contacto (Auditoría A8 / Legal)
 
 Los campos tipoDocumento y numeroDocumento son estrictamente obligatorios.
@@ -119,9 +129,14 @@ Los campos tipoDocumento y numeroDocumento son estrictamente obligatorios.
   ]
 }
 ```
-409 Conflict
+#### `400 Bad Request`
 
-Fallo de validación de catálogo o stock con el módulo de Productos (F).
+Cabecera `Idempotency-Key` ausente o con formato inválido — código `CABECERA_FALTANTE`.
+
+#### `409 Conflict`
+
+- Fallo de validación de catálogo o stock con el módulo de Productos (F).
+- `Idempotency-Key` ya usada con un payload distinto — código `IDEMPOTENCY_KEY_REUSED`.
 
 ### 1.2 Notificación de Pago (Webhook de Pasarela)
 - **Endpoint:** `POST /api/v1/pedidos/{pedidoId}/pagos/notificacion`
@@ -229,12 +244,13 @@ Descripción: Permite a clientes, canales y administradores consultar el estado 
 - **`401 Unauthorized`**: Token ausente o inválido.
 - **`403 Forbidden`**: El cliente autenticado no es el titular de la orden.
 - **`404 Not Found`**: El pedido solicitado no existe.
-### 1.4 Listar Pedidos por Cliente
+### 1.4 Listar Pedidos por Cliente (uso administrativo)
+
 - **Endpoint:** `GET /api/v1/pedidos`
-Descripción: Permite obtener el listado histórico paginado de pedidos asociados a un cliente.
-- **Headers:** `Authorization: Bearer <token>`
+Descripción: Listado paginado de pedidos para el Gestor/Backoffice — requiere indicar explícitamente el `clienteId` a consultar. Para que un canal muestre "mis pedidos" al propio cliente autenticado, usar **1.4b** (`/pedidos/me`), no este endpoint.
+- **Headers:** `Authorization: Bearer <token_gestor>` (scope `ventas:admin`)
 ### Query Params
-clienteId (requerido para clientes): Identificador del cliente.
+clienteId (requerido): Identificador del cliente.
 estado (opcional): `CREADO` | `PAGADO` | `EN_PREPARACION` | `DESPACHADO` | `ENTREGADO` | `ANULADO`
 desde (opcional): Fecha inicial ISO.
 hasta (opcional): Fecha final ISO.
@@ -260,6 +276,48 @@ tamano (opcional, default: 10)
   "totalElementos": 1
 }
 ```
+
+### 1.4b Listar Mis Pedidos (acuerdo H-03 con Marketplace)
+
+- **Endpoint:** `GET /api/v1/pedidos/me`
+Descripción: Historial de pedidos del cliente autenticado, para que un canal (Marketplace, Chatbot) muestre "mis pedidos" sin exponer `clienteId` en la URL. La identidad se toma exclusivamente del JWT (`sub`/`customerId`); nunca se acepta `clienteId` por query string.
+- **Headers:** `Authorization: Bearer <token_cliente>` (scope `ventas:pedidos:leer`)
+### Query Params
+estado (opcional, valores públicos): `CREADO` | `PAGADO` | `EN_PREPARACION` | `DESPACHADO` | `ENTREGADO` | `ANULADO`
+page (opcional, default: 1)
+pageSize (opcional, default: 10, máximo: 50)
+### Respuestas
+#### `200 OK`
+
+Si el cliente no tiene compras previas:
+```json
+{ "items": [], "total": 0, "page": 1, "pageSize": 10 }
+```
+
+Con resultados:
+```json
+{
+  "items": [
+    {
+      "pedidoId": "PED-2026-00981",
+      "canal": "CHATBOT",
+      "estado": "EN_PREPARACION",
+      "total": 129.90,
+      "moneda": "PEN",
+      "fechaCreacion": "2026-09-23T00:05:00Z"
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "pageSize": 10
+}
+```
+
+> Este endpoint usa `items`/`total`/`page`/`pageSize` en vez de `contenido`/`totalElementos`/`pagina`/`tamano` (el patrón del resto de la API) porque así quedó formalmente acordado con Marketplace (H-03) — no es un error de copiado, es una excepción deliberada para este endpoint específico.
+
+- **`401 Unauthorized`**: Token ausente o inválido.
+- **`403 Forbidden`**: El token no tiene el scope `ventas:pedidos:leer`.
+
 ### 1.5 Transición de Estado del Pedido
 - **Endpoint:** `PATCH /api/v1/pedidos/{pedidoId}/estado`
 Descripción: Valida la máquina de estados e inserta el evento en el historial. Invocado por Despacho / Logística (E).
@@ -391,3 +449,37 @@ Descripción: El Gestor resuelve una anulación en `PENDIENTE_AUTORIZACION`. Si 
 Si `decision` es `RECHAZADA`, `estadoPedido` vuelve a `EN_PREPARACION` y `estadoAnulacion` queda en `RECHAZADA`.
 ### Errores
 - **`409 Conflict`**: La anulación no está en `PENDIENTE_AUTORIZACION`, o el pedido ya no está en `EN_PREPARACION` (por ejemplo, ya despachó) — en ese caso la anulación pasa a `RECHAZADA`.
+
+---
+
+## Eventos salientes de M1 hacia Marketplace
+
+### 1.10 Webhook de Estado de Envío (acuerdo H-05 con Marketplace)
+
+- **Evento:** `pedidos.envio.estado_actualizado` (versión `1.0.0`)
+- **Descripción:** M1 actúa como intermediario entre Despacho (Módulo E) y Marketplace, para que Marketplace no se acople directamente a los eventos internos de Despacho. Cuando M1 recibe de Despacho una actualización pública de estado (`DESPACHADO`, `ENTREGADO`, u otra que el equipo defina como pública), M1 notifica a Marketplace con este webhook.
+- **Mecanismo de entrega:** pendiente de diseño técnico (reintentos, backoff, cola de salida). Es responsabilidad de quien implemente F1 definirlo; este documento solo fija el contrato que Marketplace ya aceptó.
+
+**Cuerpo del evento:**
+
+```json
+{
+  "eventId": "evt_uuid_123456",
+  "eventType": "ShipmentStatusUpdated",
+  "version": "1.0.0",
+  "timestamp": "2026-10-09T21:40:00Z",
+  "emitter": "modulo-ventas",
+  "data": {
+    "orderId": 1042,
+    "publicStatus": "DESPACHADO",
+    "trackingNumber": "TRK-987654",
+    "estimatedDeliveryDate": "2026-10-12"
+  }
+}
+```
+
+**Garantías de entrega:**
+- **Deduplicación:** Marketplace almacena y valida el `eventId` recibido, para no duplicar notificaciones al usuario final si M1 reintenta.
+- **Privacidad:** el payload no expone datos sensibles ni direcciones detalladas — solo identificadores de tracking y estados públicos.
+
+> Este webhook es independiente de los eventos internos de dominio que M1 publica hacia M2 (`pedido.pagado`, `pedido.anulado`, `pedido.entregado`, ver [catalogo-eventos.md](catalogo-eventos.md)). Tiene su propio nombre, formato y destino — no reutiliza el mecanismo de `outbox_evento`/M2 tal cual; el mecanismo de entrega hacia Marketplace todavía está por diseñarse.

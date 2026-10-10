@@ -44,6 +44,10 @@ Definidos en la guía de implementación del backend (sección 3.3), además de 
 | `CALIFICACION_DUPLICADA` | Ya existe una encuesta CSAT registrada para ese pedido. |
 | `RECLAMO_NO_ENCONTRADO` | El `codigoSeguimiento` o `reclamoId` indicado no existe. |
 | `RESPUESTA_VACIA` | `respuestaVisibleCliente` está vacío o ausente al intentar cerrar un reclamo. |
+| `CABECERA_FALTANTE` | Falta una cabecera obligatoria, por ejemplo `Idempotency-Key` en `POST /api/v1/pedidos`. |
+| `IDEMPOTENCY_KEY_REUSED` | La `Idempotency-Key` ya se usó para crear un pedido con un payload distinto (acuerdo H-02 con Marketplace). |
+| `ORDER_NOT_DELIVERED` | Equivalente a `PEDIDO_NO_ENTREGADO`, pero con `422` en vez de `409` — nombre y status code literales acordados con Marketplace en H-04, exclusivo de `POST /api/v2/csat`. |
+| `CSAT_ALREADY_SUBMITTED` | Equivalente a `CALIFICACION_DUPLICADA` — nombre literal acordado con Marketplace en H-04, exclusivo de `POST /api/v2/csat`. |
 
 ---
 
@@ -52,7 +56,9 @@ Definidos en la guía de implementación del backend (sección 3.3), además de 
 | Endpoint | HTTP | Condición | Código de negocio |
 |---|---|---|---|
 | `POST /api/v1/pedidos` | `400` | El número de documento no cumple el formato requerido para el tipo indicado. | `DOCUMENTO_INVALIDO` |
+| `POST /api/v1/pedidos` | `400` | Cabecera `Idempotency-Key` ausente o con formato inválido. | `CABECERA_FALTANTE` |
 | `POST /api/v1/pedidos` | `409` | Fallo de validación de catálogo o stock con el módulo de Productos (F). | `ITEM_SIN_DISPONIBILIDAD` |
+| `POST /api/v1/pedidos` | `409` | `Idempotency-Key` ya usada con un payload distinto. | `IDEMPOTENCY_KEY_REUSED` |
 | `POST /api/v1/pedidos/{pedidoId}/pagos/notificacion` | `400` | Inconsistencia de montos o datos de transacción. | — |
 | `POST /api/v1/pedidos/{pedidoId}/pagos/notificacion` | `404` | El pedido indicado no existe. | `PEDIDO_NO_ENCONTRADO` |
 | `POST /api/v1/pedidos/{pedidoId}/pagos/notificacion` | `409` | El pedido no se encuentra en estado `CREADO`. | — |
@@ -62,6 +68,8 @@ Definidos en la guía de implementación del backend (sección 3.3), además de 
 | `PATCH /api/v1/pedidos/{pedidoId}/estado` | `409` | Transición no permitida por la máquina de estados. | `TRANSICION_NO_PERMITIDA` |
 | `POST /api/v1/pedidos/{pedidoId}/anulaciones` | `400` | Motivo ausente o no tipificado. | `MOTIVO_INVALIDO` |
 | `POST /api/v1/pedidos/{pedidoId}/anulaciones` | `409` | Pedido ya en `DESPACHADO` o `ENTREGADO` (derivar al microservicio M2). | `PEDIDO_NO_ANULABLE` |
+| `GET /api/v1/pedidos/me` | `401` | Token ausente o inválido. | — |
+| `GET /api/v1/pedidos/me` | `403` | El token no tiene el scope `ventas:pedidos:leer`. | — |
 | `GET /api/v1/pedidos/anulaciones/pendientes` | — | Sin errores de negocio propios (solo `401`/`403` genéricos de autenticación/autorización). | — |
 | `PATCH /api/v1/pedidos/{pedidoId}/anulaciones/{anulacionId}` | `409` | La anulación no está `PENDIENTE_AUTORIZACION`, o el pedido ya no está `EN_PREPARACION`. | — |
 
@@ -84,8 +92,9 @@ Definidos en la guía de implementación del backend (sección 3.3), además de 
 | `POST /api/v2/reembolsos` | `409` | La `X-Idempotency-Key` ya existe con datos distintos. | `CLAVE_IDEMPOTENCIA_EN_CONFLICTO` |
 | `POST /api/v2/reembolsos` | `409` | El monto supera el saldo reembolsable del pedido. | `SALDO_INSUFICIENTE` |
 | `POST /api/v2/csat` | `400` | Puntuación fuera de rango (1 al 5). | — |
-| `POST /api/v2/csat` | `409` | Pedido no `ENTREGADO`. | `PEDIDO_NO_ENTREGADO` |
-| `POST /api/v2/csat` | `409` | Encuesta ya registrada para ese pedido. | `CALIFICACION_DUPLICADA` |
+| `POST /api/v2/csat` | `403` | El `pedidoId` no pertenece al `sub` del usuario autenticado. | — |
+| `POST /api/v2/csat` | `422` | Pedido no está en estado terminal `ENTREGADO`. | `ORDER_NOT_DELIVERED` |
+| `POST /api/v2/csat` | `409` | Encuesta ya registrada para ese pedido. | `CSAT_ALREADY_SUBMITTED` |
 | `POST /api/v2/reclamos` | `400` | Datos incompletos del consumidor o motivo no tipificado. | — |
 | `GET /api/v2/reclamos/{codigoSeguimiento}` | `401` | Token ausente o inválido. | — |
 | `GET /api/v2/reclamos/{codigoSeguimiento}` | `404` | Reclamo no encontrado con ese código de seguimiento. | `RECLAMO_NO_ENCONTRADO` |
