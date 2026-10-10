@@ -262,7 +262,7 @@ Este bloque ayuda a reconocer el efecto del último avance sin reemplazar el his
 | **F5 — Calificación de experiencia** | Se relaciona con la entrega para activar la encuesta de experiencia según el flujo previsto |
 | **Módulo E — Despacho y Entrega** | Aporta la información y los eventos logísticos utilizados por F1 |
 
-La arquitectura mantiene F1 y F2 dentro de **M1 — Pedidos**, las funciones de postventa pertenecen a M2 y solicitan los cambios de pedido mediante API cuando corresponde
+La arquitectura mantiene F1 y F2 dentro de **M1 — Ventas**, las funciones de postventa pertenecen a M2 y solicitan los cambios de pedido mediante API cuando corresponde
 
 La vista concentra información de estas relaciones sin acceder directamente a las bases de datos de otros módulos
 

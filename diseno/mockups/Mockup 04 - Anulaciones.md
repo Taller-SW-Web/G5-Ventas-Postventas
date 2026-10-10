@@ -316,7 +316,7 @@ El regreso no aprueba ni rechaza por sí mismo la solicitud y no ejecuta una nue
 | **Productos y Ofertas** | Recibe la operación de reposición de stock cuando corresponde |
 | **Despacho y Entrega** | Coordina la cancelación logística cuando corresponde |
 
-F1 y F2 pertenecen a **M1 — Pedidos**, F4 pertenece a **M2 — Postventa**, esta separación mantiene al pedido bajo un único control y permite coordinar el dinero mediante el proceso autorizado
+F1 y F2 pertenecen a **M1 — Ventas**, F4 pertenece a **M2 — Postventa**, esta separación mantiene al pedido bajo un único control y permite coordinar el dinero mediante el proceso autorizado
 
 La comunicación entre módulos se realiza por APIs y eventos, la pantalla no debe modificar directamente datos de otros componentes
 

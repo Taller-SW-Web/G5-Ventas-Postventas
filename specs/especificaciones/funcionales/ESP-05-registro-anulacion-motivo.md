@@ -4,7 +4,7 @@
 **Funcionalidad:** F2 — Anulación de pedidos
 **Estado:** En especificación
 **Actor principal:** Cliente (solicitante), Canal (sistema iniciador) y Gestor (autoriza condicionalmente)
-**Microservicio:** M1 — Pedidos
+**Microservicio:** M1 — Ventas
 **Lineamiento:** "Anulación de pedidos según reglas de negocio (con autorización)" (Módulo D — Ventas y Postventa)
 
 ## 1. Contexto

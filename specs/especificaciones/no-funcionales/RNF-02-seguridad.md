@@ -3,7 +3,7 @@
 **Responsable:** Luis Arroyo
 **Categoría:** Requisito No Funcional — Seguridad
 **Estado:** En especificación
-**Aplica a:** Todo el sistema (M1 — Pedidos y M2 — Postventa), con énfasis en los endpoints de F2 (Anulación)
+**Aplica a:** Todo el sistema (M1 — Ventas y M2 — Postventa), con énfasis en los endpoints de F2 (Anulación)
 
 ## 1. Propósito
 

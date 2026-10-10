@@ -204,7 +204,7 @@ El Hub no constituye una nueva funcionalidad independiente, organiza el acceso a
 
 ### 8.2. Separación entre M1 y M2
 
-La arquitectura ubica F3, F4 y F6 dentro de **M2 — Postventa**, mientras que F1 y F2 pertenecen a **M1 — Pedidos**
+La arquitectura ubica F3, F4 y F6 dentro de **M2 — Postventa**, mientras que F1 y F2 pertenecen a **M1 — Ventas**
 
 M1 conserva el control del estado del pedido y M2 consulta sus datos o solicita las transiciones correspondientes mediante API, esta relación evita que un acceso desde Postventa modifique directamente el pedido
 

@@ -53,7 +53,7 @@ Los documentos bajo `arquitectura/` (C4 niveles 1, 2 y 3) siguen siendo **propue
 No inventes valores para estos campos; si hace falta, pregunta o deja el gap explícito:
 
 - `pago.estado`, `devolucion.estado`, `anulacion.estado` y `pedido.canal` no tienen lista de valores cerrada (ver "Pendientes" en diseno/diagramas/bd/diagrama-logico.md y diagrama-fisico.md).
-- M1 se llama "M1 — Ventas" en README, overview, modelo de datos y C4, pero "M1 — Pedidos" en mockups, wireframes, RNF y algunas ESP. Falta unificar el nombre en esos documentos.
+- Dónde corre el simulador de pasarela de pagos (servicio propio en Render o embebido en `servicio-postventa`) — ver `arquitectura/c4-nivel-2-contenedores-ventas-postventa.md`, sección 8. No aparece todavía en la estructura real de `backend/`.
 
 ---
 

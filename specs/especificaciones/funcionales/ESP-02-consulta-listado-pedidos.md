@@ -7,7 +7,7 @@
 | **Código**          | ESP-02                            |
 | **Nombre**          | Consulta y listado de pedidos     |
 | **Funcionalidad**   | F1 — Ciclo de vida del pedido     |
-| **Módulo**          | M1 — Pedidos                      |
+| **Módulo**          | M1 — Ventas                      |
 | **Responsable**     | Michael                           |
 | **Tipo**            | Especificación funcional          |
 
@@ -39,7 +39,7 @@ La modificación del estado del pedido no forma parte de esta especificación (v
 | ------------------------------- | ------------------------------------------------------------------------ |
 | **Canal (Marketplace/Chatbot/Retail)** | Consulta pedidos del cliente al que representa.                    |
 | **Gestor**                      | Consulta cualquier pedido desde el panel administrativo.                |
-| **M1 — Pedidos**                 | Resuelve la consulta y aplica el control de acceso correspondiente.     |
+| **M1 — Ventas**                 | Resuelve la consulta y aplica el control de acceso correspondiente.     |
 
 ---
 

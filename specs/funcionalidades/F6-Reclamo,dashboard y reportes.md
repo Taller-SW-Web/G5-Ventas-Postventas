@@ -66,7 +66,7 @@ Para estandarizar el registro y facilitar la agregación en el dashboard, se def
 
 | Dependencia | Responsabilidad |
 |---|---|
-| M1 — Pedidos (F1) | Publica eventos (`pedido.pagado`, `pedido.anulado`, `pedido.entregado`) que F6 consume para sus agregados. |
+| M1 — Ventas (F1) | Publica eventos (`pedido.pagado`, `pedido.anulado`, `pedido.entregado`) que F6 consume para sus agregados. |
 | M2 — Postventa (F2 a F5) | Publican eventos relevantes (anulaciones, devoluciones, reembolsos, calificaciones) que también alimentan los agregados. |
 | Seguridad (G) | Aporta datos de contacto y rol del cliente/Gestor. |
 | Canales A/B/C | Punto de entrada para que el cliente registre un reclamo. |

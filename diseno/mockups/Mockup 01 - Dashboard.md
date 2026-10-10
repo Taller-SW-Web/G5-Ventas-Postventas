@@ -233,7 +233,7 @@ El Dashboard pertenece principalmente a **F6 — Gestión de reclamos, dashboard
 
 ### 8.2. Relación con la arquitectura del módulo
 
-El diagrama de arquitectura interna ubica **F1 y F2 en M1 — Pedidos** y **F3, F4, F5 y F6 en M2 — Postventa**, por ello la ubicación de un indicador en el Dashboard no cambia la responsabilidad de la funcionalidad que genera sus datos
+El diagrama de arquitectura interna ubica **F1 y F2 en M1 — Ventas** y **F3, F4, F5 y F6 en M2 — Postventa**, por ello la ubicación de un indicador en el Dashboard no cambia la responsabilidad de la funcionalidad que genera sus datos
 
 M1 conserva el control del pedido y publica eventos de dominio, M2 utiliza esa información para mantener los agregados de análisis y consulta
 

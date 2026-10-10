@@ -38,7 +38,7 @@ Marketplace, Chatbot y Retail aportan el contexto de canal utilizado en las cons
 
 | Bloque             | Funcionalidades | Responsabilidad                                                                    |
 | ------------------ | --------------- | ---------------------------------------------------------------------------------- |
-| **M1 — Pedidos**   | F1 y F2         | Controla el ciclo de vida del pedido y las anulaciones permitidas                  |
+| **M1 — Ventas**   | F1 y F2         | Controla el ciclo de vida del pedido y las anulaciones permitidas                  |
 | **M2 — Postventa** | F3, F4, F5 y F6 | Gestiona devoluciones, cambios, reembolsos, calificaciones, reclamos e indicadores |
 
 M1 conserva el control del estado del pedido, M2 consulta su información y solicita los cambios que correspondan mediante los servicios autorizados

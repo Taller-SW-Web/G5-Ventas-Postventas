@@ -3,7 +3,7 @@
 **Responsable:** Michael  
 **Estado:** En especificación  
 **Actor principal:** Canales A/B/C (Marketplace, Chatbot, Retail) y Gestor  
-**Microservicio:** M1 — Pedidos  
+**Microservicio:** M1 — Ventas  
 **Lineamiento del curso:** "Todos los canales gestionan el ciclo de vida del pedido en este módulo" (Módulo D — Ventas y Postventa)
 
 ## 1. Contexto

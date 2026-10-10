@@ -7,7 +7,7 @@
 | **Código**          | ESP-01                            |
 | **Nombre**          | Creación de pedido                |
 | **Funcionalidad**   | F1 — Ciclo de vida del pedido     |
-| **Módulo**          | M1 — Pedidos                      |
+| **Módulo**          | M1 — Ventas                      |
 | **Responsable**     | Michael                           |
 | **Tipo**            | Especificación funcional          |
 
@@ -42,7 +42,7 @@ La confirmación del pago y las transiciones posteriores corresponden a **ESP-03
 | ------------------------------- | ----------------------------------------------------------------------------------------- |
 | **Canal (Marketplace/Chatbot/Retail)** | Envía la solicitud de creación con todos los bloques requeridos (canal, ítems, cupón, envío, contacto, pago). |
 | **Cliente**                      | Es el titular del pedido; sus datos de contacto y envío se registran junto con la solicitud. |
-| **M1 — Pedidos**                 | Valida la solicitud completa, consulta dependencias y persiste el pedido.                 |
+| **M1 — Ventas**                 | Valida la solicitud completa, consulta dependencias y persiste el pedido.                 |
 | **Productos y Ofertas (F)**      | Confirma precio y disponibilidad de cada ítem.                                            |
 | **Seguridad (G)**                | Valida el token/rol del canal que origina la solicitud.                                   |
 
@@ -275,7 +275,7 @@ El registro debe permitir identificar:
 ### Consulta de precio/disponibilidad
 
 ```text
-M1 — Pedidos
+M1 — Ventas
       │
       │ consulta precio/disponibilidad por item
       ▼

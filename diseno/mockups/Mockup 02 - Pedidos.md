@@ -271,7 +271,7 @@ Una devolución gestionada por F3 requiere un pedido entregado, por ello impedir
 | **F3 — Devoluciones y cambios** | Gestiona solicitudes posteriores a la entrega cuando se cumplen las condiciones de postventa |
 | **F6 — Gestión de reclamos, dashboard y reportes** | Utiliza eventos del pedido para mantener indicadores y agregados de análisis |
 
-La arquitectura ubica F1 y F2 en **M1 — Pedidos**, mientras que F3 y F6 pertenecen a **M2 — Postventa**, esta separación permite consultar información de distintas funciones sin trasladar al frontend la responsabilidad de modificar los pedidos
+La arquitectura ubica F1 y F2 en **M1 — Ventas**, mientras que F3 y F6 pertenecen a **M2 — Postventa**, esta separación permite consultar información de distintas funciones sin trasladar al frontend la responsabilidad de modificar los pedidos
 
 Los datos deben obtenerse mediante APIs y eventos de los servicios autorizados, sin acceso directo a bases de datos ajenas
 

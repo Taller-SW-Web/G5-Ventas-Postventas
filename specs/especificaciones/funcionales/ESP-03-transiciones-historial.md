@@ -7,7 +7,7 @@
 | **Código**          | ESP-03                                 |
 | **Nombre**          | Transiciones de estado e historial      |
 | **Funcionalidad**   | F1 — Ciclo de vida del pedido           |
-| **Módulo**          | M1 — Pedidos                            |
+| **Módulo**          | M1 — Ventas                            |
 | **Responsable**     | Michael                                 |
 | **Tipo**            | Especificación funcional                |
 
@@ -42,7 +42,7 @@ La publicación de eventos de dominio derivada de estas transiciones corresponde
 | **Canal**                               | `CANAL_CHATBOT` | Dispara la anulación por `PAGO_NO_COMPLETADO` cuando la pasarela reporta el fallo, sin intervención del Gestor. |
 | **Gestor**                              | `GESTOR` | Autoriza anulaciones desde `EN PREPARACIÓN` (ver F2); consulta el historial.        |
 | **Despacho y Entrega (E)**              | `SISTEMA_LOGISTICA` | Notifica `DESPACHADO` y `ENTREGADO` (o entrega fallida) mediante su llamada a la API de F1. |
-| **M1 — Pedidos**                        | — | Valida cada transición contra la máquina de estados y registra el historial.        |
+| **M1 — Ventas**                        | — | Valida cada transición contra la máquina de estados y registra el historial.        |
 
 ---
 
