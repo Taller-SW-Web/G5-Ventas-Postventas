@@ -149,7 +149,7 @@ Durante la simulación estos campos se actualizan junto con el avance del pedido
 | Etapa | Estado logístico mostrado | Información complementaria |
 |---|---|---|
 | **PAGADO** | Pendiente de preparación | Sin guía ni fecha estimada en la vista inicial |
-| **EN PREPARACIÓN** | En preparación | Se mantiene la dirección de entrega |
+| **EN_PREPARACION** | En preparación | Se mantiene la dirección de entrega |
 | **DESPACHADO** | Despachado | Se presenta GUI-2026-01042 y la fecha estimada 19/09/2026 |
 | **ENTREGADO** | Entregado | Se conserva la información logística del caso |
 
@@ -161,13 +161,13 @@ En el sistema implementado la operación logística corresponde al Módulo E, su
 
 El panel **Historial de estados** representa la secuencia principal del pedido
 
-**CREADO → PAGADO → EN PREPARACIÓN → DESPACHADO → ENTREGADO**
+**CREADO → PAGADO → EN_PREPARACION → DESPACHADO → ENTREGADO**
 
 La etapa actual se diferencia mediante un marcador naranja y una etiqueta **Estado actual**, al avanzar el pedido esta identificación se desplaza a la nueva etapa
 
 La línea es informativa y no permite seleccionar directamente cualquier estado, el avance se realiza mediante el botón disponible para la etapa correspondiente
 
-En la vista inicial el pedido se encuentra en **PAGADO**, después de las acciones de demostración puede pasar a **EN PREPARACIÓN**, **DESPACHADO** y **ENTREGADO**
+En la vista inicial el pedido se encuentra en **PAGADO**, después de las acciones de demostración puede pasar a **EN_PREPARACION**, **DESPACHADO** y **ENTREGADO**
 
 Este panel muestra el recorrido principal y no todas las ramas de la máquina de estados, la anulación y otros resultados del proceso deben mantenerse coherentes con las reglas definidas para M1
 
@@ -179,7 +179,7 @@ El historial visual tampoco sustituye la bitácora completa, en la implementaci�
 
 ### 8.1. Botón Pasar a preparación
 
-**Pasar a preparación** se muestra cuando el pedido está en **PAGADO**, al presionarlo el mockup cambia el estado a **EN PREPARACIÓN**
+**Pasar a preparación** se muestra cuando el pedido está en **PAGADO**, al presionarlo el mockup cambia el estado a **EN_PREPARACION**
 
 La interacción actualiza la tarjeta superior, el marcador del historial y el estado logístico a **En preparación**, también registra como movimiento reciente **Pedido enviado a preparación** y muestra la actualización **18/09/2026 03:22**
 
@@ -189,7 +189,7 @@ La transición representa el siguiente paso de un pedido cuyo pago ya está conf
 
 ### 8.2. Botón Marcar como despachado
 
-**Marcar como despachado** aparece cuando el pedido se encuentra en **EN PREPARACIÓN**, al presionarlo cambia la representación a **DESPACHADO**
+**Marcar como despachado** aparece cuando el pedido se encuentra en **EN_PREPARACION**, al presionarlo cambia la representación a **DESPACHADO**
 
 El mockup actualiza el resumen y el historial, incorpora la guía **GUI-2026-01042** y la fecha estimada **19/09/2026** y presenta el movimiento **Pedido entregado al operador logístico** con actualización **18/09/2026 11:40**
 
@@ -209,20 +209,20 @@ La entrega habilita los procesos de postventa que correspondan según sus reglas
 
 ### 8.4. Botón Iniciar anulación
 
-**Iniciar anulación** se presenta durante las etapas **PAGADO** y **EN PREPARACIÓN** del recorrido demostrado
+**Iniciar anulación** se presenta durante las etapas **PAGADO** y **EN_PREPARACION** del recorrido demostrado
 
 En el frame individual de la página 3 este botón abre un aviso de **Solicitud de anulación** que se cierra automáticamente, en la copia de **Mockup Flujo** está conectado con la pantalla **Anulaciones**
 
 Presionarlo inicia la revisión del caso y no cambia inmediatamente el pedido a **ANULADO**, F2 debe validar el estado, el motivo y la autorización que corresponda
 
-Un pedido **EN PREPARACIÓN** requiere autorización expresa del Gestor, cuando ya está **DESPACHADO** o **ENTREGADO** la anulación desde F2 no está disponible
+Un pedido **EN_PREPARACION** requiere autorización expresa del Gestor, cuando ya está **DESPACHADO** o **ENTREGADO** la anulación desde F2 no está disponible
 
 ### 8.5. Relación entre los estados y los botones
 
 | Estado representado | Acción principal visible | Opción de anulación |
 |---|---|---|
 | **PAGADO** | Pasar a preparación | Iniciar anulación |
-| **EN PREPARACIÓN** | Marcar como despachado | Iniciar anulación con revisión de autorización |
+| **EN_PREPARACION** | Marcar como despachado | Iniciar anulación con revisión de autorización |
 | **DESPACHADO** | Marcar como entregado | Anulación no disponible |
 | **ENTREGADO** | Pedido entregado como mensaje informativo | Anulación no disponible |
 
@@ -262,7 +262,7 @@ Este bloque ayuda a reconocer el efecto del último avance sin reemplazar el his
 | **F5 — Calificación de experiencia** | Se relaciona con la entrega para activar la encuesta de experiencia según el flujo previsto |
 | **Módulo E — Despacho y Entrega** | Aporta la información y los eventos logísticos utilizados por F1 |
 
-La arquitectura mantiene F1 y F2 dentro de **M1 — Pedidos**, las funciones de postventa pertenecen a M2 y solicitan los cambios de pedido mediante API cuando corresponde
+La arquitectura mantiene F1 y F2 dentro de **M1 — Ventas**, las funciones de postventa pertenecen a M2 y solicitan los cambios de pedido mediante API cuando corresponde
 
 La vista concentra información de estas relaciones sin acceder directamente a las bases de datos de otros módulos
 
@@ -292,7 +292,7 @@ El recorrido de consulta es
 
 La demostración del avance dentro del detalle sigue la secuencia
 
-**PAGADO → Pasar a preparación → EN PREPARACIÓN → Marcar como despachado → DESPACHADO → Marcar como entregado → ENTREGADO**
+**PAGADO → Pasar a preparación → EN_PREPARACION → Marcar como despachado → DESPACHADO → Marcar como entregado → ENTREGADO**
 
 La revisión de anulación se inicia mediante **Iniciar anulación** y continúa en **Anulaciones** dentro del flujo integrado, su disponibilidad depende de la etapa del pedido
 

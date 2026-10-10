@@ -7,7 +7,7 @@
 | **Código**          | ESP-04                            |
 | **Nombre**          | Publicación de eventos            |
 | **Funcionalidad**   | F1 — Ciclo de vida del pedido     |
-| **Módulo**          | M1 — Pedidos                      |
+| **Módulo**          | M1 — Ventas                      |
 | **Responsable**     | Michael                           |
 | **Tipo**            | Especificación funcional          |
 
@@ -35,7 +35,7 @@ La lógica de qué hace cada consumidor con el evento no forma parte de esta esp
 
 | Actor                    | Responsabilidad                                                       |
 | --------------------------- | --------------------------------------------------------------------- |
-| **M1 — Pedidos**             | Publica el evento correspondiente en la misma operación que aplica la transición (ver ESP-03). |
+| **M1 — Ventas**             | Publica el evento correspondiente en la misma operación que aplica la transición (ver ESP-03). |
 | **M2 (F2 a F6)**              | Consume los eventos relevantes y actualiza su propio estado/agregados. |
 | **Productos y Ofertas (F)**  | Consume `pedido.anulado` para reponer stock.                          |
 
@@ -144,7 +144,7 @@ Los eventos no tienen un ciclo de vida propio de estados; su trazabilidad se apo
 ## 12. Integraciones y API
 
 ```text
-M1 — Pedidos
+M1 — Ventas
       │
       │ publica evento
       ▼

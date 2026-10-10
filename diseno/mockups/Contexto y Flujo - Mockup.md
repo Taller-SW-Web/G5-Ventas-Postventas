@@ -38,7 +38,7 @@ Marketplace, Chatbot y Retail aportan el contexto de canal utilizado en las cons
 
 | Bloque             | Funcionalidades | Responsabilidad                                                                    |
 | ------------------ | --------------- | ---------------------------------------------------------------------------------- |
-| **M1 — Pedidos**   | F1 y F2         | Controla el ciclo de vida del pedido y las anulaciones permitidas                  |
+| **M1 — Ventas**   | F1 y F2         | Controla el ciclo de vida del pedido y las anulaciones permitidas                  |
 | **M2 — Postventa** | F3, F4, F5 y F6 | Gestiona devoluciones, cambios, reembolsos, calificaciones, reclamos e indicadores |
 
 M1 conserva el control del estado del pedido, M2 consulta su información y solicita los cambios que correspondan mediante los servicios autorizados
@@ -104,7 +104,7 @@ La entrega permite iniciar los procesos de postventa que cumplan sus condiciones
 
 F2 recibe la solicitud y verifica el estado del pedido, el motivo y la autorización necesaria antes de resolverla
 
-Los pedidos **CREADO** y **PAGADO** admiten la revisión de anulación desde el canal, **EN PREPARACIÓN** requiere autorización del Gestor y **DESPACHADO** ya no permite anulación
+Los pedidos **CREADO** y **PAGADO** admiten la revisión de anulación desde el canal, **EN_PREPARACION** requiere autorización del Gestor y **DESPACHADO** ya no permite anulación
 
 El recorrido de revisión es **Iniciar anulación → Revisar solicitud → Validar estado y motivo → Aprobar o rechazar → Confirmar decisión**
 
@@ -160,7 +160,7 @@ F6 recibe el reclamo o queja desde el canal, genera su código y formato y conse
 
 Desde **Reclamos** el Gestor pulsa **Ver**, consulta descripción, contacto, historial y SLA y continúa con **Iniciar atención → Responder reclamo → Guardar respuesta → Marcar como atendido → Confirmar cierre**
 
-El caso avanza de **REGISTRADO** a **EN PROCESO** y finalmente a **ATENDIDO**, el cierre requiere una respuesta válida y trazable
+El caso avanza de **REGISTRADO** a **EN_PROCESO** y finalmente a **ATENDIDO**, el cierre requiere una respuesta válida y trazable
 
 El SLA expresa la situación del plazo y se distingue del estado de atención, un caso vencido puede seguir en proceso y debe conservar esa condición en su seguimiento
 

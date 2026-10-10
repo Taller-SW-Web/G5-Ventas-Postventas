@@ -62,7 +62,12 @@ Los documentos bajo `arquitectura/` (C4 niveles 1, 2 y 3) siguen siendo **propue
 
 No inventes valores para estos campos; si hace falta, pregunta o deja el gap explícito:
 
+<<<<<<< HEAD
 - Dónde se despliega `simulador-pasarela` (Render u otro). En local corre como aplicación propia en el puerto 8083 (ver la guía del backend, sección 9.3).
+=======
+- `pago.estado`, `devolucion.estado`, `anulacion.estado` y `pedido.canal` no tienen lista de valores cerrada (ver "Pendientes" en diseno/diagramas/bd/diagrama-logico.md y diagrama-fisico.md).
+- Dónde corre el simulador de pasarela de pagos (servicio propio en Render o embebido en `servicio-postventa`) — ver `arquitectura/c4-nivel-2-contenedores-ventas-postventa.md`, sección 8. No aparece todavía en la estructura real de `backend/`.
+>>>>>>> 8dce20fefa9c25104ca0401df25ed3a82d636bc1
 
 ---
 

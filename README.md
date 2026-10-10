@@ -97,14 +97,14 @@ graph TD
 
 ## Matriz de funcionalidades y responsables
 
-| Código | Funcionalidad | Servicio | Responsable | Rama | Descripción |
-|:---:|---|:---:|:---:|:---:|---|
-| **F1** | Gestión de Pedidos | M1 | Michael | `Michael` | Máquina de estados del pedido (`CREADO` → `ENTREGADO`), snapshot inmutable de cliente y precios. |
-| **F2** | Anulación de Pedidos | M1 | Luis Arroyo | `Luis-Arroyo` | Cancelación directa en estados tempranos, o con aprobación de Gestor en `EN_PREPARACION`. |
-| **F3** | Devoluciones y Cambios | M2 | Joseph | `Joseph` | Carga de evidencias, registro de solicitudes y dictamen técnico post-entrega. |
-| **F4** | Reembolsos y Extornos | M2 | Luis Alejandro | `Luis-Alejandro` | Orquestación de extornos a pasarela con validación idempotente obligatoria. |
-| **F5** | Satisfacción (CSAT) | M2 | Johan | `Johan` | Recolección de calificaciones (1 a 5) y comentarios post-entrega. |
-| **F6** | Libro de Reclamaciones y Dashboard | M2 | Fabrizio | `Fabrizio` | Registro de quejas (SLA 15 días hábiles, Indecopi), respuesta pública y métricas ejecutivas. |
+| Código | Funcionalidad | Servicio | Responsable | Rol | Rama | Descripción |
+|:---:|---|:---:|:---:|---|:---:|---|
+| **F1** | Gestión de Pedidos | M1 | Michael | Developer Full Stack | `Michael` | Máquina de estados del pedido (`CREADO` → `ENTREGADO`), snapshot inmutable de cliente y precios. |
+| **F2** | Anulación de Pedidos | M1 | Luis Arroyo | Software Architect | `Luis-Arroyo` | Cancelación directa en estados tempranos, o con aprobación de Gestor en `EN_PREPARACION`. |
+| **F3** | Devoluciones y Cambios | M2 | Joseph | Product Owner | `Joseph` | Carga de evidencias, registro de solicitudes y dictamen técnico post-entrega. |
+| **F4** | Reembolsos y Extornos | M2 | Luis Alejandro | Developer Frontend | `Luis-Alejandro` | Orquestación de extornos a pasarela con validación idempotente obligatoria. |
+| **F5** | Satisfacción (CSAT) | M2 | Johan | Frontend - QA | `Johan` | Recolección de calificaciones (1 a 5) y comentarios post-entrega. |
+| **F6** | Libro de Reclamaciones y Dashboard | M2 | Fabrizio | Developer Backend | `Fabrizio` | Registro de quejas (SLA 15 días hábiles, Indecopi), respuesta pública y métricas ejecutivas. |
 
 Antes de contribuir, revisa [CONTRIBUTING.md](CONTRIBUTING.md) para el flujo de ramas y convenciones de commit.
 
@@ -141,10 +141,13 @@ G5-Ventas-Postventas/
 ├── AGENTS.md                      # Contexto de negocio para asistentes de IA
 ├── .gitignore
 │
-├── arquitectura/                  # Modelo C4 — propuesta en discusión, no aprobada
+├── arquitectura/
 │   ├── c4-nivel-1-contexto-ventas-postventa.md
 │   ├── c4-nivel-2-contenedores-ventas-postventa.md
-│   └── c4-nivel-3-componentes-ventas-postventa.md
+│   ├── c4-nivel-3-componentes-ventas-postventa.md
+│   └── adr/                       # Registro de decisiones arquitecturales (ADR)
+│       ├── README.md
+│       └── ADR-004-fuente-verdad-contratos-api.md
 │
 ├── specs/
 │   ├── overview.md                # Visión general del módulo D

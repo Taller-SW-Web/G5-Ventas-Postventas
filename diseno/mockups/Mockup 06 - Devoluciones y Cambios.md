@@ -81,7 +81,7 @@ Los filtros se encuentran sobre la tabla para que el Gestor pueda preparar la co
 | Control | Opciones y finalidad |
 |---|---|
 | **Buscar** | Representa la búsqueda por código de expediente, pedido o cliente mediante coincidencias rápidas |
-| **Estado** | Incluye Todos, SOLICITADA, EN EVALUACIÓN, APROBADA, RECHAZADA y COMPLETADA |
+| **Estado** | Incluye Todos, SOLICITADA, EN_EVALUACION, APROBADA, RECHAZADA y COMPLETADA |
 | **Tipo** | Permite elegir Todos, Cambio o Devolución |
 | **Canal** | Permite elegir Todos, Marketplace, Chatbot o Retail |
 | **Aplicar filtros** | Confirma los criterios seleccionados y presenta una vista de resultados |
@@ -144,7 +144,7 @@ Presenta la siguiente información
 - Motivo registrado
 - Cantidad de archivos de evidencia
 
-Al abrir **DEV-2026-0214** se muestra el pedido **PED-2026-1042**, el cliente **Ana López** y el motivo **Talla incorrecta**, el caso se presenta como un cambio en estado **EN EVALUACIÓN** con dos archivos de evidencia
+Al abrir **DEV-2026-0214** se muestra el pedido **PED-2026-1042**, el cliente **Ana López** y el motivo **Talla incorrecta**, el caso se presenta como un cambio en estado **EN_EVALUACION** con dos archivos de evidencia
 
 La fecha de entrega aporta el contexto necesario para revisar la elegibilidad, el motivo y el tipo de solicitud permiten interpretar la resolución propuesta
 
@@ -206,14 +206,14 @@ El bloque **Acciones disponibles** cambia según el expediente abierto, no todos
 | Situación del expediente | Acciones representadas |
 |---|---|
 | **SOLICITADA** | Iniciar evaluación y Volver al pedido |
-| **EN EVALUACIÓN** | Aprobar solicitud, Rechazar solicitud y Volver al pedido |
+| **EN_EVALUACION** | Aprobar solicitud, Rechazar solicitud y Volver al pedido |
 | **APROBADA con resolución de cambio** | Coordinar cambio y Volver al pedido |
 | **APROBADA con resolución de reembolso** | Derivar a reembolso y Volver al pedido |
 | **RECHAZADA o cambio completado** | Consulta del resultado y Volver al pedido |
 
 ### 9.2. Iniciar evaluación
 
-**Iniciar evaluación** cambia el estado mostrado de **SOLICITADA** a **EN EVALUACIÓN** y reemplaza ese botón por las opciones de aprobación y rechazo
+**Iniciar evaluación** cambia el estado mostrado de **SOLICITADA** a **EN_EVALUACION** y reemplaza ese botón por las opciones de aprobación y rechazo
 
 Este paso representa el inicio de la revisión administrativa, no implica que la solicitud ya cumpla todas las condiciones para aprobarse
 

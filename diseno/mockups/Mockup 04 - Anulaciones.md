@@ -41,7 +41,7 @@ El usuario principal es el **Gestor o Administrador de ventas**, quien utiliza l
 
 El cliente solicita la anulación desde el canal correspondiente, algunas operaciones pueden resolverse sin autorización manual según el estado y las reglas del módulo
 
-Los pedidos **CREADO** y **PAGADO** pueden participar en anulaciones directas según las condiciones de F2, un pedido **EN PREPARACIÓN** requiere autorización expresa del Gestor
+Los pedidos **CREADO** y **PAGADO** pueden participar en anulaciones directas según las condiciones de F2, un pedido **EN_PREPARACION** requiere autorización expresa del Gestor
 
 En la implementación el acceso debe estar protegido mediante token y rol, la disponibilidad de un botón no reemplaza la validación de permisos y elegibilidad en el backend
 
@@ -169,7 +169,7 @@ El ejemplo de **PED-2026-1041** presenta la siguiente información
 | Campo | Valor mostrado |
 |---|---|
 | **Pedido** | PED-2026-1041 |
-| **Estado actual** | EN PREPARACIÓN |
+| **Estado actual** | EN_PREPARACION |
 | **Cliente** | Carlos Ramírez |
 | **Canal** | Chatbot |
 | **Motivo** | Dirección incorrecta |
@@ -223,7 +223,7 @@ La elegibilidad depende del estado del pedido y de las condiciones establecidas 
 |---|---|
 | **CREADO** | Puede admitir anulación directa según actor y motivo |
 | **PAGADO** | Puede admitir anulación directa y originar un reembolso cuando corresponde |
-| **EN PREPARACIÓN** | Requiere autorización expresa del Gestor |
+| **EN_PREPARACION** | Requiere autorización expresa del Gestor |
 | **DESPACHADO** | No admite anulación desde F2 |
 | **ENTREGADO** | Debe revisarse mediante los procesos de postventa que correspondan |
 | **ANULADO** | No corresponde ejecutar nuevamente la misma anulación |
@@ -316,7 +316,7 @@ El regreso no aprueba ni rechaza por sí mismo la solicitud y no ejecuta una nue
 | **Productos y Ofertas** | Recibe la operación de reposición de stock cuando corresponde |
 | **Despacho y Entrega** | Coordina la cancelación logística cuando corresponde |
 
-F1 y F2 pertenecen a **M1 — Pedidos**, F4 pertenece a **M2 — Postventa**, esta separación mantiene al pedido bajo un único control y permite coordinar el dinero mediante el proceso autorizado
+F1 y F2 pertenecen a **M1 — Ventas**, F4 pertenece a **M2 — Postventa**, esta separación mantiene al pedido bajo un único control y permite coordinar el dinero mediante el proceso autorizado
 
 La comunicación entre módulos se realiza por APIs y eventos, la pantalla no debe modificar directamente datos de otros componentes
 

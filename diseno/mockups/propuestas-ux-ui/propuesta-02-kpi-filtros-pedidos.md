@@ -29,7 +29,7 @@ A pesar de su prominencia visual, presentaban las siguientes deficiencias de int
 Se redefinieron las tarjetas métricas superiores para dotarlas de comportamiento de botón selector de estado (*toggle state*)[cite: 14]:
 * **Estado Predeterminado (Default):** Fondo blanco/crema con borde sutil, visualizando el conteo global y el icono representativo[cite: 5, 14].
 * **Estado Activo / Seleccionado (Active):** Al hacer clic sobre una tarjeta (por ejemplo, *Pendientes: 426*), la tarjeta adquiere un borde perimetral destacado con el color primario de marca (`#FF5A00`), elevación visual sutil y realce tipográfico[cite: 14].
-* **Respuesta Inmediata en Listado:** La acción ejecuta un filtrado reactivo instantáneo en la tabla inferior, mostrando exclusivamente los pedidos en estados compatibles (e.g., `EN PREPARACIÓN` o `CREADO`) sin requerir pulsar *"Aplicar filtros"*[cite: 14].
+* **Respuesta Inmediata en Listado:** La acción ejecuta un filtrado reactivo instantáneo en la tabla inferior, mostrando exclusivamente los pedidos en estados compatibles (e.g., `EN_PREPARACION` o `CREADO`) sin requerir pulsar *"Aplicar filtros"*[cite: 14].
 * **Comportamiento de Deselección:** Al hacer clic nuevamente sobre la tarjeta activa o presionar *"Limpiar"*, la vista se restablece automáticamente mostrando el universo total de pedidos[cite: 14].
 
 ---

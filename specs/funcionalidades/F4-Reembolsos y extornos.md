@@ -40,7 +40,7 @@ Incluye:
 |---|---|
 | F2 — Anulación de pedidos | Origina la solicitud cuando una anulación involucra un pedido ya pagado. |
 | F3 — Devoluciones y cambios | Origina la solicitud cuando una devolución es aprobada con reembolso de dinero. |
-| M1 — Pedidos | Provee la referencia del pedido/pago original. |
+| M1 — Ventas | Provee la referencia del pedido/pago original. |
 | Simulador de pasarela de pago | Procesa la operación de extorno (simula éxito, error o latencia). |
 | Seguridad (G) | Valida el rol del autorizador cuando la operación lo requiere. |
 

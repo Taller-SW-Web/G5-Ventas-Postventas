@@ -339,3 +339,55 @@ Requiere autorización del Gestor si está en `EN_PREPARACION`:
 ### Errores
 - **`400 Bad Request`**: Motivo ausente o no tipificado.
 - **`409 Conflict`**: Pedido ya en `DESPACHADO` o `ENTREGADO` (derivar al microservicio M2).
+
+### 1.8 Listar Anulaciones Pendientes de Autorización
+
+- **Endpoint:** `GET /api/v1/pedidos/anulaciones/pendientes`
+Descripción: Lista las anulaciones en `PENDIENTE_AUTORIZACION` que esperan decisión del Gestor (bandeja de F2).
+- **Headers:** `Authorization: Bearer <token_gestor>` (scope `ventas:admin`)
+### Query Params
+pagina (opcional, default: 0)
+tamano (opcional, default: 10)
+### Respuestas
+#### `200 OK`
+```json
+{
+  "contenido": [
+    {
+      "solicitudAnulacionId": "ANUL-0012",
+      "pedidoId": "PED-2026-00981",
+      "motivo": "SOLICITUD_CLIENTE",
+      "fechaSolicitud": "2026-09-23"
+    }
+  ],
+  "pagina": 0,
+  "totalPaginas": 1,
+  "totalElementos": 1
+}
+```
+
+### 1.9 Aprobar o Rechazar una Anulación Pendiente
+
+- **Endpoint:** `PATCH /api/v1/pedidos/{pedidoId}/anulaciones/{anulacionId}`
+Descripción: El Gestor resuelve una anulación en `PENDIENTE_AUTORIZACION`. Si aprueba, F1 ejecuta `EN_PREPARACION → ANULADO` y dispara los efectos de F2 (ESP-06). Si rechaza, el pedido conserva su estado.
+- **Headers:** `Authorization: Bearer <token_gestor>` (scope `ventas:admin`)
+### Request Body
+```json
+{
+  "decision": "APROBADA",
+  "autorizadorId": "GESTOR-03",
+  "comentario": "Motivo validado con el cliente"
+}
+```
+### Respuestas
+#### `200 OK`
+```json
+{
+  "pedidoId": "PED-2026-00981",
+  "estadoPedido": "ANULADO",
+  "estadoAnulacion": "EJECUTADA"
+}
+```
+Si `decision` es `RECHAZADA`, `estadoPedido` vuelve a `EN_PREPARACION` y `estadoAnulacion` queda en `RECHAZADA`.
+### Errores
+- **`409 Conflict`**: La anulación no está en `PENDIENTE_AUTORIZACION`, o el pedido ya no está en `EN_PREPARACION` (por ejemplo, ya despachó) — en ese caso la anulación pasa a `RECHAZADA`.

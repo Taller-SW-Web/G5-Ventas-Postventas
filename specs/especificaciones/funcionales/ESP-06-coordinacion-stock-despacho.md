@@ -4,7 +4,7 @@
 **Funcionalidad:** F2 — Anulación de pedidos
 **Estado:** En especificación
 **Actor principal:** Sistema (orquestador de F2), Productos (F), Despacho (E), F4 — Reembolsos
-**Microservicio:** M1 — Pedidos
+**Microservicio:** M1 — Ventas
 **Lineamiento:** "Anulación de pedidos según reglas de negocio (con autorización)" (Módulo D — Ventas y Postventa)
 
 ## 1. Contexto
@@ -21,7 +21,7 @@ Incluye:
 
 - Solicitud de reposición de stock hacia Productos y Ofertas (F).
 - Solicitud de cancelación de envío hacia Despacho y Entrega (E), cuando ya existía un despacho programado.
-- Origen de la solicitud de reembolso hacia F4, **únicamente cuando el pedido tenía pago confirmado** (`PAGADO` o `EN PREPARACIÓN` con pago ya registrado).
+- Origen de la solicitud de reembolso hacia F4, **únicamente cuando el pedido tenía pago confirmado** (`PAGADO` o `EN_PREPARACION` con pago ya registrado).
 - Registro visible de inconsistencias cuando un servicio externo (F o E) falla al responder.
 
 **No incluye:** la validación de motivo ni la decisión de autorización (eso es ESP-05); la ejecución contable del reembolso en sí (F4); la reasignación de repartidor o reprogramación logística (E).
@@ -33,7 +33,7 @@ Incluye:
 | `CREADO` (canal, `PAGO_NO_COMPLETADO`) | Sí, inmediata | No aplica (nunca se despachó) | **No** (nunca se cobró) |
 | `CREADO` (cliente) | Sí, inmediata | No aplica | **No** (nunca se cobró) |
 | `PAGADO` | Sí | No aplica (aún no se programó despacho) | **Sí**, exactamente una solicitud |
-| `EN PREPARACIÓN` (aprobada por Gestor) | Sí | Sí, si ya había despacho programado | **Sí**, exactamente una solicitud |
+| `EN_PREPARACION` (aprobada por Gestor) | Sí | Sí, si ya había despacho programado | **Sí**, exactamente una solicitud |
 
 ## 4. Precondiciones, dependencias y resultados
 

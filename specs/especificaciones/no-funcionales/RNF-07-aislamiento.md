@@ -2,7 +2,7 @@
 
 **Módulo:** D — Ventas y Postventa  
 **Tipo:** Requisito no funcional  
-**Ámbito:** M1 — Pedidos / M2 — Postventa  
+**Ámbito:** M1 — Ventas / M2 — Postventa  
 **Estado:** En especificación  
 **Responsable:** Johan Solano
 
@@ -12,7 +12,7 @@
 
 Definir las reglas de aislamiento entre los componentes internos del Módulo D, evitando que una funcionalidad modifique directamente información que pertenece a otra responsabilidad
 
-El objetivo principal es conservar límites claros entre M1 — Pedidos y M2 — Postventa, de manera que cada microservicio opere únicamente sobre los datos y procesos que le corresponden
+El objetivo principal es conservar límites claros entre M1 — Ventas y M2 — Postventa, de manera que cada microservicio opere únicamente sobre los datos y procesos que le corresponden
 
 En particular, M1 es el propietario exclusivo del estado y de las tablas del pedido. Las funcionalidades de postventa no deben escribir directamente sobre dichas tablas y cualquier cambio relacionado con el pedido debe solicitarse mediante las APIs o eventos definidos por el proyecto
 
@@ -22,7 +22,7 @@ En particular, M1 es el propietario exclusivo del estado y de las tablas del ped
 
 El Módulo D se divide funcionalmente en:
 
-- **M1 — Pedidos:** responsable del ciclo de vida del pedido y de sus transiciones de estado
+- **M1 — Ventas:** responsable del ciclo de vida del pedido y de sus transiciones de estado
 - **M2 — Postventa:** responsable de devoluciones/cambios, reembolsos, calificaciones, reclamos y procesos posteriores a la venta
 
 Esta separación implica que una funcionalidad puede consultar información de otra o solicitar una operación, pero no debe modificar directamente sus datos internos
@@ -84,7 +84,7 @@ F3 — Devoluciones y cambios puede consultar a F1 para verificar que un pedido 
 
 F3 administra su propio expediente de postventa y su propia máquina de estados:
 
-`SOLICITADA → EN EVALUACIÓN → APROBADA / RECHAZADA → COMPLETADA`
+`SOLICITADA → EN_EVALUACION → APROBADA / RECHAZADA → COMPLETADA`
 
 Estos estados pertenecen al expediente de devolución/cambio y no sustituyen ni modifican directamente el estado del pedido gestionado por M1
 
@@ -160,7 +160,7 @@ F6 administra sus propios reclamos, SLA, respuestas y agregados, manteniendo la 
 
 ### CA-03 — Estados de devolución separados de estados de pedido
 
-**DADO** un expediente de devolución en estado `EN EVALUACIÓN`  
+**DADO** un expediente de devolución en estado `EN_EVALUACION`  
 **CUANDO** el Gestor lo aprueba o rechaza  
 **ENTONCES** cambia únicamente el estado del expediente de F3  
 **Y** el estado del pedido en M1 permanece bajo control de F1

@@ -46,7 +46,7 @@ El módulo se divide en dos bloques principales:
 
 | Bloque             | Responsabilidad                                                                     |
 | ------------------ | ----------------------------------------------------------------------------------- |
-| **M1 — Pedidos**   | Gestiona el ciclo de vida del pedido, sus estados, detalle e historial              |
+| **M1 — Ventas**   | Gestiona el ciclo de vida del pedido, sus estados, detalle e historial              |
 | **M2 — Postventa** | Gestiona anulaciones, devoluciones, reembolsos, calificaciones, reclamos y reportes |
 
 La interfaz del Gestor integra ambos bloques mediante un menú común con acceso a **Dashboard, Pedidos, Postventa y Reportes**

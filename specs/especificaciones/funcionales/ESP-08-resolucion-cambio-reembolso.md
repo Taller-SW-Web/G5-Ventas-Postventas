@@ -27,7 +27,7 @@ Esta especificación comprende:
 
 * Consulta y evaluación de una solicitud de devolución.
 * Validación de las condiciones necesarias para resolverla.
-* Cambio del estado de la solicitud a `EN EVALUACIÓN`.
+* Cambio del estado de la solicitud a `EN_EVALUACION`.
 * Resolución mediante cambio de producto.
 * Resolución mediante reembolso.
 * Rechazo de la solicitud con un motivo obligatorio.
@@ -60,7 +60,7 @@ La ejecución del reembolso corresponde a **F4 — Reembolsos y extornos**, medi
 Antes de resolver una devolución se debe cumplir lo siguiente:
 
 1. La solicitud debe existir.
-2. La solicitud debe encontrarse en estado `SOLICITADA` o `EN EVALUACIÓN`.
+2. La solicitud debe encontrarse en estado `SOLICITADA` o `EN_EVALUACION`.
 3. El Gestor debe estar autenticado y autorizado para evaluar la solicitud.
 4. La solicitud debe contener la información necesaria para su evaluación.
 5. El pedido asociado debe corresponder a una solicitud válida de devolución.
@@ -82,7 +82,7 @@ Consulta solicitud
 Inicia evaluación
    │
    ▼
-EN EVALUACIÓN
+EN_EVALUACION
    │
    ├───────────────┐
    ▼               ▼
@@ -104,7 +104,7 @@ COMPLETADA      F4 — Reembolso
 
 1. El Gestor consulta una solicitud de devolución registrada.
 2. El sistema verifica que la solicitud pueda ser evaluada.
-3. La solicitud pasa al estado `EN EVALUACIÓN`.
+3. La solicitud pasa al estado `EN_EVALUACION`.
 4. El sistema muestra la información del pedido, motivo, descripción y evidencia disponible.
 5. El Gestor analiza la solicitud.
 6. El Gestor selecciona una resolución:
@@ -256,7 +256,7 @@ La información de trazabilidad debe mantenerse de acuerdo con **RNF-03 — Traz
 ## 9. Reglas de negocio
 
 1. Solo pueden resolverse solicitudes existentes y válidas.
-2. Una solicitud debe encontrarse en `SOLICITADA` o `EN EVALUACIÓN` para iniciar su evaluación.
+2. Una solicitud debe encontrarse en `SOLICITADA` o `EN_EVALUACION` para iniciar su evaluación.
 3. Toda solicitud evaluada debe terminar en una resolución definida.
 4. Las resoluciones permitidas son `CAMBIO`, `REEMBOLSO` o `RECHAZO`.
 5. Un rechazo debe registrar obligatoriamente su motivo.
@@ -308,7 +308,7 @@ El proceso de resolución utiliza los siguientes estados:
 SOLICITADA
      │
      ▼
-EN EVALUACIÓN
+EN_EVALUACION
      │
      ├───────────────┐
      ▼               ▼
@@ -412,7 +412,7 @@ Para un rechazo:
 
 **CUANDO** el Gestor inicia su evaluación.
 
-**ENTONCES** la solicitud pasa a `EN EVALUACIÓN` y se muestra la información necesaria para tomar una decisión.
+**ENTONCES** la solicitud pasa a `EN_EVALUACION` y se muestra la información necesaria para tomar una decisión.
 
 ---
 

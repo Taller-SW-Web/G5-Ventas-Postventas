@@ -93,9 +93,9 @@ Los componentes asociados a reglas de negocio deben representar también el esta
 
 Los badges y etiquetas deben mantener una convención visual uniforme para estados como:
 
-- Pedidos: `CREADO`, `PAGADO`, `EN PREPARACIÓN`, `DESPACHADO`, `ENTREGADO`, `ANULADO`.
-- Devoluciones: `SOLICITADA`, `EN EVALUACIÓN`, `APROBADA`, `RECHAZADA`, `COMPLETADA`.
-- Reclamos: `REGISTRADO`, `EN PROCESO`, `ATENDIDO` y `DERIVADO` cuando corresponda.
+- Pedidos: `CREADO`, `PAGADO`, `EN_PREPARACION`, `DESPACHADO`, `ENTREGADO`, `ANULADO`.
+- Devoluciones: `SOLICITADA`, `EN_EVALUACION`, `APROBADA`, `RECHAZADA`, `COMPLETADA`.
+- Reclamos: `REGISTRADO`, `EN_PROCESO`, `ATENDIDO` y `DERIVADO` cuando corresponda.
 - Reembolsos: `PENDIENTE`, `EXITOSO` y `FALLIDO`.
 
 La definición final de colores para cada estado se realizará en Figma y será aplicada mediante el theme del frontend

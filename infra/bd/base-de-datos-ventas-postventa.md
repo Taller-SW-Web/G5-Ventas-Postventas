@@ -176,13 +176,23 @@ spring.jpa.hibernate.ddl-auto=validate
 
 Se usa `validate` porque las tablas ya existen. La conexión directa de Supabase usa IPv6; si da problemas, se puede usar la opción Session pooler.
 
-## 7. Pendientes
+## 7. Segunda migración — eventos y huecos de implementación
+
+Al escribir la guía de implementación del backend, se encontraron huecos entre el ER original, los contratos y las especificaciones. Las decisiones ya se tomaron y los cambios ya están aplicados en Supabase:
+
+- **Eventos entre M1 y M2** (sin broker, bandeja de salida): `ventas.outbox_evento` (eventos que M1 debe enviar a M2), `ventas.evento_recibido` (notificaciones externas — pasarela, Despacho — ya procesadas) y `postventa.evento_recibido` (eventos de M1 ya aplicados en M2). Confirmado en el código real de `servicio-ventas` (`OutboxEvento.java`, `PublicadorEventos.java`).
+- **F3 (Joseph):** `devolucion` gana `descripcion` e `id_cliente`; tabla nueva `devolucion_item` (id_devolucion, id_producto, cantidad).
+- **F4 (Luis Alejandro):** `reembolso` gana `id_pedido` (para controlar el saldo reembolsable); tabla nueva `reembolso_intento` (historial de intentos de extorno, exigido por ESP-10).
+- **F6 (Fabrizio):** `reclamo` gana `id_cliente`, `fecha_registro`, `fecha_atencion` y `atendido_por`; tabla nueva `agregado_metricas` (contadores diarios por canal para el dashboard, complementa a `agregado_ventas`).
+
+Con esto, el total pasó de 11 a 17 tablas (7 en `ventas`, 10 en `postventa`). El detalle de columnas, tipos y CHECK está en [diagrama-logico.md](../../diseno/diagramas/bd/diagrama-logico.md) y [diagrama-fisico.md](../../diseno/diagramas/bd/diagrama-fisico.md) — ambos ya actualizados. El `.drawio` original todavía no refleja esta segunda migración.
+
+## 8. Pendientes
 
 Por definir en equipo:
 
 - En el ER se dibuja la relación devolución-reembolso, pero `reembolso` usa `id_origen` y `tipo_origen`, que puede apuntar a una anulación (M1) o a una devolución (M2). Se dejó sin clave foránea.
-- En la base el estado se guarda como `EN_PREPARACION`; el enum en Java debe usar el mismo valor.
-- Faltan definir los valores válidos de `pago.estado`, `devolucion.estado`, `reclamo.estado` y `canal`.
+- `reclamo.canal`: el contrato ya lo envía al registrar un reclamo, pero todavía no existe la columna — es el único valor de la lista original que sigue sin definirse. `devolucion.estado`, `anulacion.estado`, `reclamo.estado`, `pedido.canal` y `pago.estado` ya están confirmados (ver diagrama-fisico.md, sección 5).
 
 Trabajo técnico:
 
@@ -190,8 +200,8 @@ Trabajo técnico:
 - Crear el bucket de Storage para las evidencias de devolución.
 - Conectar los microservicios de Spring Boot.
 
-## 8. Archivos
+## 9. Archivos
 
-- `Diagrama_ER - VentasPostventas.drawio`: diagrama original.
+- `Diagrama_ER - VentasPostventas.drawio`: diagrama original (11 tablas; pendiente de actualizar con la segunda migración).
 - `ventas_postventa_schema.sql`: script de creación de la base.
 - `base-de-datos-ventas-postventa.md`: este documento.

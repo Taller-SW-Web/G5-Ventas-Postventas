@@ -80,7 +80,7 @@ La tabla principal presenta:
 | **Estado** | Situación actual del expediente |
 | **Acción** | Permite abrir el expediente para revisión |
 
-Los estados representados en el wireframe incluyen `SOLICITADA`, `EN EVALUACIÓN`, `APROBADA` y `RECHAZADA`
+Los estados representados en el wireframe incluyen `SOLICITADA`, `EN_EVALUACION`, `APROBADA` y `RECHAZADA`
 
 ### Detalle visual: filtros y bandeja de solicitudes
 
@@ -102,7 +102,7 @@ Al seleccionar una solicitud, el panel lateral presenta la información necesari
 
 La fecha de entrega es relevante porque F3 debe verificar que el pedido ya haya sido entregado y que la solicitud se encuentre dentro del plazo establecido
 
-En el ejemplo mostrado, el expediente corresponde a un **Cambio** por talla incorrecta y se encuentra en estado `EN EVALUACIÓN`
+En el ejemplo mostrado, el expediente corresponde a un **Cambio** por talla incorrecta y se encuentra en estado `EN_EVALUACION`
 
 ---
 
@@ -150,7 +150,7 @@ El wireframe presenta cuatro acciones principales:
 | **Derivar a reembolso** | Envía el origen del caso hacia F4 cuando corresponde devolver dinero |
 | **Volver al pedido** | Regresa al detalle W03 del pedido relacionado |
 
-Al abrir una solicitud en estado `SOLICITADA`, F3 puede pasarla a `EN EVALUACIÓN`
+Al abrir una solicitud en estado `SOLICITADA`, F3 puede pasarla a `EN_EVALUACION`
 
 Si se aprueba un cambio y existe disponibilidad, se coordina un nuevo despacho. Si no existe stock, el expediente debe resolverse mediante la alternativa definida por el proyecto y no quedar indefinidamente pendiente
 

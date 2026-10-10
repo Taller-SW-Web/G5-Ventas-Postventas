@@ -3,7 +3,7 @@
 **Responsable:** Luis Arroyo
 **Categoría:** Requisito No Funcional — Seguridad
 **Estado:** En especificación
-**Aplica a:** Todo el sistema (M1 — Pedidos y M2 — Postventa), con énfasis en los endpoints de F2 (Anulación)
+**Aplica a:** Todo el sistema (M1 — Ventas y M2 — Postventa), con énfasis en los endpoints de F2 (Anulación)
 
 ## 1. Propósito
 
@@ -14,7 +14,7 @@ Garantizar que todo endpoint que modifique o exponga datos de pedidos, anulacion
 | Regla | Descripción |
 |---|---|
 | Validación de token | Toda solicitud a un endpoint protegido debe incluir un `Authorization: Bearer <token>` válido, emitido por el módulo de Seguridad (G). Un token ausente, expirado o inválido responde `401 Unauthorized`. |
-| Validación de rol | Las acciones administrativas (aprobar/rechazar anulaciones `EN PREPARACIÓN`, resolver expedientes, consultar el dashboard) requieren rol `GESTOR`/`ADMIN`. Un rol insuficiente, o un rol presente en el token pero no reconocido por el catálogo del sistema, responde `403 Forbidden` (nunca `500`). |
+| Validación de rol | Las acciones administrativas (aprobar/rechazar anulaciones `EN_PREPARACION`, resolver expedientes, consultar el dashboard) requieren rol `GESTOR`/`ADMIN`. Un rol insuficiente, o un rol presente en el token pero no reconocido por el catálogo del sistema, responde `403 Forbidden` (nunca `500`). |
 | Validación de pertenencia del recurso | Un Cliente solo puede consultar o anular **sus propios** pedidos. Intentar operar sobre un pedido de otro cliente responde `403 Forbidden`, aunque el token sea válido. |
 | Validación de origen de servicio | Endpoints invocados por sistemas internos (Canal, Despacho, pasarela de pago) exigen un token de servicio específico, distinto del token de usuario final. |
 
@@ -39,7 +39,7 @@ Incluye:
 
 #### CA-02. Rechazo por rol insuficiente
 
-- **DADO** un usuario autenticado con rol `CLIENTE` que intenta aprobar/rechazar una anulación `EN PREPARACIÓN` (acción reservada al Gestor).
+- **DADO** un usuario autenticado con rol `CLIENTE` que intenta aprobar/rechazar una anulación `EN_PREPARACION` (acción reservada al Gestor).
 - **CUANDO** se envía la solicitud.
 - **ENTONCES** el sistema responde `403 Forbidden` y no ejecuta la acción.
 
@@ -52,7 +52,7 @@ Incluye:
 #### CA-04. Aceptación con token y rol válidos
 
 - **DADO** un Gestor autenticado con rol `GESTOR` y token válido.
-- **CUANDO** aprueba una anulación `EN PREPARACIÓN`.
+- **CUANDO** aprueba una anulación `EN_PREPARACION`.
 - **ENTONCES** el sistema procesa la solicitud normalmente, sin bloqueos de seguridad.
 
 ## 5. Estrategia de verificación

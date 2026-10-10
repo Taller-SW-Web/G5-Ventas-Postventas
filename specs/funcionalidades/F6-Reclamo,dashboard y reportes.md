@@ -29,14 +29,14 @@ Incluye:
 
 ### 4.1. Ciclo de vida y máquina de estados del reclamo
 
-`REGISTRADO → EN PROCESO → ATENDIDO` (rama alterna opcional: `DERIVADO`, si escala a mediación externa).
+`REGISTRADO → EN_PROCESO → ATENDIDO` (rama alterna opcional: `DERIVADO`, si escala a mediación externa).
 
 - **REGISTRADO:**
   - El consumidor o canal genera el reclamo/queja.
   - Se asigna un código único correlativo (`REC-YYYY-XXXX`).
   - Se vincula de forma opcional a un `pedidoId`.
   - Se calcula y fija automáticamente el plazo legal improrrogable: **15 días hábiles** (SLA normado por Indecopi), registrando la fecha límite en `fechaLimiteSLA`.
-- **EN PROCESO:** el Gestor toma el expediente en su bandeja de atención para análisis y recopilación de evidencias.
+- **EN_PROCESO:** el Gestor toma el expediente en su bandeja de atención para análisis y recopilación de evidencias.
 - **ATENDIDO:** el Gestor emite la resolución formal. Es **obligatorio** completar el campo `respuestaVisibleCliente` para que el consumidor pueda consultarlo desde cualquier canal.
 
 ### 4.2. Catálogo de motivos tipificados (`motivo`)
@@ -66,7 +66,7 @@ Para estandarizar el registro y facilitar la agregación en el dashboard, se def
 
 | Dependencia | Responsabilidad |
 |---|---|
-| M1 — Pedidos (F1) | Publica eventos (`pedido.pagado`, `pedido.anulado`, `pedido.entregado`) que F6 consume para sus agregados. |
+| M1 — Ventas (F1) | Publica eventos (`pedido.pagado`, `pedido.anulado`, `pedido.entregado`) que F6 consume para sus agregados. |
 | M2 — Postventa (F2 a F5) | Publican eventos relevantes (anulaciones, devoluciones, reembolsos, calificaciones) que también alimentan los agregados. |
 | Seguridad (G) | Aporta datos de contacto y rol del cliente/Gestor. |
 | Canales A/B/C | Punto de entrada para que el cliente registre un reclamo. |
@@ -104,7 +104,7 @@ El sistema DEBE registrar un reclamo con código único, pedido opcional, motivo
 El sistema DEBE exigir una respuesta visible al cliente al atender el reclamo, y auditar el cumplimiento del SLA con fecha y hora exactas.
 
 #### CA-04. Respuesta del Gestor dentro de plazo
-- **DADO** un reclamo `EN PROCESO` con `respuestaVisibleCliente` completado antes de `fechaLimiteSLA`.
+- **DADO** un reclamo `EN_PROCESO` con `respuestaVisibleCliente` completado antes de `fechaLimiteSLA`.
 - **CUANDO** el Gestor cierra el reclamo.
 - **ENTONCES** el sistema lo transiciona a `ATENDIDO`, registra la fecha/hora en UTC y marca el SLA como cumplido.
 
@@ -177,7 +177,7 @@ Los filtros por vendedor y producto podrán incorporarse en una versión posteri
 |---|---|
 | Registro de reclamos | Genera código único (`REC-YYYY-XXXX`), valida motivo tipificado y calcula `fechaLimiteSLA`. |
 | Motor de SLA | Calcula y mantiene visible la fecha límite y su estado (a tiempo, próximo a vencer, vencido). |
-| Servicio de atención | Gestiona la transición `REGISTRADO → EN PROCESO → ATENDIDO`/`DERIVADO`, exigiendo `respuestaVisibleCliente`. |
+| Servicio de atención | Gestiona la transición `REGISTRADO → EN_PROCESO → ATENDIDO`/`DERIVADO`, exigiendo `respuestaVisibleCliente`. |
 | Consumidor de eventos de M1/M2 | Escucha eventos relevantes de todas las funcionalidades del módulo para mantener los agregados. |
 | Servicio de agregados | Mantiene tablas resumen por periodo/canal/vendedor/producto, consultadas por el dashboard. |
 | Exportador de reportes | Genera el archivo de reporte según los filtros solicitados. |

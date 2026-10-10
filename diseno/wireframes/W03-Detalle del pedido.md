@@ -104,7 +104,7 @@ Esta información es de consulta para el Gestor. La gestión operativa del repar
 
 El panel lateral representa la secuencia principal del ciclo de vida:
 
-`CREADO → PAGADO → EN PREPARACIÓN → DESPACHADO → ENTREGADO`
+`CREADO → PAGADO → EN_PREPARACION → DESPACHADO → ENTREGADO`
 
 El estado actual se identifica visualmente dentro de la línea de tiempo. En el ejemplo, el pedido se encuentra en `PAGADO`
 
@@ -118,12 +118,12 @@ El wireframe muestra dos acciones principales para el pedido seleccionado:
 
 | Acción | Comportamiento esperado |
 |---|---|
-| **Pasar a preparación** | Solicita una transición válida desde `PAGADO` hacia `EN PREPARACIÓN` |
+| **Pasar a preparación** | Solicita una transición válida desde `PAGADO` hacia `EN_PREPARACION` |
 | **Iniciar anulación** | Abre el flujo de F2 cuando el estado actual permite anular |
 
 Las acciones deben depender siempre del estado actual. El frontend puede ocultar o deshabilitar operaciones inválidas, pero la validación definitiva debe realizarse en el backend
 
-Para el ejemplo mostrado, la regla visible indica que un pedido `PAGADO` puede continuar hacia `EN PREPARACIÓN` o iniciar el proceso de anulación correspondiente
+Para el ejemplo mostrado, la regla visible indica que un pedido `PAGADO` puede continuar hacia `EN_PREPARACION` o iniciar el proceso de anulación correspondiente
 
 ---
 

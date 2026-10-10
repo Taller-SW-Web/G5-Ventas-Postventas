@@ -261,6 +261,7 @@
 ``` json
 {
   "origen": "ANULACION",
+  "origenId": "ANUL-0012",
   "referenciaId": "PED-2026-00981",
   "monto": 129.90,
   "moneda": "PEN",
@@ -268,6 +269,8 @@
   "solicitadoPor": "SISTEMA_M1"
 }
 ```
+
+`origenId` es el código de la anulación (`ANUL-NNNN`) o de la devolución (`DEV-AAAA-NNNN`) que origina el reembolso. Su número final se guarda en `reembolso.id_origen` junto con `tipo_origen`, para la restricción de unicidad `(tipo_origen, id_origen)` — distinto de `referenciaId`, cuyo número final va a `reembolso.id_pedido`.
 
 -   **Respuestas:**
     -   **`201 Created`**

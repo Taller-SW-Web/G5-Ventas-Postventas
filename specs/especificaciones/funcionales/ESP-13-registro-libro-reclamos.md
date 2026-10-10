@@ -47,13 +47,15 @@ El tipo clasifica la disconformidad registrada por el consumidor y debe conserva
 - `CHATBOT`
 - `RETAIL`
 
-### 3.3. Motivos permitidos
+### 3.3. Motivos permitidos (`MotivoReclamo`)
 
 - `INCUMPLIMIENTO_PLAZO_ENTREGA`
 - `PRODUCTO_DEFECTUOSO_O_INCORRECTO`
 - `COBRO_INDEBIDO_O_NO_RECONOCIDO`
 - `ATENCION_INADECUADA`
 - `INCUMPLIMIENTO_GARANTIA`
+
+Catálogo cerrado, confirmado en la guía de implementación del backend.
 
 ## 4. Estados del reclamo
 
