@@ -82,6 +82,7 @@ flowchart TB
 | Esquema `ventas` | pedido, detalle_pedido, pago, historial_estado, anulacion | PostgreSQL administrado por Supabase | Esquema aislado | Solo M1 |
 | Esquema `postventa` | devolucion, evidencia_devolucion, reembolso, reclamo, calificacion, agregado_ventas | PostgreSQL administrado por Supabase | Esquema aislado | Solo M2 |
 | Evidencias | Fotografías y documentos de devoluciones | Supabase Storage privado | Bucket privado | Solo M2 |
+| Simulador de pasarela | Simula cobros (avisa a M1) y extornos (los pide M2); sin base de datos, se comporta como sistema externo | Java 21, Spring Boot mínimo | Servicio propio en Render | M1 (recibe notificación de cobro), M2 (recibe solicitud de extorno) |
 
 El modelo de datos de ambos esquemas está en [diseno/diagramas/bd/](../diseno/diagramas/bd/).
 
@@ -159,6 +160,7 @@ backend/
 ├── api-gateway/
 ├── servicio-ventas/
 ├── servicio-postventa/
+├── simulador-pasarela/
 └── pom.xml
 ```
 
@@ -166,7 +168,7 @@ backend/
 |---|---|---|
 | `G5-Ventas-Postventas` | Documentación | Sin despliegue de ejecución |
 | `frontend` | Consola del Gestor | Un proyecto en Vercel |
-| `backend` | API Gateway y dos microservicios | Tres servicios en Render |
+| `backend` | API Gateway, dos microservicios y el simulador de pasarela | Cuatro servicios en Render |
 
 ### 7.1. Configuración mínima por despliegue
 
@@ -176,6 +178,7 @@ backend/
 | Render: API Gateway | `api-gateway` | URL interna de ambos microservicios, origen CORS y datos para validar tokens |
 | Render: M1 — Ventas | `servicio-ventas` | Conexión al esquema `ventas`, URL interna de M2, URLs de Productos y Despacho |
 | Render: M2 — Postventa | `servicio-postventa` | Conexión al esquema `postventa`, URL interna de M1, URL del simulador, URLs de Productos, Despacho y Seguridad, credenciales de Storage |
+| Render: Simulador de pasarela | `simulador-pasarela` | URL interna de M1 (para avisar el resultado del cobro); sin conexión a base de datos ni validación de JWT |
 
 Los secretos se configuran únicamente en Render. Nunca se incorporan al código fuente ni a las variables públicas de Vercel.
 
@@ -185,6 +188,7 @@ Los secretos se configuran únicamente en Render. Nunca se incorporan al código
 |---|---|---|
 | Rutas y scopes que usará Despacho | Los endpoints y scopes ya definidos en api-ventas.md | Si Despacho propone otro contrato |
 | Mensajería de eventos | Bandeja de salida sin broker | Incorporar un broker si aparecen más consumidores |
-| Dónde corre el simulador de pasarela | Servicio propio en Render, mantenido por el responsable de F4 | Embebido en M2 si se limita la cantidad de servicios |
 | Base de datos | Un proyecto Supabase con dos esquemas y credenciales aisladas | Separar proyectos si se necesita aislamiento físico |
 | Autenticación | Consumir JWT de Seguridad; no usar Supabase Auth | Solo por acuerdo con Seguridad y Usuarios |
+
+**Resuelto:** el simulador de pasarela es un servicio propio en Render (`simulador-pasarela`, puerto 8083), a cargo de Johan (F5). No tiene base de datos, no valida JWT y no importa código de M1 ni M2 — se comunica solo por HTTP, comportándose como un sistema externo aunque lo construya el propio equipo.
