@@ -129,7 +129,7 @@ with p as (
   select id, 'SKU-001', 2, 50, 100 from p
 ), pg as (
   insert into ventas.pago (id_pedido, metodo, monto, estado)
-  select id, 'TARJETA', 100, 'CONFIRMADO' from p
+  select id, 'TARJETA', 100, 'APROBADO' from p
 )
 insert into ventas.historial_estado (id_pedido, estado_anterior, estado_nuevo, actor)
 select id, 'CREADO', 'PAGADO', 'PASARELA_PAGOS' from p;

@@ -85,18 +85,16 @@ erDiagram
         date fecha "NN"
     }
     OUTBOX_EVENTO {
-        bigint id PK
+        uuid id_evento PK
         bigint id_pedido FK "NN"
-        varchar(36) id_evento UK "NN"
-        varchar(30) tipo "NN"
+        varchar(40) tipo "NN"
         jsonb payload "NN"
         timestamp creado_en "NN"
         timestamp enviado_en
         integer intentos "NN"
     }
     EVENTO_RECIBIDO {
-        bigint id PK
-        varchar(100) id_evento UK "NN"
+        varchar(100) id_evento PK
         varchar(30) origen "NN"
         timestamp recibido_en "NN"
     }
@@ -139,7 +137,7 @@ erDiagram
         bigint id PK
         bigint id_origen "referencia sin FK, NN"
         varchar(20) tipo_origen "NN"
-        bigint id_pedido "referencia sin FK, NN"
+        bigint id_pedido "referencia sin FK"
         varchar(100) idempotency_key UK "NN"
         decimal(12-2) monto "NN"
         char(3) moneda "NN"
@@ -174,8 +172,9 @@ erDiagram
         timestamp fecha_registro "NN"
         date fecha_limite_respuesta "NN"
         timestamp fecha_atencion
-        varchar(30) atendido_por
+        varchar(50) atendido_por
         text respuesta_visible_cliente
+        varchar(20) canal "NN"
     }
     CALIFICACION {
         bigint id PK
@@ -196,7 +195,7 @@ erDiagram
     }
     AGREGADO_METRICAS {
         date fecha PK
-        varchar(30) canal PK
+        varchar(20) canal PK
         integer pedidos_pagados "NN"
         integer pedidos_anulados "NN"
         integer pedidos_entregados "NN"
@@ -209,8 +208,8 @@ erDiagram
         timestamp actualizado_en "NN"
     }
     EVENTO_RECIBIDO {
-        bigint id PK
-        varchar(36) id_evento UK "NN"
+        uuid id_evento PK
+        varchar(40) tipo "NN"
         timestamp recibido_en "NN"
     }
 ```
@@ -254,10 +253,10 @@ historial_estado ([id], id_pedido → pedido.id, estado_anterior, estado_nuevo, 
 anulacion        ([id], id_pedido → pedido.id UK, motivo, id_solicitante, id_autorizador,
                   estado, fecha)
 
-outbox_evento    ([id], id_pedido → pedido.id, id_evento UK, tipo, payload, creado_en,
-                  enviado_en, intentos)
+outbox_evento    ([id_evento], id_pedido → pedido.id, tipo, payload, creado_en, enviado_en,
+                  intentos)
 
-evento_recibido  ([id], id_evento UK, origen, recibido_en)
+evento_recibido  ([id_evento], origen, recibido_en)
 ```
 
 postventa (M2):
@@ -280,7 +279,7 @@ reembolso_intento    ([id], id_reembolso → reembolso.id, numero_intento, estad
 reclamo              ([id], codigo UK, id_pedido ⇢ M1.pedido, id_cliente ⇢ G, tipo, motivo,
                       detalle, nombre_consumidor, documento, email, telefono, estado,
                       plazo_dias_habiles, fecha_registro, fecha_limite_respuesta,
-                      fecha_atencion, atendido_por, respuesta_visible_cliente)
+                      fecha_atencion, atendido_por, respuesta_visible_cliente, canal)
 
 calificacion         ([id], id_pedido ⇢ M1.pedido UK, puntaje, comentario, canal, fecha)
 
@@ -290,7 +289,7 @@ agregado_metricas    ([fecha, canal], pedidos_pagados, pedidos_anulados, pedidos
                       devoluciones_aprobadas, monto_reembolsado_pen, csat_suma, csat_cantidad,
                       reclamos_registrados, reclamos_atendidos, actualizado_en)
 
-evento_recibido      ([id], id_evento UK, recibido_en)
+evento_recibido      ([id_evento], tipo, recibido_en)
 ```
 
 ## 4. Relaciones
@@ -335,11 +334,11 @@ M1:
 3. Un pedido tiene como máximo una anulación.
 4. detalle_pedido.cantidad es mayor que cero y los montos no pueden ser negativos.
 5. historial_estado solo recibe inserciones.
-6. pago.estado solo admite PENDIENTE, APROBADO y RECHAZADO (confirmado en el código de `servicio-ventas`, enum `EstadoPago`).
+6. pago.estado solo admite PENDIENTE, APROBADO y RECHAZADO (restricción `ck_pago_estado` en Supabase y enum `EstadoPago` de `servicio-ventas`).
 7. pedido.canal solo admite MARKETPLACE, CHATBOT y RETAIL (enum `CanalVenta`).
 8. anulacion.estado solo admite PENDIENTE_AUTORIZACION, EJECUTADA y RECHAZADA.
-9. outbox_evento.id_evento es único; un evento no se marca `enviado_en` hasta que M2 confirma la recepción (ver evento_recibido en postventa).
-10. evento_recibido.id_evento es único; evita que una misma notificación externa (pasarela o Despacho) duplique una transición.
+9. outbox_evento.id_evento es la clave primaria (la genera M1); un evento no se marca `enviado_en` hasta que M2 confirma la recepción (ver evento_recibido en postventa).
+10. evento_recibido.id_evento es la clave primaria; evita que una misma notificación externa (pasarela o Despacho) duplique una transición.
 
 M2:
 
@@ -357,7 +356,7 @@ M2:
 12. calificacion.puntaje va de 1 a 5, con una calificación por pedido.
 13. agregado_ventas se actualiza con eventos.
 14. agregado_metricas tiene como máximo una fila por (fecha, canal); se actualiza con upsert a partir de eventos y de las acciones de F3 a F6.
-15. evento_recibido.id_evento es único; evita reprocesar un evento de M1 ya aplicado a los agregados.
+15. evento_recibido.id_evento es la clave primaria; evita reprocesar un evento de M1 ya aplicado a los agregados.
 
 ## 6. Tablas por funcionalidad
 

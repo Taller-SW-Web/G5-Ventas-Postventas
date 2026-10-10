@@ -72,7 +72,7 @@ flowchart TB
 | Publicador de eventos | Registra los eventos en la bandeja de salida y los entrega a M2 con reintentos | ESP-04 |
 | Anulación | Valida el motivo tipificado; anula directo en `CREADO` o `PAGADO` y deja la solicitud pendiente del Gestor en `EN_PREPARACION` | ESP-05 |
 | Coordinación de efectos de la anulación | Repone stock, cancela el despacho si existe y, si el pedido estaba pagado, solicita exactamente un reembolso a M2 | ESP-06 |
-| Repositorio del esquema ventas | Acceso a pedido, detalle_pedido, pago, historial_estado, anulacion y bandeja de salida | ESP-01 a ESP-06 |
+| Repositorio del esquema ventas | Acceso a pedido, detalle_pedido, pago, historial_estado, anulacion, outbox_evento (bandeja de salida) y evento_recibido | ESP-01 a ESP-06 |
 
 ## 2. Componentes de M2 — Postventa
 
@@ -144,7 +144,7 @@ flowchart TB
 | Calificación CSAT | Genera la encuesta al recibir `pedido.entregado`, registra el puntaje y actualiza el CSAT | ESP-11, ESP-12 |
 | Reclamos | Registra el reclamo con código de seguimiento y plazo de 15 días hábiles, y la respuesta visible al cliente | ESP-13, ESP-14 |
 | Dashboard y reportes | Mantiene tablas agregadas a partir de eventos y sirve indicadores y exportaciones | ESP-15, ESP-16 |
-| Repositorio del esquema postventa | Acceso a devolucion, evidencia_devolucion, reembolso, reclamo, calificacion y agregado_ventas | ESP-07 a ESP-16 |
+| Repositorio del esquema postventa | Acceso a devolucion, evidencia_devolucion, reembolso, reclamo, calificacion, agregado_ventas y evento_recibido | ESP-07 a ESP-16 |
 
 ## 3. Reglas de dependencia
 
@@ -152,7 +152,37 @@ flowchart TB
 - M2 no accede al esquema `ventas`; consulta el pedido por la API de M1.
 - Reembolsos solo se activa desde la anulación de M1 (`ANULACION`) o desde Devoluciones (`DEVOLUCION`).
 - El dashboard lee tablas agregadas, nunca las tablas transaccionales.
+- Toda llamada a otro sistema (M1, M2, E, F, G o la pasarela) pasa por un cliente del paquete `integracion/`. Los componentes de negocio no arman llamadas HTTP por su cuenta.
 
-## 4. Regla de lectura
+## 4. Componentes y paquetes del código
+
+Cada flecha hacia un sistema externo en los diagramas anteriores corresponde a un cliente del paquete `integracion/` de ese servicio.
+
+M1 — paquete `ventas`:
+
+| Componente | Paquete |
+|---|---|
+| API de Pedidos, Receptor de notificaciones, Creación, Consulta, Máquina de estados | `pedido/` |
+| Anulación, Coordinación de efectos de la anulación | `anulacion/` |
+| Publicador de eventos | `integracion/eventos/` (`PublicadorEventos`, `EnvioEventosScheduler`) |
+| Llamadas a Productos y Ofertas (F) | `integracion/ProductosClient` |
+| Llamadas a Despacho y Logística (E) | `integracion/DespachoClient` |
+| Solicitud de reembolso a M2 | `integracion/PostventaClient` |
+
+M2 — paquete `postventa`:
+
+| Componente | Paquete |
+|---|---|
+| Devoluciones y cambios | `devolucion/` |
+| Reembolsos | `reembolso/` |
+| Calificación CSAT | `calificacion/` |
+| Reclamos | `reclamo/` |
+| Dashboard y reportes | `dashboard/` |
+| Receptor de eventos de M1 | `integracion/eventos/` (`POST /api/v2/eventos`, interno) |
+| Consulta de pedido a M1 | `integracion/VentasClient` |
+| Extorno a la pasarela | `integracion/PasarelaClient` |
+| Llamadas a F, E y G | `integracion/ProductosClient`, `DespachoClient`, `SeguridadClient` |
+
+## 5. Regla de lectura
 
 Este diagrama responde únicamente a la pregunta **cómo se organiza cada microservicio por dentro**. Las clases, entidades y endpoints detallados pertenecen a las especificaciones funcionales, a los contratos de API y al código fuente.

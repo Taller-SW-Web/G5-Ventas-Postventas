@@ -141,6 +141,15 @@ Descripción: Recibe la confirmación o el rechazo de la transacción desde la p
   "fechaPago": "2026-09-23T00:06:00Z",
   "codigoAutorizacion": "AUTH-99021"
 }
+
+Valores de `resultado`:
+
+| `resultado` | Estado guardado en `ventas.pago` | Estado del pedido | Actor en el historial |
+|---|---|---|---|
+| `APROBADO` | `APROBADO` | `CREADO` → `PAGADO` | `PASARELA_PAGOS` |
+| `RECHAZADO` | `RECHAZADO` | `CREADO` → `ANULADO`, motivo `PAGO_NO_COMPLETADO` | `PASARELA_PAGOS` |
+
+Cualquier otro valor responde `400 Bad Request`. Si la misma `transaccionId` llega dos veces, se responde `200 OK` con el resultado ya registrado, sin repetir el cambio.
 ### Respuestas
 #### `200 OK`
 ```json
@@ -151,7 +160,7 @@ Descripción: Recibe la confirmación o el rechazo de la transacción desde la p
   "fechaTransicion": "2026-09-23T00:06:00Z"
 }
 ```
-- **`400 Bad Request`**: Inconsistencia de montos o datos de transacción.
+- **`400 Bad Request`**: Inconsistencia de montos, datos de transacción o `resultado` distinto de `APROBADO` o `RECHAZADO`.
 - **`404 Not Found`**: El pedido indicado no existe.
 - **`409 Conflict`**: El pedido no se encuentra en estado `CREADO`.
 ### 1.3 Consultar Pedido por ID
