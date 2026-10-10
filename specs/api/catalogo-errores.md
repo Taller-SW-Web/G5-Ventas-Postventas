@@ -2,7 +2,7 @@
 
 ## 1. Propósito
 
-Consolidar en un solo lugar los errores que ya están definidos en los dos contratos de API ([api-ventas.md](api-ventas.md) y [api-postventas.md](api-postventas.md)), en vez de dejarlos repartidos endpoint por endpoint. Este documento **no define errores nuevos**: solo reorganiza lo que ya existe en ambos contratos.
+Consolidar en un solo lugar los errores de los dos contratos de API ([api-ventas.md](api-ventas.md) y [api-postventas.md](api-postventas.md)) y los `codigo` de negocio ya definidos en la guía de implementación del backend, en vez de dejarlos repartidos entre ambos. Este documento **no inventa errores nuevos**: todo lo que trae viene de uno de esos dos lugares. Cuando una fila viene solo de la guía (y todavía no está en el contrato correspondiente), queda marcado en la sección 6, Pendientes.
 
 ---
 
@@ -19,14 +19,31 @@ Consolidar en un solo lugar los errores que ya están definidos en los dos contr
 
 ---
 
-## 3. Códigos de error de negocio ya formalizados
+## 3. Códigos de error de negocio formalizados
 
-Solo dos códigos de error aparecen como valor literal de `codigo` en los contratos actuales. El resto de las condiciones de error están descritas en texto, pero sin un `codigo` propio asignado (ver sección 6, Pendientes).
+Definidos en la guía de implementación del backend (sección 3.3), además de `DOCUMENTO_INVALIDO` y `RECURSO_NO_ENCONTRADO` que ya venían de los contratos. Algunas condiciones (ver secciones 4 y 5) todavía no tienen código propio asignado — ver sección 6, Pendientes.
 
-| Código | Significado | Dónde aparece |
-|---|---|---|
-| `RECURSO_NO_ENCONTRADO` | Ejemplo genérico del formato estándar de error, usado como ilustración en ambos contratos. | Convenciones generales de api-ventas.md y api-postventas.md |
-| `DOCUMENTO_INVALIDO` | El número de documento no cumple el formato esperado para el `tipoDocumento` indicado (DNI, RUC, CE, PASAPORTE). | api-ventas.md, 1.1 Crear Pedido (`400 Bad Request`) |
+| Código | Significado |
+|---|---|
+| `RECURSO_NO_ENCONTRADO` | Ejemplo genérico del formato estándar de error, usado como ilustración en ambos contratos. |
+| `PEDIDO_NO_ENCONTRADO` | El `pedidoId` indicado no existe. |
+| `CODIGO_INVALIDO` | Un código público (`PED-...`, `ANUL-...`, `DEV-...`, `REEM-...`, `REC-...`) está mal formado al intentar extraer su `id` numérico. |
+| `MOTIVO_REQUERIDO` | Falta el motivo al transicionar un pedido a `ANULADO` (ESP-03). |
+| `TRANSICION_NO_PERMITIDA` | El par (estado actual, estado solicitado) no está en la matriz de ESP-03, o el actor no está autorizado para esa transición. |
+| `DOCUMENTO_INVALIDO` | El número de documento no cumple el formato esperado para el `tipoDocumento` indicado (DNI, RUC, CE, PASAPORTE). |
+| `ITEM_SIN_DISPONIBILIDAD` | Algún ítem del pedido no tiene stock disponible en Productos (F). |
+| `MOTIVO_INVALIDO` | El motivo de anulación está ausente, fuera del catálogo `MotivoAnulacion`, o no aplica al estado actual del pedido. |
+| `PEDIDO_NO_ANULABLE` | El pedido ya está `DESPACHADO` o `ENTREGADO`; corresponde iniciar una devolución (F3). |
+| `PEDIDO_NO_ENTREGADO` | El pedido no está en estado `ENTREGADO` (requerido para devolución o calificación CSAT). |
+| `PLAZO_VENCIDO` | La devolución se solicita más de 7 días naturales después de la entrega. |
+| `EVIDENCIA_REQUERIDA` | El motivo de devolución exige evidencia y no se adjuntó ninguna. |
+| `SIN_STOCK` | No hay stock disponible en Productos (F) para resolver una devolución como `CAMBIO`. |
+| `ORIGEN_NO_PERMITIDO` | El reembolso se solicita con un `origen` distinto de `ANULACION` o `DEVOLUCION`. |
+| `CLAVE_IDEMPOTENCIA_EN_CONFLICTO` | La `X-Idempotency-Key` ya existe para un reembolso con datos distintos (origen, monto, moneda). |
+| `SALDO_INSUFICIENTE` | El monto del reembolso, sumado a los ya `EXITOSO`/`PENDIENTE` del mismo pedido, supera el total pagado. |
+| `CALIFICACION_DUPLICADA` | Ya existe una encuesta CSAT registrada para ese pedido. |
+| `RECLAMO_NO_ENCONTRADO` | El `codigoSeguimiento` o `reclamoId` indicado no existe. |
+| `RESPUESTA_VACIA` | `respuestaVisibleCliente` está vacío o ausente al intentar cerrar un reclamo. |
 
 ---
 
@@ -35,16 +52,18 @@ Solo dos códigos de error aparecen como valor literal de `codigo` en los contra
 | Endpoint | HTTP | Condición | Código de negocio |
 |---|---|---|---|
 | `POST /api/v1/pedidos` | `400` | El número de documento no cumple el formato requerido para el tipo indicado. | `DOCUMENTO_INVALIDO` |
-| `POST /api/v1/pedidos` | `409` | Fallo de validación de catálogo o stock con el módulo de Productos (F). | — |
+| `POST /api/v1/pedidos` | `409` | Fallo de validación de catálogo o stock con el módulo de Productos (F). | `ITEM_SIN_DISPONIBILIDAD` |
 | `POST /api/v1/pedidos/{pedidoId}/pagos/notificacion` | `400` | Inconsistencia de montos o datos de transacción. | — |
-| `POST /api/v1/pedidos/{pedidoId}/pagos/notificacion` | `404` | El pedido indicado no existe. | — |
+| `POST /api/v1/pedidos/{pedidoId}/pagos/notificacion` | `404` | El pedido indicado no existe. | `PEDIDO_NO_ENCONTRADO` |
 | `POST /api/v1/pedidos/{pedidoId}/pagos/notificacion` | `409` | El pedido no se encuentra en estado `CREADO`. | — |
 | `GET /api/v1/pedidos/{pedidoId}` | `401` | Token ausente o inválido. | — |
 | `GET /api/v1/pedidos/{pedidoId}` | `403` | El cliente autenticado no es el titular de la orden. | — |
-| `GET /api/v1/pedidos/{pedidoId}` | `404` | El pedido solicitado no existe. | — |
-| `PATCH /api/v1/pedidos/{pedidoId}/estado` | `409` | Transición no permitida por la máquina de estados. | — |
-| `POST /api/v1/pedidos/{pedidoId}/anulaciones` | `400` | Motivo ausente o no tipificado. | — |
-| `POST /api/v1/pedidos/{pedidoId}/anulaciones` | `409` | Pedido ya en `DESPACHADO` o `ENTREGADO` (derivar al microservicio M2). | — |
+| `GET /api/v1/pedidos/{pedidoId}` | `404` | El pedido solicitado no existe. | `PEDIDO_NO_ENCONTRADO` |
+| `PATCH /api/v1/pedidos/{pedidoId}/estado` | `409` | Transición no permitida por la máquina de estados. | `TRANSICION_NO_PERMITIDA` |
+| `POST /api/v1/pedidos/{pedidoId}/anulaciones` | `400` | Motivo ausente o no tipificado. | `MOTIVO_INVALIDO` |
+| `POST /api/v1/pedidos/{pedidoId}/anulaciones` | `409` | Pedido ya en `DESPACHADO` o `ENTREGADO` (derivar al microservicio M2). | `PEDIDO_NO_ANULABLE` |
+| `GET /api/v1/pedidos/anulaciones/pendientes` | — | Sin errores de negocio propios (solo `401`/`403` genéricos de autenticación/autorización). | — |
+| `PATCH /api/v1/pedidos/{pedidoId}/anulaciones/{anulacionId}` | `409` | La anulación no está `PENDIENTE_AUTORIZACION`, o el pedido ya no está `EN_PREPARACION`. | — |
 
 ---
 
@@ -53,27 +72,33 @@ Solo dos códigos de error aparecen como valor literal de `codigo` en los contra
 | Endpoint | HTTP | Condición | Código de negocio |
 |---|---|---|---|
 | `POST /api/v2/devoluciones/evidencias/upload` | `400` | Formato no admitido o tamaño mayor a 5 MB. | — |
-| `POST /api/v2/devoluciones` | `400` | Evidencias visuales faltantes o plazo excedido (> 7 días naturales). | — |
-| `POST /api/v2/devoluciones` | `409` | El pedido no se encuentra en estado `ENTREGADO`. | — |
+| `POST /api/v2/devoluciones` | `400` | Evidencias visuales faltantes (motivo que exige evidencia). | `EVIDENCIA_REQUERIDA` |
+| `POST /api/v2/devoluciones` | `400` | Plazo excedido (> 7 días naturales desde la entrega). | `PLAZO_VENCIDO` |
+| `POST /api/v2/devoluciones` | `409` | El pedido no se encuentra en estado `ENTREGADO`. | `PEDIDO_NO_ENTREGADO` |
 | `GET /api/v2/devoluciones/{devolucionId}` | `404` | El expediente solicitado no existe. | — |
 | `PATCH /api/v2/devoluciones/{devolucionId}/resolucion` | `400` | Rechazo sin fundamento explicativo. | — |
 | `PATCH /api/v2/devoluciones/{devolucionId}/resolucion` | `404` | Expediente no encontrado. | — |
+| `PATCH /api/v2/devoluciones/{devolucionId}/resolucion` | `409` | Cambio aprobado sin stock disponible en Productos (F). | `SIN_STOCK` |
 | `POST /api/v2/reembolsos` | `400` | Monto fuera de rango o estructura inválida. | — |
-| `POST /api/v2/reembolsos` | `403` | Solicitud con origen no permitido (distinto de `ANULACION` o `DEVOLUCION`). | — |
-| `POST /api/v2/reembolsos` | `409` | Conflicto de idempotencia o fallo de pasarela. | — |
+| `POST /api/v2/reembolsos` | `403` | Solicitud con origen no permitido (distinto de `ANULACION` o `DEVOLUCION`). | `ORIGEN_NO_PERMITIDO` |
+| `POST /api/v2/reembolsos` | `409` | La `X-Idempotency-Key` ya existe con datos distintos. | `CLAVE_IDEMPOTENCIA_EN_CONFLICTO` |
+| `POST /api/v2/reembolsos` | `409` | El monto supera el saldo reembolsable del pedido. | `SALDO_INSUFICIENTE` |
 | `POST /api/v2/csat` | `400` | Puntuación fuera de rango (1 al 5). | — |
-| `POST /api/v2/csat` | `409` | Encuesta ya registrada para ese pedido. | — |
+| `POST /api/v2/csat` | `409` | Pedido no `ENTREGADO`. | `PEDIDO_NO_ENTREGADO` |
+| `POST /api/v2/csat` | `409` | Encuesta ya registrada para ese pedido. | `CALIFICACION_DUPLICADA` |
 | `POST /api/v2/reclamos` | `400` | Datos incompletos del consumidor o motivo no tipificado. | — |
 | `GET /api/v2/reclamos/{codigoSeguimiento}` | `401` | Token ausente o inválido. | — |
-| `GET /api/v2/reclamos/{codigoSeguimiento}` | `404` | Reclamo no encontrado con ese código de seguimiento. | — |
-| `PATCH /api/v2/reclamos/{reclamoId}/respuesta` | `400` | Campo `respuestaVisibleCliente` vacío o nulo. | — |
+| `GET /api/v2/reclamos/{codigoSeguimiento}` | `404` | Reclamo no encontrado con ese código de seguimiento. | `RECLAMO_NO_ENCONTRADO` |
+| `PATCH /api/v2/reclamos/{reclamoId}/respuesta` | `400` | Campo `respuestaVisibleCliente` vacío o nulo. | `RESPUESTA_VACIA` |
+| `PATCH /api/v2/reclamos/{reclamoId}/respuesta` | `409` | El reclamo ya está `ATENDIDO`. | — |
+| `POST /api/v2/eventos` | `400` | `tipo` de evento desconocido. | — |
 
 ---
 
 ## 6. Pendientes
 
-- La mayoría de condiciones de error (tabla 4 y 5) no tienen un `codigo` de negocio propio en los contratos actuales — solo la descripción en texto asociada al código HTTP. Asignar códigos como `ERR_...` para cada una es una decisión de equipo que no corresponde inventar en este documento; mientras no se defina, el campo `codigo` de la respuesta puede repetir la condición en mayúsculas o quedar genérico.
-- `pago.estado`, `devolucion.estado`, `anulacion.estado`, `reclamo.estado` y `reclamo.canal` ya tienen lista de valores cerrada y `CHECK` en Supabase (ver [diagrama-fisico.md](../../diseno/diagramas/bd/diagrama-fisico.md), sección 5).
+- Algunas condiciones (marcadas `—` en las tablas 4 y 5) todavía no tienen un `codigo` de negocio propio ni en los contratos ni en la guía — por ejemplo, datos de pago inconsistentes, token ausente/inválido, rechazo de devolución sin fundamento, o estructura de reembolso inválida. Asignarles un código es una decisión de equipo que no corresponde inventar en este documento.
+- Estas filas vienen de la guía de implementación, pero los contratos (`api-ventas.md`/`api-postventas.md`) todavía no las documentan explícitamente — falta agregarlas ahí: la bandeja de anulaciones pendientes (`GET`/`PATCH .../anulaciones/{anulacionId}`), `SIN_STOCK` en la resolución de devolución, `SALDO_INSUFICIENTE` en reembolsos, `PEDIDO_NO_ENTREGADO` en CSAT, el `409` de reclamo ya `ATENDIDO`, y `POST /api/v2/eventos`.
 
 ---
 
