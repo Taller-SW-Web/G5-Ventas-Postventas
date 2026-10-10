@@ -10,12 +10,10 @@ Formato de archivo: `ADR-NNN-titulo-corto.md`, con las secciones **Contexto**, *
 
 | ADR | Título | Estado | Encargado | Rama |
 |---|---|---|---|---|
-| ADR-001-f2-anulaciones-en-m1.md | F2 (Anulación de pedidos) pertenece a M1, no a M2 | Pendiente | Luis Arroyo (F2, Software Architect) | `Luis-Arroyo` |
+| [ADR-001-f2-anulaciones-en-m1.md](ADR-001-f2-anulaciones-en-m1.md) | F2 (Anulación de pedidos) pertenece a M1, no a M2 | **Aceptado** | Luis Arroyo (F2, Software Architect) | `Luis-Arroyo` |
 | ADR-002-frontend-mantine-ui.md | UI Kit del frontend: Mantine UI, no Tailwind CSS | Pendiente | Luis Alejandro (F4, Developer Frontend) | `Luis-Alejandro` |
-| ADR-003-aislamiento-esquemas-m1-m2.md | Aislamiento estricto de esquemas entre M1 y M2 (Database-per-Service) | Pendiente | Luis Arroyo (Software Architect) | `Luis-Arroyo` |
+| [ADR-003-aislamiento-esquemas-m1-m2.md](ADR-003-aislamiento-esquemas-m1-m2.md) | Aislamiento estricto de esquemas entre M1 y M2 (Database-per-Service) | **Aceptado** | Luis Arroyo (Software Architect) | `Luis-Arroyo` |
 | [ADR-004-fuente-verdad-contratos-api.md](ADR-004-fuente-verdad-contratos-api.md) | Markdown como fuente de verdad de los contratos de API | **Aceptado** | Joseph (F3, Product Owner) | `Joseph` |
-
-Los nombres de archivo de ADR-001 a ADR-003 todavía no existen como links porque nadie los ha subido aún — se enlazan solos cuando cada responsable los cree, para no dejar enlaces rotos mientras tanto.
 
 ### Qué debe capturar cada uno
 
