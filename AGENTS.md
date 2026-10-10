@@ -23,8 +23,8 @@ Sin esquemas compartidos ni JOINs cruzados entre M1 y M2 (RNF-07). Ver [specs/ov
 Estas decisiones están vigentes en la documentación aprobada. Si un documento las contradice, **ese documento es el que está desactualizado**, no estas reglas:
 
 1. **F2 (Anulación de pedidos) pertenece a M1**, no a M2. Así lo dicen README.md, specs/overview.md, specs/glosario.md, CONTRIBUTING.md, [specs/funcionalidades/F2-Anulacion de pedidos.md](specs/funcionalidades/F2-Anulacion%20de%20pedidos.md) y el modelo de datos (tabla `anulacion` vive en el esquema `ventas`).
-   - Los documentos `arquitectura/c4-nivel-1-contexto-ventas-postventa.md` y `arquitectura/c4-nivel-2-contenedores-ventas-postventa.md` ponen F2 en M2, pero ambos están explícitamente marcados como **"Propuesta para discusión, no aprobada"**. No son fuente de verdad hasta que el equipo los cierre.
-2. **El UI Kit del frontend es Mantine UI**, no Tailwind CSS. Así lo dicen README.md, CONTRIBUTING.md y específicamente specs/stack-frontend.md (documento detallado y vigente). La mención a Tailwind CSS en el C4 nivel 2 es parte de esa misma propuesta no aprobada.
+   - Los documentos de `arquitectura/` (C4 niveles 1, 2 y 3) ya ubican F2 en M1.
+2. **El UI Kit del frontend es Mantine UI**, no Tailwind CSS. Así lo dicen README.md, CONTRIBUTING.md y específicamente specs/stack-frontend.md (documento detallado y vigente). El C4 nivel 2 ya usa Mantine UI.
 3. **Valores de `historial_estado.actor`**: únicamente `CLIENTE`, `GESTOR`, `CANAL_CHATBOT`, `PASARELA_PAGOS`, `SISTEMA_LOGISTICA` (el `CHECK` real en base de datos, ver diseno/diagramas/bd/diagrama-fisico.md). ESP-03 ya está alineado a esta lista — no usar `PASARELA`, `CANAL`, `DESPACHO` ni `SISTEMA` sueltos.
 
 Si necesitas tocar cualquiera de estos tres puntos, pregunta antes de asumir que el C4 "propuesta" ya es la versión vigente.
@@ -44,7 +44,7 @@ Si necesitas tocar cualquiera de estos tres puntos, pregunta antes de asumir que
 | Stack y convenciones de frontend | [specs/stack-frontend.md](specs/stack-frontend.md) |
 | Flujo de ramas, commits y PRs | [CONTRIBUTING.md](CONTRIBUTING.md) |
 
-Los documentos bajo `arquitectura/` (C4 nivel 1 y 2) son **propuestas en discusión**, no especificaciones aprobadas. Úsalos solo como contexto de una dirección que el equipo está evaluando, nunca como regla vigente.
+Los documentos bajo `arquitectura/` (C4 niveles 1, 2 y 3) siguen siendo **propuestas en discusión** en lo que respecta a proveedores de despliegue (Vercel, Render, Supabase). Su contenido funcional (F1 y F2 en M1; F3 a F6 en M2; Mantine UI) está alineado con la sección 2.
 
 ---
 
@@ -53,8 +53,7 @@ Los documentos bajo `arquitectura/` (C4 nivel 1 y 2) son **propuestas en discusi
 No inventes valores para estos campos; si hace falta, pregunta o deja el gap explícito:
 
 - `pago.estado`, `devolucion.estado`, `anulacion.estado` y `pedido.canal` no tienen lista de valores cerrada (ver "Pendientes" en diseno/diagramas/bd/diagrama-logico.md y diagrama-fisico.md).
-- El nombre del esquema de M1 varía entre "Ventas" (modelo de datos) y "Pedidos" (C4) — pendiente de alinear.
-- La propuesta C4 (F2 en M2, Tailwind) todavía no fue corregida por su responsable para que deje de contradecir la sección 2 — mientras tanto, la sección 2 manda.
+- M1 se llama "M1 — Ventas" en README, overview, modelo de datos y C4, pero "M1 — Pedidos" en mockups, wireframes, RNF y algunas ESP. Falta unificar el nombre en esos documentos.
 
 ---
 

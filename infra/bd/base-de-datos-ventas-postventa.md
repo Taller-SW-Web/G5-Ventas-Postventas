@@ -163,7 +163,7 @@ Para dar acceso a otro integrante: Settings de la organización > Team > Invite,
 La cadena de conexión se obtiene con el botón Connect y se guarda como variable de entorno en Render, no en el repositorio. Cada microservicio apunta a su esquema:
 
 ```properties
-# M1 - servicio-pedidos
+# M1 - servicio-ventas
 spring.datasource.url=${DB_URL}?currentSchema=ventas
 spring.jpa.properties.hibernate.default_schema=ventas
 spring.jpa.hibernate.ddl-auto=validate
@@ -180,11 +180,9 @@ Se usa `validate` porque las tablas ya existen. La conexión directa de Supabase
 
 Por definir en equipo:
 
-- La anulación está en `ventas` (M1) según el ER, pero en el C4 nivel 2 aparece en M2. Hay que alinear ambos documentos.
 - En el ER se dibuja la relación devolución-reembolso, pero `reembolso` usa `id_origen` y `tipo_origen`, que puede apuntar a una anulación (M1) o a una devolución (M2). Se dejó sin clave foránea.
 - En la base el estado se guarda como `EN_PREPARACION`; el enum en Java debe usar el mismo valor.
 - Faltan definir los valores válidos de `pago.estado`, `devolucion.estado`, `reclamo.estado` y `canal`.
-- El esquema de M1 se llama "Ventas" en el ER y "Pedidos" en el C4.
 
 Trabajo técnico:
 
