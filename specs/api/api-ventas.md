@@ -146,7 +146,7 @@ Valores de `resultado`:
 
 | `resultado` | Estado guardado en `ventas.pago` | Estado del pedido | Actor en el historial |
 |---|---|---|---|
-| `APROBADO` | `APROBADO` | `CREADO` → `PAGADO` | `PASARELA_PAGOS` |
+| `APROBADO` | `CONFIRMADO` | `CREADO` → `PAGADO` | `PASARELA_PAGOS` |
 | `RECHAZADO` | `RECHAZADO` | `CREADO` → `ANULADO`, motivo `PAGO_NO_COMPLETADO` | `PASARELA_PAGOS` |
 
 Cualquier otro valor responde `400 Bad Request`. Si la misma `transaccionId` llega dos veces, se responde `200 OK` con el resultado ya registrado, sin repetir el cambio.

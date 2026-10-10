@@ -129,7 +129,7 @@ with p as (
   select id, 'SKU-001', 2, 50, 100 from p
 ), pg as (
   insert into ventas.pago (id_pedido, metodo, monto, estado)
-  select id, 'TARJETA', 100, 'APROBADO' from p
+  select id, 'TARJETA', 100, 'CONFIRMADO' from p
 )
 insert into ventas.historial_estado (id_pedido, estado_anterior, estado_nuevo, actor)
 select id, 'CREADO', 'PAGADO', 'PASARELA_PAGOS' from p;
@@ -192,7 +192,7 @@ Con esto, el total pasó de 11 a 17 tablas (7 en `ventas`, 10 en `postventa`). E
 Por definir en equipo:
 
 - En el ER se dibuja la relación devolución-reembolso, pero `reembolso` usa `id_origen` y `tipo_origen`, que puede apuntar a una anulación (M1) o a una devolución (M2). Se dejó sin clave foránea.
-- `reclamo.canal`: el contrato ya lo envía al registrar un reclamo, pero todavía no existe la columna — es el único valor de la lista original que sigue sin definirse. `devolucion.estado`, `anulacion.estado`, `reclamo.estado`, `pedido.canal` y `pago.estado` ya están confirmados (ver diagrama-fisico.md, sección 5).
+- `devolucion.estado`, `anulacion.estado`, `reclamo.estado`, `reclamo.canal`, `pedido.canal` y `pago.estado` ya están todos confirmados y con `CHECK` en Supabase (ver diagrama-fisico.md, sección 5).
 
 Trabajo técnico:
 

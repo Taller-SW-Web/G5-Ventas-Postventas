@@ -300,7 +300,7 @@ CHECK:
 | ck_detalle_cantidad | ventas.detalle_pedido | cantidad > 0 |
 | ck_detalle_montos | ventas.detalle_pedido | precio_unitario, descuento e importe ≥ 0 |
 | ck_pago_monto | ventas.pago | monto ≥ 0 |
-| ck_pago_estado | ventas.pago | estado IN (PENDIENTE, APROBADO, RECHAZADO) |
+| ck_pago_estado | ventas.pago | estado IN (PENDIENTE, CONFIRMADO, RECHAZADO) |
 | ck_historial_actor | ventas.historial_estado | actor IN (CLIENTE, GESTOR, CANAL_CHATBOT, PASARELA_PAGOS, SISTEMA_LOGISTICA) |
 | ck_anulacion_estado | ventas.anulacion | estado IN (PENDIENTE_AUTORIZACION, EJECUTADA, RECHAZADA) |
 | ck_outbox_tipo | ventas.outbox_evento | tipo IN (pedido.pagado, pedido.anulado, pedido.entregado) |

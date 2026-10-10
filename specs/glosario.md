@@ -43,7 +43,7 @@
 
 ### 2.4. Estados del Pago (M1)
 * *PENDIENTE:* El pedido fue creado y la pasarela todavía no informa el resultado del cobro.
-* *APROBADO:* La pasarela aprobó el cobro (envía `resultado: APROBADO`, se guarda tal cual). El pedido pasa a `PAGADO`.
+* *CONFIRMADO:* La pasarela aprobó el cobro (envía `resultado: APROBADO`, se guarda como `CONFIRMADO`). El pedido pasa a `PAGADO`.
 * *RECHAZADO:* La pasarela rechazó el cobro (envía `resultado: RECHAZADO`). El pedido pasa a `ANULADO` con motivo `PAGO_NO_COMPLETADO`.
 
 ### 2.5. Estados de la Anulación (M1)

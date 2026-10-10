@@ -28,7 +28,7 @@ Estas decisiones están vigentes en la documentación aprobada. Si un documento 
 3. **Valores de `historial_estado.actor`**: únicamente `CLIENTE`, `GESTOR`, `CANAL_CHATBOT`, `PASARELA_PAGOS`, `SISTEMA_LOGISTICA` (el `CHECK` real en base de datos, ver diseno/diagramas/bd/diagrama-fisico.md). ESP-03 ya está alineado a esta lista — no usar `PASARELA`, `CANAL`, `DESPACHO` ni `SISTEMA` sueltos.
 4. **Valores cerrados de estados y canal** (cada uno con su `CHECK` en la base y su enum en Java):
    - `pedido.canal`, `reclamo.canal`, `calificacion.canal`: `MARKETPLACE`, `CHATBOT`, `RETAIL`. El canal web se llama `MARKETPLACE`, nunca `WEB`.
-   - `pago.estado`: `PENDIENTE`, `APROBADO`, `RECHAZADO` (confirmado en el código real de `servicio-ventas`, enum `EstadoPago`). La pasarela envía `resultado: APROBADO` y se guarda tal cual, como `APROBADO` — no `CONFIRMADO`.
+   - `pago.estado`: `PENDIENTE`, `CONFIRMADO`, `RECHAZADO` — confirmado en Supabase (migración `huecos_h2_h3_h5_h6_postventa`, 10/10/2026) y en la guía de implementación del backend; manda Supabase si algún documento no coincide. La pasarela envía `resultado: APROBADO`, pero internamente se guarda como `CONFIRMADO`, no `APROBADO`.
    - `anulacion.estado`: `PENDIENTE_AUTORIZACION`, `EJECUTADA`, `RECHAZADA`.
    - `devolucion.estado`: `SOLICITADA`, `EN_EVALUACION`, `APROBADA`, `RECHAZADA`, `COMPLETADA`.
    - `reclamo.estado`: `REGISTRADO`, `EN_PROCESO`, `ATENDIDO`, `DERIVADO`.

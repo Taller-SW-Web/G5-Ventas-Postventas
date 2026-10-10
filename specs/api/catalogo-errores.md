@@ -73,7 +73,7 @@ Solo dos códigos de error aparecen como valor literal de `codigo` en los contra
 ## 6. Pendientes
 
 - La mayoría de condiciones de error (tabla 4 y 5) no tienen un `codigo` de negocio propio en los contratos actuales — solo la descripción en texto asociada al código HTTP. Asignar códigos como `ERR_...` para cada una es una decisión de equipo que no corresponde inventar en este documento; mientras no se defina, el campo `codigo` de la respuesta puede repetir la condición en mayúsculas o quedar genérico.
-- `pago.estado`, `devolucion.estado` y `anulacion.estado` tampoco tienen lista de valores cerrada (ver "Pendientes" en [diagrama-logico.md](../../diseno/diagramas/bd/diagrama-logico.md)), lo que afecta a varias de las condiciones 409 de esta tabla.
+- `pago.estado`, `devolucion.estado`, `anulacion.estado`, `reclamo.estado` y `reclamo.canal` ya tienen lista de valores cerrada y `CHECK` en Supabase (ver [diagrama-fisico.md](../../diseno/diagramas/bd/diagrama-fisico.md), sección 5).
 
 ---
 

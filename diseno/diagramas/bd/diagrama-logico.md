@@ -334,7 +334,7 @@ M1:
 3. Un pedido tiene como máximo una anulación.
 4. detalle_pedido.cantidad es mayor que cero y los montos no pueden ser negativos.
 5. historial_estado solo recibe inserciones.
-6. pago.estado solo admite PENDIENTE, APROBADO y RECHAZADO (restricción `ck_pago_estado` en Supabase y enum `EstadoPago` de `servicio-ventas`).
+6. pago.estado solo admite PENDIENTE, CONFIRMADO y RECHAZADO (restricción `ck_pago_estado` en Supabase y enum `EstadoPago` de `servicio-ventas`; la pasarela envía `resultado: APROBADO`, que se traduce a `CONFIRMADO`).
 7. pedido.canal solo admite MARKETPLACE, CHATBOT y RETAIL (enum `CanalVenta`).
 8. anulacion.estado solo admite PENDIENTE_AUTORIZACION, EJECUTADA y RECHAZADA.
 9. outbox_evento.id_evento es la clave primaria (la genera M1); un evento no se marca `enviado_en` hasta que M2 confirma la recepción (ver evento_recibido en postventa).
@@ -352,7 +352,7 @@ M2:
 8. reembolso.id_pedido se usa para calcular el saldo reembolsable del pedido (suma de intentos EXITOSO y PENDIENTE del mismo pedido no puede superar su total).
 9. (id_reembolso, numero_intento) es único en reembolso_intento; nunca se edita ni se borra un intento ya registrado (ESP-10).
 10. reclamo.codigo es único. reclamo.estado solo admite REGISTRADO, EN_PROCESO, ATENDIDO y DERIVADO; pasa de REGISTRADO a EN_PROCESO y llega a ATENDIDO solo con respuesta visible al cliente (ESP-13, ESP-14).
-11. reclamo.plazo_dias_habiles es 15 por defecto.
+11. reclamo.plazo_dias_habiles es 15 por defecto. reclamo.canal solo admite MARKETPLACE, CHATBOT y RETAIL.
 12. calificacion.puntaje va de 1 a 5, con una calificación por pedido.
 13. agregado_ventas se actualiza con eventos.
 14. agregado_metricas tiene como máximo una fila por (fecha, canal); se actualiza con upsert a partir de eventos y de las acciones de F3 a F6.
@@ -371,7 +371,6 @@ M2:
 
 ## 7. Pendientes
 
-- reclamo.canal: el contrato (`api-postventas.md` 2.8) ya envía este campo al registrar un reclamo, pero ni la guía de implementación ni este modelo tienen todavía una columna para guardarlo — falta decidirlo con el equipo.
 - El `.drawio` de este diagrama todavía no incluye `outbox_evento`, `evento_recibido`, `devolucion_item`, `reembolso_intento` ni `agregado_metricas` — pendiente de que quien lo mantiene lo actualice y reexporte las imágenes.
 
 ## 8. Otros modelos

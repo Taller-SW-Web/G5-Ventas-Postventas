@@ -82,7 +82,7 @@ create table ventas.pago (
     estado         varchar(20)   not null,
     fecha_proceso  timestamptz,
     constraint ck_pago_monto  check (monto >= 0),
-    constraint ck_pago_estado check (estado in ('PENDIENTE','APROBADO','RECHAZADO'))
+    constraint ck_pago_estado check (estado in ('PENDIENTE','CONFIRMADO','RECHAZADO'))
 );
 
 create table ventas.historial_estado (
