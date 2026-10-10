@@ -5,7 +5,7 @@ Muestra las entidades del módulo, sus atributos y cómo se relacionan. No inclu
 Las entidades se dividen según el microservicio al que pertenecen:
 
 - M1 Ventas: pedido, detalle, pago, historial de estados y anulación.
-- M2 Postventa: devolución, evidencia, reembolso, reclamo, calificación y agregados del dashboard.
+- M2 Postventa: devolución (con sus ítems), evidencia, reembolso (con sus intentos), reclamo, calificación y agregados del dashboard (ventas y métricas).
 
 ## 1. Diagrama
 
@@ -20,6 +20,8 @@ erDiagram
     PEDIDO ||--|{ HISTORIAL_ESTADO : audita
     PEDIDO ||--o| ANULACION : "puede tener"
     DEVOLUCION ||--o{ EVIDENCIA_DEVOLUCION : adjunta
+    DEVOLUCION ||--|{ DEVOLUCION_ITEM : contiene
+    REEMBOLSO ||--|{ REEMBOLSO_INTENTO : registra
     PEDIDO ||..o{ DEVOLUCION : "genera (API)"
     PEDIDO ||..o| CALIFICACION : "recibe (API)"
     PEDIDO |o..o{ RECLAMO : "puede motivar (API)"
@@ -50,12 +52,15 @@ erDiagram
 
 | Entidad | Atributos | Descripción |
 |---|---|---|
-| DEVOLUCION | id, tipo, motivo, estado, resolucion, idAutorizador, fundamentoRechazo, fecha | Devolución o cambio de un pedido entregado (F3) |
+| DEVOLUCION | id, tipo, motivo, descripcion, estado, resolucion, idAutorizador, fundamentoRechazo, fecha, idCliente (G) | Devolución o cambio de un pedido entregado (F3) |
+| DEVOLUCION_ITEM | id, idProducto (F), cantidad | Productos incluidos en la devolución |
 | EVIDENCIA_DEVOLUCION | id, url, tipo, fecha | Archivos que sustentan la devolución |
-| REEMBOLSO | id, tipoOrigen, idempotencyKey, monto, moneda, idTransaccion, estado, idAutorizador, fecha | Devolución de dinero por anulación o devolución (F4) |
-| RECLAMO | id, codigo, tipo, motivo, detalle, nombreConsumidor, documento, email, telefono, estado, plazoDiasHabiles, fechaLimiteRespuesta, respuestaVisibleCliente | Libro de reclamaciones (F6) |
+| REEMBOLSO | id, tipoOrigen, idPedido, idempotencyKey, monto, moneda, idTransaccion, estado, idAutorizador, fecha | Devolución de dinero por anulación o devolución (F4) |
+| REEMBOLSO_INTENTO | id, numeroIntento, estado, idTransaccion, resultado, fechaHora | Historial de intentos de extorno de un reembolso (ESP-10) |
+| RECLAMO | id, codigo, tipo, motivo, detalle, nombreConsumidor, documento, email, telefono, estado, plazoDiasHabiles, fechaRegistro, fechaLimiteRespuesta, fechaAtencion, atendidoPor, respuestaVisibleCliente, canal, idCliente (G) | Libro de reclamaciones (F6) |
 | CALIFICACION | id, puntaje, comentario, canal, fecha | Encuesta CSAT de un pedido entregado (F5) |
-| AGREGADO_VENTAS | periodo, canal, idVendedor, idProducto, unidades, monto, actualizadoEn | Totales para el dashboard (F6). Se actualiza con eventos y no se relaciona con otras entidades |
+| AGREGADO_VENTAS | periodo, canal, idVendedor, idProducto, unidades, monto, actualizadoEn | Totales de ventas para el dashboard (F6). Se actualiza con eventos y no se relaciona con otras entidades |
+| AGREGADO_METRICAS | fecha, canal, pedidosPagados, pedidosAnulados, pedidosEntregados, devolucionesAprobadas, montoReembolsadoPEN, csatSuma, csatCantidad, reclamosRegistrados, reclamosAtendidos, actualizadoEn | Contadores diarios del dashboard (F6). Se actualiza con eventos y con las acciones de F3 a F6; no se relaciona con otras entidades |
 
 ## 5. Relaciones
 
@@ -68,6 +73,8 @@ Dentro de cada microservicio:
 | PEDIDO - HISTORIAL_ESTADO | 1 a 1..N | Al crear el pedido se registra el primer historial (ESP-01) |
 | PEDIDO - ANULACION | 1 a 0..1 | Un pedido se anula como máximo una vez |
 | DEVOLUCION - EVIDENCIA_DEVOLUCION | 1 a 0..N | Una devolución puede tener varias evidencias |
+| DEVOLUCION - DEVOLUCION_ITEM | 1 a 1..N | Una devolución incluye al menos un producto |
+| REEMBOLSO - REEMBOLSO_INTENTO | 1 a 1..N | Cada intento de extorno queda registrado; nunca se edita ni se borra (ESP-10) |
 
 Sin clave foránea:
 
