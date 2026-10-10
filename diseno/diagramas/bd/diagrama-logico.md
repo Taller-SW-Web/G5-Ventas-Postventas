@@ -85,28 +85,16 @@ erDiagram
         date fecha "NN"
     }
     OUTBOX_EVENTO {
-<<<<<<< HEAD
         uuid id_evento PK
         bigint id_pedido FK "NN"
         varchar(40) tipo "NN"
-=======
-        bigint id PK
-        bigint id_pedido FK "NN"
-        varchar(36) id_evento UK "NN"
-        varchar(30) tipo "NN"
->>>>>>> 8dce20fefa9c25104ca0401df25ed3a82d636bc1
         jsonb payload "NN"
         timestamp creado_en "NN"
         timestamp enviado_en
         integer intentos "NN"
     }
     EVENTO_RECIBIDO {
-<<<<<<< HEAD
         varchar(100) id_evento PK
-=======
-        bigint id PK
-        varchar(100) id_evento UK "NN"
->>>>>>> 8dce20fefa9c25104ca0401df25ed3a82d636bc1
         varchar(30) origen "NN"
         timestamp recibido_en "NN"
     }
@@ -149,11 +137,7 @@ erDiagram
         bigint id PK
         bigint id_origen "referencia sin FK, NN"
         varchar(20) tipo_origen "NN"
-<<<<<<< HEAD
         bigint id_pedido "referencia sin FK"
-=======
-        bigint id_pedido "referencia sin FK, NN"
->>>>>>> 8dce20fefa9c25104ca0401df25ed3a82d636bc1
         varchar(100) idempotency_key UK "NN"
         decimal(12-2) monto "NN"
         char(3) moneda "NN"
@@ -188,11 +172,7 @@ erDiagram
         timestamp fecha_registro "NN"
         date fecha_limite_respuesta "NN"
         timestamp fecha_atencion
-<<<<<<< HEAD
         varchar(50) atendido_por
-=======
-        varchar(30) atendido_por
->>>>>>> 8dce20fefa9c25104ca0401df25ed3a82d636bc1
         text respuesta_visible_cliente
         varchar(20) canal "NN"
     }
@@ -215,11 +195,7 @@ erDiagram
     }
     AGREGADO_METRICAS {
         date fecha PK
-<<<<<<< HEAD
         varchar(20) canal PK
-=======
-        varchar(30) canal PK
->>>>>>> 8dce20fefa9c25104ca0401df25ed3a82d636bc1
         integer pedidos_pagados "NN"
         integer pedidos_anulados "NN"
         integer pedidos_entregados "NN"
@@ -232,13 +208,8 @@ erDiagram
         timestamp actualizado_en "NN"
     }
     EVENTO_RECIBIDO {
-<<<<<<< HEAD
         uuid id_evento PK
         varchar(40) tipo "NN"
-=======
-        bigint id PK
-        varchar(36) id_evento UK "NN"
->>>>>>> 8dce20fefa9c25104ca0401df25ed3a82d636bc1
         timestamp recibido_en "NN"
     }
 ```
@@ -282,17 +253,10 @@ historial_estado ([id], id_pedido → pedido.id, estado_anterior, estado_nuevo, 
 anulacion        ([id], id_pedido → pedido.id UK, motivo, id_solicitante, id_autorizador,
                   estado, fecha)
 
-<<<<<<< HEAD
 outbox_evento    ([id_evento], id_pedido → pedido.id, tipo, payload, creado_en, enviado_en,
                   intentos)
 
 evento_recibido  ([id_evento], origen, recibido_en)
-=======
-outbox_evento    ([id], id_pedido → pedido.id, id_evento UK, tipo, payload, creado_en,
-                  enviado_en, intentos)
-
-evento_recibido  ([id], id_evento UK, origen, recibido_en)
->>>>>>> 8dce20fefa9c25104ca0401df25ed3a82d636bc1
 ```
 
 postventa (M2):
@@ -315,11 +279,7 @@ reembolso_intento    ([id], id_reembolso → reembolso.id, numero_intento, estad
 reclamo              ([id], codigo UK, id_pedido ⇢ M1.pedido, id_cliente ⇢ G, tipo, motivo,
                       detalle, nombre_consumidor, documento, email, telefono, estado,
                       plazo_dias_habiles, fecha_registro, fecha_limite_respuesta,
-<<<<<<< HEAD
                       fecha_atencion, atendido_por, respuesta_visible_cliente, canal)
-=======
-                      fecha_atencion, atendido_por, respuesta_visible_cliente)
->>>>>>> 8dce20fefa9c25104ca0401df25ed3a82d636bc1
 
 calificacion         ([id], id_pedido ⇢ M1.pedido UK, puntaje, comentario, canal, fecha)
 
@@ -329,11 +289,7 @@ agregado_metricas    ([fecha, canal], pedidos_pagados, pedidos_anulados, pedidos
                       devoluciones_aprobadas, monto_reembolsado_pen, csat_suma, csat_cantidad,
                       reclamos_registrados, reclamos_atendidos, actualizado_en)
 
-<<<<<<< HEAD
 evento_recibido      ([id_evento], tipo, recibido_en)
-=======
-evento_recibido      ([id], id_evento UK, recibido_en)
->>>>>>> 8dce20fefa9c25104ca0401df25ed3a82d636bc1
 ```
 
 ## 4. Relaciones
@@ -378,19 +334,11 @@ M1:
 3. Un pedido tiene como máximo una anulación.
 4. detalle_pedido.cantidad es mayor que cero y los montos no pueden ser negativos.
 5. historial_estado solo recibe inserciones.
-<<<<<<< HEAD
 6. pago.estado solo admite PENDIENTE, CONFIRMADO y RECHAZADO (restricción `ck_pago_estado` en Supabase y enum `EstadoPago` de `servicio-ventas`).
 7. pedido.canal solo admite MARKETPLACE, CHATBOT y RETAIL (enum `CanalVenta`).
 8. anulacion.estado solo admite PENDIENTE_AUTORIZACION, EJECUTADA y RECHAZADA.
 9. outbox_evento.id_evento es la clave primaria (la genera M1); un evento no se marca `enviado_en` hasta que M2 confirma la recepción (ver evento_recibido en postventa).
 10. evento_recibido.id_evento es la clave primaria; evita que una misma notificación externa (pasarela o Despacho) duplique una transición.
-=======
-6. pago.estado solo admite PENDIENTE, APROBADO y RECHAZADO (confirmado en el código de `servicio-ventas`, enum `EstadoPago`).
-7. pedido.canal solo admite MARKETPLACE, CHATBOT y RETAIL (enum `CanalVenta`).
-8. anulacion.estado solo admite PENDIENTE_AUTORIZACION, EJECUTADA y RECHAZADA.
-9. outbox_evento.id_evento es único; un evento no se marca `enviado_en` hasta que M2 confirma la recepción (ver evento_recibido en postventa).
-10. evento_recibido.id_evento es único; evita que una misma notificación externa (pasarela o Despacho) duplique una transición.
->>>>>>> 8dce20fefa9c25104ca0401df25ed3a82d636bc1
 
 M2:
 
@@ -408,11 +356,7 @@ M2:
 12. calificacion.puntaje va de 1 a 5, con una calificación por pedido.
 13. agregado_ventas se actualiza con eventos.
 14. agregado_metricas tiene como máximo una fila por (fecha, canal); se actualiza con upsert a partir de eventos y de las acciones de F3 a F6.
-<<<<<<< HEAD
 15. evento_recibido.id_evento es la clave primaria; evita reprocesar un evento de M1 ya aplicado a los agregados.
-=======
-15. evento_recibido.id_evento es único; evita reprocesar un evento de M1 ya aplicado a los agregados.
->>>>>>> 8dce20fefa9c25104ca0401df25ed3a82d636bc1
 
 ## 6. Tablas por funcionalidad
 
