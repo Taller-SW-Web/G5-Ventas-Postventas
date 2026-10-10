@@ -19,7 +19,7 @@ Gestionar solicitudes posteriores a la entrega y resolverlas como cambio, devolu
 Incluye:
 - Registro de la solicitud (`SOLICITADA`) asociada a un pedido entregado.
 - Validación de elegibilidad: estado de entrega, motivo, plazo y evidencia.
-- Evaluación por el Gestor (`EN EVALUACIÓN` → `APROBADA`/`RECHAZADA`).
+- Evaluación por el Gestor (`EN_EVALUACION` → `APROBADA`/`RECHAZADA`).
 - Coordinación de un cambio logístico (disponibilidad + nuevo despacho) o del origen de un reembolso hacia F4.
 
 **No incluye:** la ejecución directa del extorno (eso es F4), ni la modificación directa del pedido en M1 (F3 solo se lo solicita a F1 por API).
@@ -81,17 +81,17 @@ El sistema DEBE permitir que el Gestor evalúe el expediente y lo resuelva como 
 
 - **DADO** una solicitud en estado `SOLICITADA`.
 - **CUANDO** el Gestor la abre para revisión.
-- **ENTONCES** el sistema la transiciona a `EN EVALUACIÓN`.
+- **ENTONCES** el sistema la transiciona a `EN_EVALUACION`.
 
 #### CA-05. Resolución aprobada
 
-- **DADO** una solicitud `EN EVALUACIÓN`.
+- **DADO** una solicitud `EN_EVALUACION`.
 - **CUANDO** el Gestor la aprueba.
 - **ENTONCES** el sistema la transiciona a `APROBADA` y determina el camino (cambio o devolución) según lo indicado.
 
 #### CA-06. Resolución rechazada
 
-- **DADO** una solicitud `EN EVALUACIÓN`.
+- **DADO** una solicitud `EN_EVALUACION`.
 - **CUANDO** el Gestor la rechaza.
 - **ENTONCES** el sistema la transiciona a `RECHAZADA`, exigiendo un fundamento no vacío.
 
@@ -124,7 +124,7 @@ Superficie visible dentro del panel del Gestor (más un formulario simple accesi
 | Elemento | Responsabilidad |
 |---|---|
 | Formulario de solicitud (cliente) | Captura motivo, tipo (cambio/devolución) y evidencia si aplica. |
-| Bandeja de expedientes (Gestor) | Lista solicitudes por estado (`SOLICITADA`, `EN EVALUACIÓN`, etc.), con acceso al detalle. |
+| Bandeja de expedientes (Gestor) | Lista solicitudes por estado (`SOLICITADA`, `EN_EVALUACION`, etc.), con acceso al detalle. |
 | Detalle del expediente | Motivo, evidencia, historial de decisiones y resultado de la derivación (cambio/reembolso). |
 | Acciones de resolución | Aprobar/Rechazar, con campo de fundamento obligatorio al rechazar. |
 
@@ -133,7 +133,7 @@ Superficie visible dentro del panel del Gestor (más un formulario simple accesi
 | Componente lógico | Responsabilidad |
 |---|---|
 | Validador de elegibilidad | Verifica entrega confirmada (vía F1), plazo, motivo y evidencia. |
-| Motor de estados del expediente | Gestiona `SOLICITADA → EN EVALUACIÓN → APROBADA/RECHAZADA → COMPLETADA`. |
+| Motor de estados del expediente | Gestiona `SOLICITADA → EN_EVALUACION → APROBADA/RECHAZADA → COMPLETADA`. |
 | Orquestador de derivación | Coordina con Productos (F) y Despacho (E) para un cambio, u origina la solicitud a F4 para un reembolso. |
 | Cliente hacia F1 | Consulta el estado `ENTREGADO` del pedido — F3 nunca escribe directamente sobre las tablas de M1. |
 

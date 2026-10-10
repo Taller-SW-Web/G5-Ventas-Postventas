@@ -84,7 +84,7 @@ F3 — Devoluciones y cambios puede consultar a F1 para verificar que un pedido 
 
 F3 administra su propio expediente de postventa y su propia máquina de estados:
 
-`SOLICITADA → EN EVALUACIÓN → APROBADA / RECHAZADA → COMPLETADA`
+`SOLICITADA → EN_EVALUACION → APROBADA / RECHAZADA → COMPLETADA`
 
 Estos estados pertenecen al expediente de devolución/cambio y no sustituyen ni modifican directamente el estado del pedido gestionado por M1
 
@@ -160,7 +160,7 @@ F6 administra sus propios reclamos, SLA, respuestas y agregados, manteniendo la 
 
 ### CA-03 — Estados de devolución separados de estados de pedido
 
-**DADO** un expediente de devolución en estado `EN EVALUACIÓN`  
+**DADO** un expediente de devolución en estado `EN_EVALUACION`  
 **CUANDO** el Gestor lo aprueba o rechaza  
 **ENTONCES** cambia únicamente el estado del expediente de F3  
 **Y** el estado del pedido en M1 permanece bajo control de F1

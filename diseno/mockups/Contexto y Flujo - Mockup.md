@@ -160,7 +160,7 @@ F6 recibe el reclamo o queja desde el canal, genera su código y formato y conse
 
 Desde **Reclamos** el Gestor pulsa **Ver**, consulta descripción, contacto, historial y SLA y continúa con **Iniciar atención → Responder reclamo → Guardar respuesta → Marcar como atendido → Confirmar cierre**
 
-El caso avanza de **REGISTRADO** a **EN PROCESO** y finalmente a **ATENDIDO**, el cierre requiere una respuesta válida y trazable
+El caso avanza de **REGISTRADO** a **EN_PROCESO** y finalmente a **ATENDIDO**, el cierre requiere una respuesta válida y trazable
 
 El SLA expresa la situación del plazo y se distingue del estado de atención, un caso vencido puede seguir en proceso y debe conservar esa condición en su seguimiento
 

@@ -83,7 +83,7 @@ Los filtros se encuentran sobre la tabla y permiten preparar la consulta antes d
 | Control | Opciones y finalidad |
 |---|---|
 | **Buscar** | Representa la búsqueda por código de reclamo, pedido o cliente mediante coincidencias rápidas |
-| **Estado** | Presenta Todos, REGISTRADO, EN PROCESO y ATENDIDO |
+| **Estado** | Presenta Todos, REGISTRADO, EN_PROCESO y ATENDIDO |
 | **Fecha de creación** | Presenta Todos y los periodos 15–21 septiembre, 08–14 septiembre y 01–07 septiembre |
 | **Aplicar filtros** | Confirma la selección y presenta la vista de resultados preparada |
 | **Limpiar** | Restablece los controles y recupera la primera página de la bandeja |
@@ -120,7 +120,7 @@ La tabla permite identificar el caso y su prioridad antes de ingresar a la revis
 
 La primera página muestra cinco casos y el pie indica **Mostrando 1–5 de 14 reclamos**, se representan motivos como incumplimiento de plazo, cobro indebido, atención inadecuada y producto defectuoso
 
-El expediente **REC-2026-0052** figura como **REGISTRADO** y **En plazo**, **REC-2026-0051** aparece **EN PROCESO** y **Próximo**, estas dos columnas permiten reconocer tanto la etapa del caso como su situación de atención
+El expediente **REC-2026-0052** figura como **REGISTRADO** y **En plazo**, **REC-2026-0051** aparece **EN_PROCESO** y **Próximo**, estas dos columnas permiten reconocer tanto la etapa del caso como su situación de atención
 
 ### 5.4. Ordenamiento, páginas y apertura
 
@@ -172,7 +172,7 @@ El indicador **SLA** representa la situación del reclamo respecto de su fecha l
 | **Cumplido** | La atención se presenta como realizada dentro del plazo |
 | **Excedido** | El reclamo aparece atendido con el plazo excedido |
 
-El estado describe la etapa del expediente y el SLA describe el cumplimiento del plazo, un reclamo puede estar **EN PROCESO** y tener un SLA **Vencido** sin que esto constituya una etapa adicional de su ciclo de vida
+El estado describe la etapa del expediente y el SLA describe el cumplimiento del plazo, un reclamo puede estar **EN_PROCESO** y tener un SLA **Vencido** sin que esto constituya una etapa adicional de su ciclo de vida
 
 El detalle muestra la fecha límite para apoyar la priorización, los valores del prototipo son ejemplos fijos y no corresponden a un contador que se recalcula con la fecha actual
 
@@ -235,15 +235,15 @@ Las acciones se adaptan al estado del reclamo y a la existencia de una respuesta
 | Situación | Acciones principales representadas |
 |---|---|
 | **REGISTRADO** | Iniciar atención, Generar PDF y acceso al pedido cuando existe |
-| **EN PROCESO sin respuesta guardada** | Responder reclamo, Generar PDF y acceso al pedido cuando existe |
-| **EN PROCESO con respuesta guardada** | Responder reclamo, Generar PDF y Marcar como atendido |
+| **EN_PROCESO sin respuesta guardada** | Responder reclamo, Generar PDF y acceso al pedido cuando existe |
+| **EN_PROCESO con respuesta guardada** | Responder reclamo, Generar PDF y Marcar como atendido |
 | **ATENDIDO** | Consulta del expediente, Generar PDF y acceso al pedido cuando existe |
 
 Cuando no existe un pedido asociado el bloque muestra **Sin pedido asociado** en lugar de ofrecer el retorno a un pedido
 
 ### 9.2. Iniciar atención
 
-**Iniciar atención** se presenta para un reclamo **REGISTRADO**, al pulsarlo cambia el estado a **EN PROCESO** y actualiza la etapa representada en el historial
+**Iniciar atención** se presenta para un reclamo **REGISTRADO**, al pulsarlo cambia el estado a **EN_PROCESO** y actualiza la etapa representada en el historial
 
 El botón se retira y se habilita **Responder reclamo**, esta transición indica que el caso fue tomado para su análisis y todavía requiere una respuesta
 
@@ -251,7 +251,7 @@ El botón se retira y se habilita **Responder reclamo**, esta transición indica
 
 **Responder reclamo** abre la ventana de respuesta, **Cancelar** permite regresar sin aplicar el contenido y **Guardar respuesta** incorpora el texto preparado al expediente
 
-Después de guardar se habilita **Marcar como atendido**, el estado se mantiene **EN PROCESO** hasta que el Gestor confirme el cierre
+Después de guardar se habilita **Marcar como atendido**, el estado se mantiene **EN_PROCESO** hasta que el Gestor confirme el cierre
 
 El botón de respuesta permanece disponible mientras el caso sigue en proceso, la interacción actual utiliza el mismo texto de ejemplo y no representa su edición libre
 
@@ -283,15 +283,15 @@ Cuando el reclamo no tiene pedido asociado se muestra una indicación sin acció
 
 ## 10. Estados y consistencia funcional
 
-El mockup utiliza los estados **REGISTRADO**, **EN PROCESO** y **ATENDIDO** para representar el avance de la atención
+El mockup utiliza los estados **REGISTRADO**, **EN_PROCESO** y **ATENDIDO** para representar el avance de la atención
 
 | Estado | Significado en el recorrido |
 |---|---|
 | **REGISTRADO** | El reclamo tiene un código y está pendiente de ser tomado para atención |
-| **EN PROCESO** | El Gestor analiza el expediente y prepara o registra la respuesta |
+| **EN_PROCESO** | El Gestor analiza el expediente y prepara o registra la respuesta |
 | **ATENDIDO** | La respuesta se encuentra registrada y el cierre fue confirmado |
 
-El recorrido principal es **REGISTRADO → EN PROCESO → ATENDIDO**, guardar la respuesta constituye un paso previo al cierre y no cambia por sí solo el estado a atendido
+El recorrido principal es **REGISTRADO → EN_PROCESO → ATENDIDO**, guardar la respuesta constituye un paso previo al cierre y no cambia por sí solo el estado a atendido
 
 Las etiquetas **Próximo**, **Vencido**, **Cumplido** y **Excedido** pertenecen al control del plazo y se presentan en una columna distinta, esta separación facilita priorizar casos sin confundir su situación temporal con su estado
 

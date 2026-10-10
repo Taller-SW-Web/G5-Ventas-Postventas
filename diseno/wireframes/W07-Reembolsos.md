@@ -161,7 +161,7 @@ Las acciones disponibles deben depender del estado actual de la operación y de 
 
 ## 10. Estados y consistencia funcional
 
-El wireframe utiliza etiquetas como **EJECUTADO**, **EN PROCESO**, **APROBADO** y **RECHAZADO** para representar de manera visual las situaciones del reembolso
+El wireframe utiliza etiquetas como **EJECUTADO**, **EN_PROCESO**, **APROBADO** y **RECHAZADO** para representar de manera visual las situaciones del reembolso
 
 La especificación funcional de F4 utiliza como estados de persistencia principales `EXITOSO`, `FALLIDO` y `PENDIENTE`
 

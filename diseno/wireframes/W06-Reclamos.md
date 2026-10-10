@@ -163,7 +163,7 @@ La acción **Volver al pedido** solo tiene sentido cuando existe una referencia 
 
 La especificación funcional de F6 define el ciclo de vida:
 
-`REGISTRADO → EN PROCESO → ATENDIDO`
+`REGISTRADO → EN_PROCESO → ATENDIDO`
 
 con una rama opcional `DERIVADO`
 

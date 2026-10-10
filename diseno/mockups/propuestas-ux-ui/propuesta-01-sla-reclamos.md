@@ -28,7 +28,7 @@ Esta estructura introducía fricciones críticas:
 
 ### 3.1. Desacoplamiento Formal de Dimensiones en Cabecera
 Se dividió el control de filtrado superior en dos componentes selectores independientes para evitar solapar el flujo de vida del reclamo con la urgencia temporal[cite: 19]:
-1. **Filtro de Estado Administrativo:** Controla el ciclo de resolución (`Todos`, `REGISTRADO`, `EN PROCESO`, `ATENDIDO`)[cite: 19].
+1. **Filtro de Estado Administrativo:** Controla el ciclo de resolución (`Todos`, `REGISTRADO`, `EN_PROCESO`, `ATENDIDO`)[cite: 19].
 2. **Filtro de Urgencia Operativa (SLA):** Controla el semáforo temporal con opciones discretas (`Todos`, `Vencidos`, `Por vencer`, `En plazo`, `Atendidos`)[cite: 19].
 
 ### 3.2. Semáforo Cromático y Etiquetas de Cuenta Regresiva
