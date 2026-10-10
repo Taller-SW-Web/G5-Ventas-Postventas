@@ -15,6 +15,8 @@ Este documento es el **punto de entrada formal** al contrato de API del Módulo 
 | M1 — Ventas / Pedidos | [specs/api/api-ventas.md](api/api-ventas.md) | F1 — Ciclo de vida del pedido, F2 — Anulación de pedidos |
 | M2 — Postventa | [specs/api/api-postventas.md](api/api-postventas.md) | F3 — Devoluciones y cambios, F4 — Reembolsos y extornos, F5 — Calificación CSAT, F6 — Reclamos y dashboard |
 
+Códigos y condiciones de error de ambos contratos, consolidados: [specs/api/catalogo-errores.md](api/catalogo-errores.md).
+
 Cualquier referencia a `specs/api-contract.md` en el resto del repositorio (README, CONTRIBUTING, especificaciones funcionales y no funcionales) debe entenderse como una referencia a este índice y, a través de él, a los dos contratos específicos.
 
 ---
