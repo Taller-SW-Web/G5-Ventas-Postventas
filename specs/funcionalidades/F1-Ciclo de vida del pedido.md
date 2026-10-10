@@ -63,7 +63,7 @@ Esta funcionalidad **no incluye**: carrito/checkout de los canales (responsabili
 | Seguridad y Usuarios (G) | Emitir el token JWT, validar rol y aportar datos de contacto del cliente. |
 | Productos y Ofertas (F) | Confirmar precio/disponibilidad al crear el pedido y recibir aviso de movimientos de stock al anular. |
 | Despacho y Entrega (E) | Recibir la solicitud de despacho cuando el pedido pasa a `EN_PREPARACION`/`DESPACHADO`, y notificar por evento/endpoint cuando el pedido fue `ENTREGADO` o falló la entrega. F1 **nunca** asigna repartidor, ruta ni zona — solo consume el evento. |
-| Pasarela de Pagos (Externa) | Emitir la notificación de cobro exitoso (`CREADO → PAGADO`) o fallo. |
+| Pasarela de Pagos (Externa) | Recibir de M1 la solicitud de cobro inmediatamente tras crear el pedido, y emitir de vuelta la notificación de cobro exitoso (`CREADO → PAGADO`) o fallo. M1 es quien invoca a la pasarela — ningún canal la invoca directamente ni suplanta su notificación. |
 | Canales A/B/C | Crear y consultar pedidos; solicitar anulación directa de pedidos `CREADO` por abandono o timeout de pago. |
 | F2 — Anulación de pedidos | Orquestar y solicitar a F1 la transición a `ANULADO` en estados pagados o en preparación. |
 | F3 — Devoluciones y cambios | Consulta a F1 que el pedido esté `ENTREGADO` antes de aceptar una solicitud de devolución/cambio. |
@@ -88,6 +88,12 @@ El sistema DEBE permitir crear un pedido a partir de una solicitud de un canal, 
 - **DADO** que un canal (Marketplace, Chatbot o Retail) envía un pedido con datos de `contacto`, ítems válidos, bloque de `envio`, condiciones de `pago` y cupón de descuento opcional.
 - **CUANDO** se confirma la solicitud.
 - **ENTONCES** el sistema consulta precio/disponibilidad a Productos (F), persiste el pedido con estado `CREADO`, calcula totales netos y registra el primer historial.
+
+#### CA-01b. Disparo del cobro simulado tras la creación
+
+- **DADO** un pedido recién persistido en estado `CREADO` con la reserva de stock y el cupón (si aplica) ya confirmados.
+- **CUANDO** el sistema termina de responder `201 Created` al canal.
+- **ENTONCES** M1 invoca internamente al simulador de pasarela para iniciar el cobro simulado — el canal que creó el pedido no participa en esta llamada ni la recibe; el resultado llega después mediante la notificación de la pasarela (ver CA-07).
 
 #### CA-02. Rechazo por datos incompletos
 
@@ -133,6 +139,12 @@ El sistema DEBE aplicar únicamente las transiciones dibujadas en la máquina de
 - **CUANDO** se recibe la notificación de pago exitoso desde la pasarela o webhook de pagos.
 - **ENTONCES** el sistema transiciona el pedido a `PAGADO`, registra el historial con actor `PASARELA_PAGOS` y publica el evento `pedido pagado`.
 
+#### CA-07b. Transición directa a ANULADO (pago rechazado por la pasarela)
+
+- **DADO** un pedido en estado `CREADO`.
+- **CUANDO** se recibe la notificación de pago rechazado desde la pasarela (`resultado: RECHAZADO`).
+- **ENTONCES** el sistema transiciona el pedido de forma directa a `ANULADO` con motivo `PAGO_NO_COMPLETADO`, sin requerir autorización del Gestor, registra el historial con actor `PASARELA_PAGOS` y repone el stock en Productos (F) — igual que en CA-12, pero disparado por la pasarela en vez del canal. No genera ninguna orden de reembolso hacia F4, porque nunca hubo pago confirmado. *(La liberación del cupón ante Productos y Ofertas (F) no tiene integración documentada en este repo — queda fuera de alcance hasta que exista ese acuerdo intermodular.)*
+
 #### CA-08. Transición inválida (salto de estado)
 
 - **DADO** un pedido en estado `CREADO`.
@@ -155,7 +167,7 @@ El sistema DEBE aplicar únicamente las transiciones dibujadas en la máquina de
 
 - **DADO** un pedido en estado `CREADO`.
 - **CUANDO** el Canal (Chatbot / Web) envía la solicitud de anulación con motivo tipificado `PAGO_NO_COMPLETADO` tras agotarse el tiempo límite de espera (timeout) o producirse el rechazo definitivo del cobro.
-- **ENTONCES** el sistema transiciona el pedido de forma directa a `ANULADO` sin requerir autorización ni intervención del rol Gestor, registra el historial con actor `CANAL` y motivo `PAGO_NO_COMPLETADO`, libera el stock en Productos (F) y no genera ninguna orden de reembolso hacia F4.
+- **ENTONCES** el sistema transiciona el pedido de forma directa a `ANULADO` sin requerir autorización ni intervención del rol Gestor, registra el historial con actor `CANAL_CHATBOT` y motivo `PAGO_NO_COMPLETADO`, libera el stock en Productos (F) y no genera ninguna orden de reembolso hacia F4.
 
 ### RF-04. Historial y trazabilidad
 
@@ -188,6 +200,7 @@ La interfaz debe impedir acciones que ya se sabe que son inválidas según el es
 | Motor de máquina de estados | Validar y aplicar únicamente las transiciones permitidas; procesar la rama directa `CREADO → ANULADO` por `PAGO_NO_COMPLETADO` y rechazar cualquier salto no dibujado. |
 | Servicio de historial | Registrar cada transición con actor, motivo y fecha/hora en UTC. |
 | Publicador de eventos | Emitir `pedido creado`, `pedido pagado`, `pedido anulado` y `pedido entregado` a los consumidores acordados (M2, F5, F6). |
+| Solicitante de cobro | Invocar al simulador de pasarela inmediatamente después de persistir el pedido en `CREADO` con la reserva confirmada, para iniciar el cobro simulado. |
 | Consumidor de eventos externos | Recibir la notificación de entrega/fallo desde Despacho (E) y confirmación de cobro desde la pasarela de forma idempotente. |
 
 Las rutas, cuerpos, respuestas y códigos específicos se centralizan en `specs/api-contract.md` (recurso `Pedido`).
@@ -204,7 +217,7 @@ Las rutas, cuerpos, respuestas y códigos específicos se centralizan en `specs/
 ## 9. Fuera de alcance
 
 - **Carrito y checkout:** corresponden a cada canal (A/B/C), no a F1.
-- **Simulación/procesamiento bancario del pago:** el cobro en sí ocurre en la pasarela externa; F1 solo recibe el webhook o notificación de resultado.
+- **Simulación/procesamiento bancario del pago:** el cálculo del resultado (aprobado/rechazado, con o sin latencia) ocurre dentro del simulador de pasarela; F1 solo solicita el cobro y recibe el webhook o notificación de resultado — no implementa lógica bancaria propia.
 - **Asignación de repartidor, rutas y zonas de despacho:** corresponden al módulo externo Despacho y Entrega.
 - **Decisión de anulación condicional, devolución, reembolso, calificación y reclamos:** cada uno tiene su propia funcionalidad (F2 a F6); F1 solo expone el endpoint de transición que ellas consumen.
 

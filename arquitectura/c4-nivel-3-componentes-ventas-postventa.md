@@ -45,6 +45,7 @@ flowchart TB
     NOT -->|"Entrega fallida definitiva"| ANU
 
     CRE -->|"Precio y disponibilidad"| PRO
+    CRE -->|"Solicita cobro"| PAS
     ANU --> EST
     ANU --> EFE
     EFE -->|"Reposición de stock"| PRO

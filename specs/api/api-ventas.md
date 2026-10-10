@@ -36,6 +36,8 @@
 ### 1.1 Crear Pedido
 - **Endpoint:** `POST /api/v1/pedidos`
 Descripción: Registra un nuevo pedido proveniente de Canales A (Marketplace), B (Chatbot) o C (Retail). Incluye obligatoriamente los bloques de canal, contacto, items, envio, pago y el bloque opcional cupon. Inicializa en estado `CREADO`.
+
+**Orquestación del cobro (respuesta a consulta de Marketplace, 2026-10-10):** inmediatamente después de responder `201 Created` con el pedido en `CREADO` y la reserva de stock/cupón confirmada, M1 invoca por su cuenta al simulador de pasarela para iniciar el cobro simulado. Ningún canal invoca al simulador ni al endpoint 1.2 directamente — el canal solo crea el pedido aquí y consulta su estado (1.3/1.4b) hasta ver `PAGADO`. Ver [F1-Ciclo de vida del pedido.md](../funcionalidades/F1-Ciclo%20de%20vida%20del%20pedido.md), CA-01b.
 ### Headers
   - `Authorization: Bearer <token_canal>`
   - `Content-Type: application/json`
@@ -163,6 +165,8 @@ Valores de `resultado`:
 |---|---|---|---|
 | `APROBADO` | `CONFIRMADO` | `CREADO` → `PAGADO` | `PASARELA_PAGOS` |
 | `RECHAZADO` | `RECHAZADO` | `CREADO` → `ANULADO`, motivo `PAGO_NO_COMPLETADO` | `PASARELA_PAGOS` |
+
+La transición a `ANULADO` por rechazo repone el stock en Productos (F) automáticamente, sin intervención del Gestor y sin generar solicitud de reembolso hacia F4 — ver [F1-Ciclo de vida del pedido.md](../funcionalidades/F1-Ciclo%20de%20vida%20del%20pedido.md), CA-07b. (La liberación del cupón ante Productos y Ofertas no tiene integración documentada todavía.)
 
 Cualquier otro valor responde `400 Bad Request`. Si la misma `transaccionId` llega dos veces, se responde `200 OK` con el resultado ya registrado, sin repetir el cambio.
 ### Respuestas
@@ -470,7 +474,7 @@ Si `decision` es `RECHAZADA`, `estadoPedido` vuelve a `EN_PREPARACION` y `estado
   "timestamp": "2026-10-09T21:40:00Z",
   "emitter": "modulo-ventas",
   "data": {
-    "orderId": 1042,
+    "orderId": "PED-2026-00981",
     "publicStatus": "DESPACHADO",
     "trackingNumber": "TRK-987654",
     "estimatedDeliveryDate": "2026-10-12"
