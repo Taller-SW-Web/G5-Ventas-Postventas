@@ -525,7 +525,7 @@
   "datos": {
     "canal": "MARKETPLACE",
     "clienteId": "3f9a2b7e-6c1d-4e2a-9b3f-7a1d2c4e5f6a",
-    "vendedorId": 12,
+    "vendedorId": "3f9a2b7e-6c1d-4e2a-9b3f-7a1d2c4e5f6a",
     "total": 129.90,
     "moneda": "PEN",
     "motivo": null,
