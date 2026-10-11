@@ -63,7 +63,7 @@ Esta funcionalidad **no incluye**: carrito/checkout de los canales (responsabili
 | Seguridad y Usuarios (G) | Emitir el token JWT, validar rol y aportar datos de contacto del cliente. |
 | Productos y Ofertas (F) | Confirmar precio/disponibilidad al crear el pedido y recibir aviso de movimientos de stock al anular. |
 | Despacho y Entrega (E) | Recibir la solicitud de despacho cuando el pedido pasa a `EN_PREPARACION`/`DESPACHADO`, y notificar por evento/endpoint cuando el pedido fue `ENTREGADO` o falló la entrega. F1 **nunca** asigna repartidor, ruta ni zona — solo consume el evento. |
-| Pasarela de Pagos (Externa) | Recibir de M1 la solicitud de cobro inmediatamente tras crear el pedido, y emitir de vuelta la notificación de cobro exitoso (`CREADO → PAGADO`) o fallo. M1 es quien invoca a la pasarela — ningún canal la invoca directamente ni suplanta su notificación. |
+| Pasarela de Pagos (Externa) | Emitir la notificación de cobro exitoso (`CREADO → PAGADO`) o fallo, vía `1.2`. Quién la invoca depende del canal: para Marketplace, M1 invoca al simulador compartido inmediatamente tras crear el pedido; para Chatbot, su propio backend notifica `1.2` directamente con su propia simulación de pago (ver `AGENTS.md` sección 2, punto 8). |
 | Canales A/B/C | Crear y consultar pedidos; solicitar anulación directa de pedidos `CREADO` por abandono o timeout de pago. |
 | F2 — Anulación de pedidos | Orquestar y solicitar a F1 la transición a `ANULADO` en estados pagados o en preparación. |
 | F3 — Devoluciones y cambios | Consulta a F1 que el pedido esté `ENTREGADO` antes de aceptar una solicitud de devolución/cambio. |
@@ -89,11 +89,13 @@ El sistema DEBE permitir crear un pedido a partir de una solicitud de un canal, 
 - **CUANDO** se confirma la solicitud.
 - **ENTONCES** el sistema consulta precio/disponibilidad a Productos (F), persiste el pedido con estado `CREADO`, calcula totales netos y registra el primer historial.
 
-#### CA-01b. Disparo del cobro simulado tras la creación
+#### CA-01b. Disparo del cobro simulado tras la creación (canales sin simulación propia)
 
-- **DADO** un pedido recién persistido en estado `CREADO` con la reserva de stock y el cupón (si aplica) ya confirmados.
+- **DADO** un pedido recién persistido en estado `CREADO`, creado por un canal que no construye su propia simulación de pago (ej. Marketplace), con la reserva de stock y el cupón (si aplica) ya confirmados.
 - **CUANDO** el sistema termina de responder `201 Created` al canal.
-- **ENTONCES** M1 invoca internamente al simulador de pasarela para iniciar el cobro simulado — el canal que creó el pedido no participa en esta llamada ni la recibe; el resultado llega después mediante la notificación de la pasarela (ver CA-07).
+- **ENTONCES** M1 invoca internamente al simulador de pasarela compartido para iniciar el cobro simulado — el canal que creó el pedido no participa en esta llamada ni la recibe; el resultado llega después mediante la notificación de la pasarela (ver CA-07).
+
+> Un canal cuyo producto exige su propia experiencia de pago (ej. Chatbot, con su propio `PaymentSimulator`) no dispara este paso: su propio backend notifica `1.2` directamente, con su propia credencial de servicio, sin pasar por el simulador compartido.
 
 #### CA-02. Rechazo por datos incompletos
 

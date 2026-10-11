@@ -37,7 +37,11 @@
 - **Endpoint:** `POST /api/v1/pedidos`
 Descripción: Registra un nuevo pedido proveniente de Canales A (Marketplace), B (Chatbot) o C (Retail). Incluye obligatoriamente los bloques de canal, contacto, items, envio, pago y el bloque opcional cupon. Inicializa en estado `CREADO`.
 
-**Orquestación del cobro (respuesta a consulta de Marketplace, 2026-10-10):** inmediatamente después de responder `201 Created` con el pedido en `CREADO` y la reserva de stock/cupón confirmada, M1 invoca por su cuenta al simulador de pasarela para iniciar el cobro simulado. Ningún canal invoca al simulador ni al endpoint 1.2 directamente — el canal solo crea el pedido aquí y consulta su estado (1.3/1.4b) hasta ver `PAGADO`. Ver [F1-Ciclo de vida del pedido.md](../funcionalidades/F1-Ciclo%20de%20vida%20del%20pedido.md), CA-01b.
+**Orquestación del cobro:** quién dispara el cobro simulado depende de si el canal construye su propia experiencia de pago o no (ver `AGENTS.md`, sección 2, punto 8):
+- **Marketplace** (acuerdo 2026-10-10): no toca pago en absoluto. Inmediatamente después de responder `201 Created` con el pedido en `CREADO` y la reserva de stock/cupón confirmada, M1 invoca por su cuenta al simulador de pasarela compartido. El canal solo crea el pedido aquí y consulta su estado (1.3/1.4b) hasta ver `PAGADO`.
+- **Chatbot** (acuerdo 2026-10-10, su propio `PaymentSimulator` ya construido): su backend procesa el pago simulado con sus propios datos de prueba y notifica `1.2` directamente, con su propia credencial de servicio.
+
+Ver [F1-Ciclo de vida del pedido.md](../funcionalidades/F1-Ciclo%20de%20vida%20del%20pedido.md), CA-01b.
 ### Headers
   - `Authorization: Bearer <token_canal>`
   - `Content-Type: application/json`
