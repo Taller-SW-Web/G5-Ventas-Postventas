@@ -54,7 +54,7 @@ Esta funcionalidad **no incluye**: carrito/checkout de los canales (responsabili
 - Estructura obligatoria de payload de creación: debe contener los bloques `canal`, `contacto`, `envio`, `pago` y opcionalmente `cupon`.
 - El precio y la disponibilidad de cada ítem deben validarse contra Productos (F) antes de confirmar la creación.
 - Toda transición de estado solicitada debe corresponder a una arista existente en la máquina de estados; cualquier salto no dibujado se rechaza con `409 Conflict`.
-- Las operaciones administrativas (consulta general, forzar un estado) requieren token JWT con rol `GESTOR` o `ADMIN`.
+- Las operaciones administrativas (consulta general, forzar un estado) requieren token JWT con rol `ADMIN_VENTAS` (catálogo cerrado de Seguridad — "Gestor" es solo el nombre que usamos en specs/interfaz, no un rol real del sistema; ver `AGENTS.md`).
 
 ### 4.2. Dependencias
 

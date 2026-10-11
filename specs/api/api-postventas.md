@@ -43,7 +43,9 @@
     satisfacción de compra. Utilizado por Canales A, B y C.
 -   **`ventas:admin`**: Gestión administrativa completa (dictamen de
     devoluciones, emisión de respuesta formal a reclamos y métricas de
-    dashboard). Utilizado por Backoffice / Gestor.
+    dashboard). Utilizado por Backoffice / Gestor — requiere el rol
+    `ADMIN_VENTAS` (claim `roles` del JWT, catálogo cerrado de Seguridad;
+    "Gestor" es solo el nombre que usamos en specs/interfaz).
 
 ## Endpoints de M2
 
@@ -140,7 +142,7 @@
 {
   "devolucionId": "DEV-2026-0042",
   "pedidoId": "PED-2026-00981",
-  "clienteId": "CLI-8841",
+  "clienteId": "3f9a2b7e-6c1d-4e2a-9b3f-7a1d2c4e5f6a",
   "tipo": "DEVOLUCION_DINERO",
   "estado": "APROBADA",
   "motivo": "PRODUCTO_DEFECTUOSO",
@@ -175,7 +177,7 @@
 {
   "devolucionId": "DEV-2026-0042",
   "pedidoId": "PED-2026-00981",
-  "clienteId": "CLI-8841",
+  "clienteId": "3f9a2b7e-6c1d-4e2a-9b3f-7a1d2c4e5f6a",
   "tipo": "DEVOLUCION_DINERO",
   "estado": "EN_EVALUACION",
   "motivo": "PRODUCTO_DEFECTUOSO",
@@ -204,7 +206,7 @@
 
 ``` json
 {
-  "clienteId": "CLI-8841",
+  "clienteId": "3f9a2b7e-6c1d-4e2a-9b3f-7a1d2c4e5f6a",
   "contenido": [
     {
       "devolucionId": "DEV-2026-0042",
@@ -228,7 +230,7 @@
 -   **Descripción:** El Gestor aprueba o rechaza el expediente. Si es
     rechazo, exige fundamento no vacío. Si se aprueba con
     `tipo: DEVOLUCION_DINERO`, deriva la instrucción de reembolso a F4.
--   **Headers:** `Authorization: Bearer <token_gestor>`
+-   **Headers:** `Authorization: Bearer <token_gestor>` (requiere rol `ADMIN_VENTAS`)
 -   **Request Body:**
 
 ``` json
@@ -304,7 +306,7 @@
 ``` json
 {
   "pedidoId": "PED-2026-00981",
-  "clienteId": "CLI-8841",
+  "clienteId": "3f9a2b7e-6c1d-4e2a-9b3f-7a1d2c4e5f6a",
   "canal": "CHATBOT",
   "puntuacion": 5,
   "comentario": "Excelente tiempo de entrega y respuesta rápida"
@@ -438,7 +440,7 @@
 -   **Endpoint:** `PATCH /api/v2/reclamos/{reclamoId}/respuesta`
 -   **Descripción:** El Gestor emite la respuesta formal que será
     visible para el cliente (Requisito A10).
--   **Headers:** `Authorization: Bearer <token_gestor>`
+-   **Headers:** `Authorization: Bearer <token_gestor>` (requiere rol `ADMIN_VENTAS`)
 -   **Request Body:**
 
 ``` json
@@ -522,7 +524,7 @@
   "fecha": "2026-09-27T15:40:00Z",
   "datos": {
     "canal": "MARKETPLACE",
-    "clienteId": "CLI-8841",
+    "clienteId": "3f9a2b7e-6c1d-4e2a-9b3f-7a1d2c4e5f6a",
     "vendedorId": 12,
     "total": 129.90,
     "moneda": "PEN",

@@ -50,7 +50,7 @@ La publicación de eventos de dominio derivada de estas transiciones corresponde
 ## 5. Precondiciones
 
 1. Toda transición solicitada debe corresponder a una arista existente en la máquina de estados.
-2. Las transiciones administrativas forzadas requieren token JWT con rol `GESTOR` o `ADMIN`.
+2. Las transiciones administrativas forzadas requieren token JWT con rol `ADMIN_VENTAS` (catálogo cerrado de Seguridad; "Gestor" es solo el nombre que usamos en specs/interfaz).
 3. Las transiciones disparadas por eventos externos (pasarela, Despacho) deben incluir una clave de idempotencia.
 
 ---

@@ -43,8 +43,8 @@ erDiagram
         varchar(40) codigo_cupon
         varchar(128) idempotency_key UK
         timestamp creado_en "NN"
-        bigint id_cliente "referencia sin FK"
-        bigint id_vendedor "referencia sin FK"
+        uuid id_cliente "referencia sin FK, = claim sub del JWT"
+        uuid id_vendedor "referencia sin FK, = claim sub del JWT"
         bigint id_direccion_entrega "referencia sin FK"
     }
     DETALLE_PEDIDO {
@@ -80,8 +80,8 @@ erDiagram
         bigint id PK
         bigint id_pedido FK,UK "NN"
         varchar(255) motivo "NN"
-        bigint id_solicitante
-        bigint id_autorizador
+        uuid id_solicitante "= claim sub del JWT"
+        uuid id_autorizador "= claim sub del JWT"
         varchar(20) estado "NN"
         date fecha "NN"
     }
@@ -111,13 +111,13 @@ erDiagram
     DEVOLUCION {
         bigint id PK
         bigint id_pedido "referencia sin FK, NN"
-        bigint id_cliente "referencia sin FK"
+        uuid id_cliente "referencia sin FK, = claim sub del JWT"
         varchar(20) tipo "NN"
         varchar(255) motivo "NN"
         text descripcion
         varchar(20) estado "NN"
         varchar(30) resolucion
-        bigint id_autorizador
+        uuid id_autorizador "= claim sub del JWT"
         text fundamento_rechazo
         date fecha "NN"
     }
@@ -144,7 +144,7 @@ erDiagram
         char(3) moneda "NN"
         varchar(100) id_transaccion
         varchar(20) estado "NN"
-        bigint id_autorizador
+        uuid id_autorizador "= claim sub del JWT"
         date fecha "NN"
     }
     REEMBOLSO_INTENTO {
@@ -160,7 +160,7 @@ erDiagram
         bigint id PK
         varchar(30) codigo UK "NN"
         bigint id_pedido "referencia sin FK"
-        bigint id_cliente "referencia sin FK"
+        uuid id_cliente "referencia sin FK, = claim sub del JWT"
         varchar(20) tipo "NN"
         varchar(60) motivo "NN"
         text detalle "NN"
@@ -188,7 +188,7 @@ erDiagram
     AGREGADO_VENTAS {
         varchar(7) periodo PK
         varchar(30) canal PK
-        bigint id_vendedor PK
+        uuid id_vendedor PK "= claim sub del JWT"
         bigint id_producto PK
         integer unidades "NN"
         decimal(14-2) monto "NN"
@@ -316,14 +316,17 @@ Sin clave foránea:
 | Columna | Apunta a | Motivo |
 |---|---|---|
 | devolucion.id_pedido | ventas.pedido | Está en otro microservicio; se valida con la API de M1 |
-| devolucion.id_cliente | Módulo G | Usuarios de Seguridad y Usuarios |
+| devolucion.id_cliente, devolucion.id_autorizador | Módulo G | Usuarios de Seguridad y Usuarios, tipo `uuid` (= claim `sub` del JWT) |
 | devolucion_item.id_producto | Módulo F | Catálogo de Productos y Ofertas |
 | reembolso.id_pedido | ventas.pedido | Para controlar el saldo reembolsable del pedido (ESP-09) |
+| reembolso.id_autorizador | Módulo G | Usuarios de Seguridad y Usuarios, tipo `uuid` (= claim `sub` del JWT) |
 | reclamo.id_pedido | ventas.pedido | Igual que el anterior; es opcional |
-| reclamo.id_cliente | Módulo G | Usuarios de Seguridad y Usuarios |
+| reclamo.id_cliente | Módulo G | Usuarios de Seguridad y Usuarios, tipo `uuid` (= claim `sub` del JWT) |
 | calificacion.id_pedido | ventas.pedido | Igual que el anterior; es único |
 | reembolso.id_origen | ventas.anulacion o postventa.devolucion | Depende de tipo_origen y una de las tablas está en M1 |
-| pedido.id_cliente, pedido.id_vendedor | Módulo G | Usuarios de Seguridad y Usuarios |
+| pedido.id_cliente, pedido.id_vendedor | Módulo G | Usuarios de Seguridad y Usuarios, tipo `uuid` (= claim `sub` del JWT) |
+| anulacion.id_solicitante, anulacion.id_autorizador | Módulo G | Usuarios de Seguridad y Usuarios, tipo `uuid` (= claim `sub` del JWT) |
+| agregado_ventas.id_vendedor | Módulo G | Usuarios de Seguridad y Usuarios, tipo `uuid` (= claim `sub` del JWT) |
 | pedido.id_direccion_entrega | Módulo E | Dato de Despacho y Entrega |
 | detalle_pedido.id_producto | Módulo F | Catálogo de Productos y Ofertas |
 

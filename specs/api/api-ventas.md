@@ -30,7 +30,7 @@
 - **`ventas:pedidos:anular`**: Cancelación directa en estado inicial por falta de pago (`POST /api/v1/pedidos/{id}/anulaciones`). Utilizado por Canales A, B y C.
 - **`ventas:pedidos:estado`**: Actualización del ciclo de vida y recepción de eventos logísticos (`PATCH /api/v1/pedidos/{id}/estado`, `POST /api/v1/pedidos/{id}/eventos-logistica`). Utilizado por Módulo E (Despacho / Logística).
 - **`ventas:pagos:webhook`**: Confirmación o rechazo de transacciones monetarias (`POST /api/v1/pedidos/{id}/pagos/notificacion`). Utilizado por Pasarela de Pagos.
-- **`ventas:admin`**: Administración, autorización de anulaciones y consulta global. Utilizado por Backoffice / Gestor.
+- **`ventas:admin`**: Administración, autorización de anulaciones y consulta global. Requiere el rol `ADMIN_VENTAS` (claim `roles` del JWT, catálogo cerrado de Seguridad — "Gestor" es solo el nombre que usamos en specs/interfaz, no un rol real del sistema).
 # Endpoints de M1
 ## F1: Ciclo de Vida del Pedido (Responsable: Michael)
 ### 1.1 Crear Pedido
@@ -69,7 +69,7 @@ Los campos tipoDocumento y numeroDocumento son estrictamente obligatorios.
 {
   "canal": "CHATBOT",
   "contacto": {
-    "clienteId": "CLI-8841",
+    "clienteId": "3f9a2b7e-6c1d-4e2a-9b3f-7a1d2c4e5f6a",
     "nombreCompleto": "Juan Pérez Rodríguez",
     "tipoDocumento": "DNI",
     "numeroDocumento": "72458912",
@@ -199,7 +199,7 @@ Descripción: Permite a clientes, canales y administradores consultar el estado 
   "canal": "CHATBOT",
   "estado": "`EN_PREPARACION`",
   "contacto": {
-    "clienteId": "CLI-8841",
+    "clienteId": "3f9a2b7e-6c1d-4e2a-9b3f-7a1d2c4e5f6a",
     "nombreCompleto": "Juan Pérez Rodríguez",
     "tipoDocumento": "DNI",
     "numeroDocumento": "72458912",
@@ -256,7 +256,7 @@ Descripción: Permite a clientes, canales y administradores consultar el estado 
 
 - **Endpoint:** `GET /api/v1/pedidos`
 Descripción: Listado paginado de pedidos para el Gestor/Backoffice — requiere indicar explícitamente el `clienteId` a consultar. Para que un canal muestre "mis pedidos" al propio cliente autenticado, usar **1.4b** (`/pedidos/me`), no este endpoint.
-- **Headers:** `Authorization: Bearer <token_gestor>` (scope `ventas:admin`)
+- **Headers:** `Authorization: Bearer <token_gestor>` (scope `ventas:admin`, requiere rol `ADMIN_VENTAS`)
 ### Query Params
 clienteId (requerido): Identificador del cliente.
 estado (opcional): `CREADO` | `PAGADO` | `EN_PREPARACION` | `DESPACHADO` | `ENTREGADO` | `ANULADO`
@@ -268,7 +268,7 @@ tamano (opcional, default: 10)
 #### `200 OK`
 ```json
 {
-  "clienteId": "CLI-8841",
+  "clienteId": "3f9a2b7e-6c1d-4e2a-9b3f-7a1d2c4e5f6a",
   "contenido": [
     {
       "pedidoId": "PED-2026-00981",
@@ -410,7 +410,7 @@ Requiere autorización del Gestor si está en `EN_PREPARACION`:
 
 - **Endpoint:** `GET /api/v1/pedidos/anulaciones/pendientes`
 Descripción: Lista las anulaciones en `PENDIENTE_AUTORIZACION` que esperan decisión del Gestor (bandeja de F2).
-- **Headers:** `Authorization: Bearer <token_gestor>` (scope `ventas:admin`)
+- **Headers:** `Authorization: Bearer <token_gestor>` (scope `ventas:admin`, requiere rol `ADMIN_VENTAS`)
 ### Query Params
 pagina (opcional, default: 0)
 tamano (opcional, default: 10)
@@ -436,7 +436,7 @@ tamano (opcional, default: 10)
 
 - **Endpoint:** `PATCH /api/v1/pedidos/{pedidoId}/anulaciones/{anulacionId}`
 Descripción: El Gestor resuelve una anulación en `PENDIENTE_AUTORIZACION`. Si aprueba, F1 ejecuta `EN_PREPARACION → ANULADO` y dispara los efectos de F2 (ESP-06). Si rechaza, el pedido conserva su estado.
-- **Headers:** `Authorization: Bearer <token_gestor>` (scope `ventas:admin`)
+- **Headers:** `Authorization: Bearer <token_gestor>` (scope `ventas:admin`, requiere rol `ADMIN_VENTAS`)
 ### Request Body
 ```json
 {

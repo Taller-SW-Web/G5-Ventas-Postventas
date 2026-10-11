@@ -2,6 +2,8 @@
 
 Implementación del [modelo lógico](diagrama-logico.md) en PostgreSQL 17 sobre Supabase (proyecto `nsfrwxrjidyckgfriyhv`). Incluye los tipos reales, valores por defecto, restricciones, índices y la configuración de seguridad. El script que crea todo es [ventas_postventa_schema.sql](../../../infra/bd/ventas_postventa_schema.sql), aplicado como la migración `crear_esquemas_ventas_postventa`.
 
+> **Pendiente de aplicar en Supabase:** las columnas que referencian un usuario de Seguridad (`id_cliente`, `id_vendedor`, `id_solicitante`, `id_autorizador`) pasaron de `bigint` a `uuid`, confirmado por el módulo de Seguridad (`sub` del JWT es `uuid`) — ver `integraciones/CONSULTA_G7_SEGURIDAD.md`. Este documento y el script ya reflejan el tipo correcto; falta la migración real.
+
 ## 1. Diagrama
 
 Esquema ventas (M1):
@@ -36,8 +38,8 @@ erDiagram
         varchar(40) codigo_cupon "null"
         varchar(128) idempotency_key UK "null"
         timestamptz creado_en "not null, default now()"
-        bigint id_cliente "referencia sin FK, null"
-        bigint id_vendedor "referencia sin FK, null"
+        uuid id_cliente "referencia sin FK, null, = claim sub del JWT"
+        uuid id_vendedor "referencia sin FK, null, = claim sub del JWT"
         bigint id_direccion_entrega "referencia sin FK, null"
     }
     DETALLE_PEDIDO {
@@ -73,8 +75,8 @@ erDiagram
         bigint id PK "identity, not null"
         bigint id_pedido FK,UK "not null"
         varchar(255) motivo "not null"
-        bigint id_solicitante "null"
-        bigint id_autorizador "null"
+        uuid id_solicitante "null, = claim sub del JWT"
+        uuid id_autorizador "null, = claim sub del JWT"
         varchar(20) estado "not null"
         date fecha "not null"
     }
@@ -104,13 +106,13 @@ erDiagram
     DEVOLUCION {
         bigint id PK "identity, not null"
         bigint id_pedido "referencia sin FK, not null"
-        bigint id_cliente "referencia sin FK, null"
+        uuid id_cliente "referencia sin FK, null, = claim sub del JWT"
         varchar(20) tipo "not null"
         varchar(255) motivo "not null"
         text descripcion "null"
         varchar(20) estado "not null"
         varchar(30) resolucion "null"
-        bigint id_autorizador "null"
+        uuid id_autorizador "null, = claim sub del JWT"
         text fundamento_rechazo "null"
         date fecha "not null"
     }
@@ -137,7 +139,7 @@ erDiagram
         char(3) moneda "not null, default PEN"
         varchar(100) id_transaccion "null"
         varchar(20) estado "not null, default PENDIENTE"
-        bigint id_autorizador "null"
+        uuid id_autorizador "null, = claim sub del JWT"
         date fecha "not null"
     }
     REEMBOLSO_INTENTO {
@@ -153,7 +155,7 @@ erDiagram
         bigint id PK "identity, not null"
         varchar(30) codigo UK "not null"
         bigint id_pedido "referencia sin FK, null"
-        bigint id_cliente "referencia sin FK, null"
+        uuid id_cliente "referencia sin FK, null, = claim sub del JWT"
         varchar(20) tipo "not null"
         varchar(60) motivo "not null"
         text detalle "not null"
@@ -181,7 +183,7 @@ erDiagram
     AGREGADO_VENTAS {
         varchar(7) periodo PK "not null"
         varchar(30) canal PK "not null"
-        bigint id_vendedor PK "not null"
+        uuid id_vendedor PK "not null, = claim sub del JWT"
         bigint id_producto PK "not null"
         integer unidades "not null"
         numeric(14-2) monto "not null"

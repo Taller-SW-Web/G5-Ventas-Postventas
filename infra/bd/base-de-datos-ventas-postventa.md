@@ -73,7 +73,7 @@ erDiagram
               bigint id_pedido "sin FK, opcional" }
     AGREGADO_VENTAS { varchar periodo PK
                       varchar canal PK
-                      bigint id_vendedor PK
+                      uuid id_vendedor PK
                       bigint id_producto PK }
 ```
 
