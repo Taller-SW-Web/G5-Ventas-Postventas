@@ -25,12 +25,22 @@
   "detalles": []
 }
 ## Catálogo de Scopes OAuth2 / JWT Expuestos por M1
-- **`ventas:pedidos:escribir`**: Registro de nuevos pedidos (`POST /api/v1/pedidos`). Utilizado por Canales A, B y C.
-- **`ventas:pedidos:leer`**: Consulta de estado, detalle y tracking (`GET /api/v1/pedidos/{id}`, `GET /api/v1/pedidos/me`). Utilizado por Canales A, B y C.
-- **`ventas:pedidos:anular`**: Cancelación directa en estado inicial por falta de pago (`POST /api/v1/pedidos/{id}/anulaciones`). Utilizado por Canales A, B y C.
-- **`ventas:pedidos:estado`**: Actualización del ciclo de vida y recepción de eventos logísticos (`PATCH /api/v1/pedidos/{id}/estado`, `POST /api/v1/pedidos/{id}/eventos-logistica`). Utilizado por Módulo E (Despacho / Logística).
-- **`ventas:pagos:webhook`**: Confirmación o rechazo de transacciones monetarias (`POST /api/v1/pedidos/{id}/pagos/notificacion`). Utilizado por Pasarela de Pagos.
-- **`ventas:admin`**: Administración, autorización de anulaciones y consulta global. Requiere el rol `ADMIN_VENTAS` (claim `roles` del JWT, catálogo cerrado de Seguridad — "Gestor" es solo el nombre que usamos en specs/interfaz, no un rol real del sistema).
+
+Registrados con Seguridad como acuerdo A10 (2026-10-10, ver `integraciones/ACUERDO_G7_SEGURIDAD.md`). Son scopes de **token de servicio** (`client_credentials`, `tipo: "servicio"`) — el canal que crea o anula un pedido usa su propio token de módulo, no un token de cliente reenviado; la identidad del cliente viaja como dato (`contacto.clienteId`) en el body, no se deriva del token. La única excepción es `GET /pedidos/me` (H-03), que sí usa el token del cliente.
+
+- **`ventas:pedidos:crear`**: Registro de nuevos pedidos (`POST /api/v1/pedidos`). Concedido a `modulo-marketplace`, `modulo-chatbot`, `modulo-retail`.
+- **`ventas:pedidos:anular`**: Cancelación directa en estado inicial por falta de pago (`POST /api/v1/pedidos/{id}/anulaciones`). Concedido a `modulo-marketplace`, `modulo-chatbot`, `modulo-retail`.
+- **`ventas:pedidos:estado`**: Actualización del ciclo de vida y recepción de eventos logísticos (`PATCH /api/v1/pedidos/{id}/estado`, `POST /api/v1/pedidos/{id}/eventos-logistica`). Concedido a `modulo-despacho`.
+- **`ventas:pagos:webhook`**: Confirmación o rechazo de transacciones monetarias (`POST /api/v1/pedidos/{id}/pagos/notificacion`). Concedido a `simulador-pasarela` y a `modulo-chatbot` (tiene su propio simulador de pago, ver `AGENTS.md` sección 2, punto 8).
+
+**`ventas:pedidos:leer` y `ventas:admin` no son scopes reales** — Seguridad no los registra porque dependen de identidad de persona, no de módulo. Se resuelven con el claim `roles` del token del usuario:
+- Consultar el propio historial (`GET /pedidos/me`): el token debe tener `roles` con `CLIENTE`; se filtra por `sub`.
+- Operación de Backoffice/Gestor: el token debe tener `roles` con `ADMIN_VENTAS` (catálogo cerrado de Seguridad — "Gestor" es solo el nombre que usamos en specs/interfaz, no un rol real del sistema).
+
+## Scopes que M1/M2 consumen de Seguridad
+
+- **`usuarios:leer`** (`GET /usuarios/{clienteId}`, devuelve `estado` de la cuenta): concedido a `modulo-ventas` y `modulo-postventa`, para verificar que el cliente siga activo antes de una operación sensible (anular, reembolsar). Reemplaza a `tokens:introspeccion`, que no aplica aquí porque M1/M2 nunca reciben el token del propio usuario (salvo `/pedidos/me`).
+- **`usuarios:leer:documento`**: **provisional**, solo para `modulo-ventas`. Depende de si la emisión de comprobantes/boletas termina siendo responsabilidad de Ventas o de Retail — ver `integraciones/CONSULTA_G4_RETAIL.md`.
 # Endpoints de M1
 ## F1: Ciclo de Vida del Pedido (Responsable: Michael)
 ### 1.1 Crear Pedido
@@ -43,7 +53,7 @@ Descripción: Registra un nuevo pedido proveniente de Canales A (Marketplace), B
 
 Ver [F1-Ciclo de vida del pedido.md](../funcionalidades/F1-Ciclo%20de%20vida%20del%20pedido.md), CA-01b.
 ### Headers
-  - `Authorization: Bearer <token_canal>`
+  - `Authorization: Bearer <token_canal>` — token de servicio del canal (`tipo: "servicio"`, scope `ventas:pedidos:crear`), no el token del cliente. La identidad del cliente viaja en `contacto.clienteId`.
   - `Content-Type: application/json`
   - `Idempotency-Key: <UUID v4>` — **obligatorio**, máximo 128 caracteres.
 
@@ -256,7 +266,7 @@ Descripción: Permite a clientes, canales y administradores consultar el estado 
 
 - **Endpoint:** `GET /api/v1/pedidos`
 Descripción: Listado paginado de pedidos para el Gestor/Backoffice — requiere indicar explícitamente el `clienteId` a consultar. Para que un canal muestre "mis pedidos" al propio cliente autenticado, usar **1.4b** (`/pedidos/me`), no este endpoint.
-- **Headers:** `Authorization: Bearer <token_gestor>` (scope `ventas:admin`, requiere rol `ADMIN_VENTAS`)
+- **Headers:** `Authorization: Bearer <token_gestor>` (requiere rol `ADMIN_VENTAS`, claim `roles` del JWT — no es un scope, ver catálogo de scopes)
 ### Query Params
 clienteId (requerido): Identificador del cliente.
 estado (opcional): `CREADO` | `PAGADO` | `EN_PREPARACION` | `DESPACHADO` | `ENTREGADO` | `ANULADO`
@@ -289,7 +299,7 @@ tamano (opcional, default: 10)
 
 - **Endpoint:** `GET /api/v1/pedidos/me`
 Descripción: Historial de pedidos del cliente autenticado, para que un canal (Marketplace, Chatbot) muestre "mis pedidos" sin exponer `clienteId` en la URL. La identidad se toma exclusivamente del JWT (`sub`/`customerId`); nunca se acepta `clienteId` por query string.
-- **Headers:** `Authorization: Bearer <token_cliente>` (scope `ventas:pedidos:leer`)
+- **Headers:** `Authorization: Bearer <token_cliente>` (requiere rol `CLIENTE`, claim `roles` del JWT; filtra por `sub` — no es un scope, ver catálogo de scopes)
 ### Query Params
 estado (opcional, valores públicos): `CREADO` | `PAGADO` | `EN_PREPARACION` | `DESPACHADO` | `ENTREGADO` | `ANULADO`
 page (opcional, default: 1)
@@ -324,7 +334,7 @@ Con resultados:
 > Este endpoint usa `items`/`total`/`page`/`pageSize` en vez de `contenido`/`totalElementos`/`pagina`/`tamano` (el patrón del resto de la API) porque así quedó formalmente acordado con Marketplace (H-03) — no es un error de copiado, es una excepción deliberada para este endpoint específico.
 
 - **`401 Unauthorized`**: Token ausente o inválido.
-- **`403 Forbidden`**: El token no tiene el scope `ventas:pedidos:leer`.
+- **`403 Forbidden`**: El token no tiene el rol `CLIENTE`.
 
 ### 1.5 Transición de Estado del Pedido
 - **Endpoint:** `PATCH /api/v1/pedidos/{pedidoId}/estado`
@@ -369,7 +379,7 @@ Descripción: Despacho (E) notifica entrega fallida definitiva o rechazo en puer
 ### 1.7 Solicitar Anulación
 - **Endpoint:** `POST /api/v1/pedidos/{pedidoId}/anulaciones`
 Descripción: Cancela el pedido. Soporta cancelación automática e inmediata por el canal en estado `CREADO` por motivo `PAGO_NO_COMPLETADO` (A9) sin intervención del Gestor.
-- **Headers:** `Authorization: Bearer <token>`
+- **Headers:** `Authorization: Bearer <token_canal>` — token de servicio del canal (`tipo: "servicio"`, scope `ventas:pedidos:anular`), no el token del cliente.
 ### Request Body
 {
   "motivo": "`PAGO_NO_COMPLETADO`",
@@ -410,7 +420,7 @@ Requiere autorización del Gestor si está en `EN_PREPARACION`:
 
 - **Endpoint:** `GET /api/v1/pedidos/anulaciones/pendientes`
 Descripción: Lista las anulaciones en `PENDIENTE_AUTORIZACION` que esperan decisión del Gestor (bandeja de F2).
-- **Headers:** `Authorization: Bearer <token_gestor>` (scope `ventas:admin`, requiere rol `ADMIN_VENTAS`)
+- **Headers:** `Authorization: Bearer <token_gestor>` (requiere rol `ADMIN_VENTAS`, claim `roles` del JWT — no es un scope, ver catálogo de scopes)
 ### Query Params
 pagina (opcional, default: 0)
 tamano (opcional, default: 10)
@@ -436,7 +446,7 @@ tamano (opcional, default: 10)
 
 - **Endpoint:** `PATCH /api/v1/pedidos/{pedidoId}/anulaciones/{anulacionId}`
 Descripción: El Gestor resuelve una anulación en `PENDIENTE_AUTORIZACION`. Si aprueba, F1 ejecuta `EN_PREPARACION → ANULADO` y dispara los efectos de F2 (ESP-06). Si rechaza, el pedido conserva su estado.
-- **Headers:** `Authorization: Bearer <token_gestor>` (scope `ventas:admin`, requiere rol `ADMIN_VENTAS`)
+- **Headers:** `Authorization: Bearer <token_gestor>` (requiere rol `ADMIN_VENTAS`, claim `roles` del JWT — no es un scope, ver catálogo de scopes)
 ### Request Body
 ```json
 {

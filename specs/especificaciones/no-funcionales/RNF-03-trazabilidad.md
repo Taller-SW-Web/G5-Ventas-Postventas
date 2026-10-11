@@ -32,8 +32,9 @@ Se debe mantener trazabilidad, como mínimo, para:
 
 | Operación             | Información relevante                                        |
 | --------------------- | ------------------------------------------------------------ |
+| **Creación de pedido** | `client_id` del canal (token de servicio) y `clienteId` del titular |
 | **Cambios de estado** | Estado anterior, estado nuevo, actor, fecha y resultado      |
-| **Anulaciones**       | Actor, motivo, autorización y resultado                      |
+| **Anulaciones**       | Actor, motivo, autorización, resultado, `client_id` del canal y `clienteId` del titular (si la anulación la dispara un canal) |
 | **Devoluciones**      | Actor, pedido, motivo, fecha, estado y resultado             |
 | **Reembolsos**        | Actor, origen, monto, moneda, transacción, fecha y resultado |
 | **Reclamos**          | Código, estado, responsable, fechas relevantes y resultado   |
