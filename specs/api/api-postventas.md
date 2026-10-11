@@ -29,23 +29,17 @@
 -   **`postventa:devoluciones:escribir`**: Registro de solicitudes de
     devolución y subida de archivos adjuntos. Utilizado por Canales A, B
     y C.
--   **`postventa:devoluciones:leer`**: Consulta de expedientes de
-    devolución y estado de trámite. Utilizado por Canales A, B y C.
 -   **`postventa:reembolsos:procesar`**: Procesamiento de desembolsos
     monetarios originados exclusivamente por M1 (`ANULACION`) o M2
     (`DEVOLUCION`). Utilizado por M1 y M2 internamente.
 -   **`postventa:reclamos:escribir`**: Registro formal de reclamos y
     quejas en el Libro de Reclamaciones. Utilizado por Canales A, B y C.
--   **`postventa:reclamos:leer`**: Consulta pública del estado y la
-    respuesta formal visible del reclamo. Utilizado por Canales A, B y
-    C.
 -   **`postventa:csat:escribir`**: Envío de calificaciones de
     satisfacción de compra. Utilizado por Canales A, B y C.
--   **`ventas:admin`**: Gestión administrativa completa (dictamen de
-    devoluciones, emisión de respuesta formal a reclamos y métricas de
-    dashboard). Utilizado por Backoffice / Gestor — requiere el rol
-    `ADMIN_VENTAS` (claim `roles` del JWT, catálogo cerrado de Seguridad;
-    "Gestor" es solo el nombre que usamos en specs/interfaz).
+
+**`postventa:devoluciones:leer` y `postventa:reclamos:leer` no existen como scopes para canales** (acuerdo con Seguridad, 2026-10-10): el listado por `clienteId` con token de servicio permitía que cualquier canal leyera los datos de cualquier cliente. Se reemplazó por el patrón de `/pedidos/me` — ver `2.4b` y `2.10b`, que usan el token del cliente (rol `CLIENTE`, filtrado por `sub`), sin scope. El listado administrativo (`2.4`, `2.10`) sigue existiendo, pero requiere rol `ADMIN_VENTAS`, no scope.
+
+**`ventas:admin` no es un scope real** — Seguridad no lo registra porque depende de identidad de persona, no de módulo. Gestión administrativa completa (dictamen de devoluciones, emisión de respuesta formal a reclamos y métricas de dashboard) se resuelve con el claim `roles` del token del usuario incluyendo `ADMIN_VENTAS` (catálogo cerrado de Seguridad; "Gestor" es solo el nombre que usamos en specs/interfaz).
 
 ## Endpoints de M2
 
@@ -189,13 +183,12 @@
 
 -   **`404 Not Found`**: El expediente solicitado no existe.
 
-#### 2.4 Listar Devoluciones por Cliente
+#### 2.4 Listar Devoluciones por Cliente (uso administrativo)
 
 -   **Endpoint:** `GET /api/v2/devoluciones`
--   **Headers:** `Authorization: Bearer <token>`
+-   **Headers:** `Authorization: Bearer <token_gestor>` (requiere rol `ADMIN_VENTAS`, claim `roles` del JWT — no es un scope). Para que un cliente consulte sus propias devoluciones, usar **2.4b** (`/devoluciones/me`), no este endpoint.
 -   **Query Params:**
-    -   `clienteId` (requerido para clientes): Identificador del
-        cliente.
+    -   `clienteId` (requerido): Identificador del cliente.
     -   `estado` (opcional):
         `SOLICITADA | EN_EVALUACION | APROBADA | RECHAZADA | COMPLETADA`
     -   `tipo` (opcional): `CAMBIO | DEVOLUCION_DINERO`
@@ -223,6 +216,20 @@
   "totalElementos": 1
 }
 ```
+
+#### 2.4b Listar Mis Devoluciones
+
+-   **Endpoint:** `GET /api/v2/devoluciones/me`
+-   **Descripción:** Historial de devoluciones del cliente autenticado, para que un canal muestre "mis devoluciones" sin exponer `clienteId` en la URL. La identidad se toma exclusivamente del JWT (`sub`); nunca se acepta `clienteId` por query string.
+-   **Headers:** `Authorization: Bearer <token_cliente>` (requiere rol `CLIENTE`, claim `roles` del JWT — no es un scope)
+-   **Query Params:**
+    -   `estado` (opcional):
+        `SOLICITADA | EN_EVALUACION | APROBADA | RECHAZADA | COMPLETADA`
+    -   `tipo` (opcional): `CAMBIO | DEVOLUCION_DINERO`
+    -   `pagina` (opcional, default: `0`)
+    -   `tamano` (opcional, default: `10`)
+-   **Respuestas:**
+    -   **`200 OK`** — mismo formato que 2.4, sin el campo `clienteId` en la raíz (ya está implícito en el token).
 
 #### 2.5 Resolver Expediente de Devolución
 
@@ -401,10 +408,10 @@
 -   **`404 Not Found`**: Reclamo no encontrado con ese código de
     seguimiento.
 
-#### 2.10 Listar Reclamos por Cliente / Consumidor
+#### 2.10 Listar Reclamos por Cliente / Consumidor (uso administrativo)
 
 -   **Endpoint:** `GET /api/v2/reclamos`
--   **Headers:** `Authorization: Bearer <token>`
+-   **Headers:** `Authorization: Bearer <token_gestor>` (requiere rol `ADMIN_VENTAS`, claim `roles` del JWT — no es un scope). Para que un cliente consulte sus propios reclamos, usar **2.10b** (`/reclamos/me`), no este endpoint. Búsqueda por `documento` (consumidor sin cuenta, Libro de Reclamaciones) solo disponible aquí.
 -   **Query Params:**
     -   `documento` (opcional): Número de documento de identidad del
         reclamante.
@@ -434,6 +441,19 @@
   "totalElementos": 1
 }
 ```
+
+#### 2.10b Listar Mis Reclamos
+
+-   **Endpoint:** `GET /api/v2/reclamos/me`
+-   **Descripción:** Historial de reclamos del cliente autenticado, para que un canal muestre "mis reclamos" sin exponer `clienteId` en la URL. La identidad se toma exclusivamente del JWT (`sub`); nunca se acepta `clienteId` ni `documento` por query string (esa búsqueda es solo administrativa, ver 2.10).
+-   **Headers:** `Authorization: Bearer <token_cliente>` (requiere rol `CLIENTE`, claim `roles` del JWT — no es un scope)
+-   **Query Params:**
+    -   `estado` (opcional):
+        `REGISTRADO | EN_PROCESO | ATENDIDO | DERIVADO`
+    -   `pagina` (opcional, default: `0`)
+    -   `tamano` (opcional, default: `10`)
+-   **Respuestas:**
+    -   **`200 OK`** — mismo formato que 2.10.
 
 #### 2.11 Responder y Resolver Reclamo
 
