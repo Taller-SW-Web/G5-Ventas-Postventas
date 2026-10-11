@@ -61,19 +61,19 @@ Incluye:
 
 ### RF-01. Reposición de stock y cancelación de despacho
 
-El sistema DEBE coordinar la reposición de stock y, cuando corresponda, la cancelación de despacho ante toda anulación confirmada.
+El sistema DEBE coordinar la reposición de stock y, cuando corresponda, la cancelación de despacho ante toda anulación confirmada. Si el pedido tenía un cupón aplicado, el sistema también publica `promotions.coupon.restoration.requested` hacia Productos (acuerdo 2026-10-11 — ver `integraciones/ACUERDO_G6_PRODUCTOS.md`).
 
 #### CA-01. Reposición de stock y cancelación de despacho programado
 
 - **DADO** un pedido anulado que ya tenía una solicitud de despacho programada.
 - **CUANDO** se confirma la anulación.
-- **ENTONCES** el sistema solicita a Productos (F) la reposición del stock y a Despacho (E) la cancelación del envío.
+- **ENTONCES** el sistema libera la reserva con Productos (`POST /api/v1/inventario/{reservaId}/liberar`, acuerdo con Productos, 2026-10-11 — ver `integraciones/ACUERDO_G6_PRODUCTOS.md`) y solicita a Despacho (E) la cancelación del envío.
 
 #### CA-02. Reposición inmediata de stock por PAGO_NO_COMPLETADO
 
 - **DADO** un pedido en `CREADO` anulado por el canal con motivo `PAGO_NO_COMPLETADO`.
 - **CUANDO** se confirma la anulación.
-- **ENTONCES** el sistema libera de inmediato el stock reservado en Productos (F), sin invocar a Despacho (E), ya que el pedido nunca llegó a programarse para envío.
+- **ENTONCES** el sistema libera de inmediato la reserva de stock en Productos (`POST /api/v1/inventario/{reservaId}/liberar`), sin invocar a Despacho (E), ya que el pedido nunca llegó a programarse para envío.
 
 ### RF-02. Origen del reembolso sin duplicar
 

@@ -180,7 +180,7 @@ Valores de `resultado`:
 | `APROBADO` | `CONFIRMADO` | `CREADO` → `PAGADO` | `PASARELA_PAGOS` |
 | `RECHAZADO` | `RECHAZADO` | `CREADO` → `ANULADO`, motivo `PAGO_NO_COMPLETADO` | `PASARELA_PAGOS` |
 
-La transición a `ANULADO` por rechazo repone el stock en Productos (F) automáticamente, sin intervención del Gestor y sin generar solicitud de reembolso hacia F4 — ver [F1-Ciclo de vida del pedido.md](../funcionalidades/F1-Ciclo%20de%20vida%20del%20pedido.md), CA-07b. (La liberación del cupón ante Productos y Ofertas no tiene integración documentada todavía.)
+La transición a `ANULADO` por rechazo libera la reserva de stock en Productos y, si había cupón aplicado, publica su restauración, automáticamente y sin intervención del Gestor, sin generar solicitud de reembolso hacia F4 — ver [F1-Ciclo de vida del pedido.md](../funcionalidades/F1-Ciclo%20de%20vida%20del%20pedido.md), CA-07b.
 
 Cualquier otro valor responde `400 Bad Request`. Si la misma `transaccionId` llega dos veces, se responde `200 OK` con el resultado ya registrado, sin repetir el cambio.
 ### Respuestas

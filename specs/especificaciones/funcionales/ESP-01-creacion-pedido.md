@@ -92,7 +92,7 @@ Se registra el pedido en estado CREADO
 2. El sistema valida que el canal esté autenticado y su token sea válido.
 3. El sistema valida que el bloque `canal` identifique correctamente el origen (Marketplace, Chatbot o Retail).
 4. El sistema valida que existan uno o más ítems, cada uno con producto y cantidad válidos.
-5. El sistema consulta a Productos (F) el precio y disponibilidad de cada ítem.
+5. El sistema consulta a Productos (F) el precio y disponibilidad de cada ítem, y solicita la reserva de stock con `POST /api/v1/inventario/reservas` (acuerdo con Productos, 2026-10-11 — ver `integraciones/ACUERDO_G6_PRODUCTOS.md`). La respuesta `202 Accepted` solo confirma que el comando fue admitido, no que la reserva ya se concretó; el resultado definitivo llega después de forma asíncrona.
 6. Si se incluyó el bloque `cupon`, el sistema valida su vigencia y calcula el descuento aplicable.
 7. El sistema valida que el bloque `envio` incluya una dirección de entrega existente.
 8. El sistema valida que el bloque `contacto` incluya al menos un medio de contacto.
