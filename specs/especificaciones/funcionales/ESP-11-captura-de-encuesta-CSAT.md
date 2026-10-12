@@ -39,6 +39,7 @@ La respuesta registrada permanece independiente del ciclo de vida transaccional 
 Para aceptar una respuesta CSAT se deben cumplir las siguientes condiciones:
 
 - El pedido relacionado debe existir
+- El pedido debe pertenecer al cliente autenticado (identidad tomada del JWT) — acuerdo H-04
 - El pedido debe haber sido confirmado previamente como `ENTREGADO`
 - Debe existir una encuesta generada o habilitada para ese pedido
 - La puntuación debe encontrarse dentro del rango permitido de 1 a 5

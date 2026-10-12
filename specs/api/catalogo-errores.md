@@ -2,7 +2,7 @@
 
 ## 1. Propósito
 
-Consolidar en un solo lugar los errores que ya están definidos en los dos contratos de API ([api-ventas.md](api-ventas.md) y [api-postventas.md](api-postventas.md)), en vez de dejarlos repartidos endpoint por endpoint. Este documento **no define errores nuevos**: solo reorganiza lo que ya existe en ambos contratos.
+Consolidar en un solo lugar los errores de los dos contratos de API ([api-ventas.md](api-ventas.md) y [api-postventas.md](api-postventas.md)) y los `codigo` de negocio ya definidos en la guía de implementación del backend, en vez de dejarlos repartidos entre ambos. Este documento **no inventa errores nuevos**: todo lo que trae viene de uno de esos dos lugares. Cuando una fila viene solo de la guía (y todavía no está en el contrato correspondiente), queda marcado en la sección 6, Pendientes.
 
 ---
 
@@ -73,20 +73,27 @@ Códigos que ya aparecen como valor literal de `codigo` en los contratos. Los de
 | Endpoint | HTTP | Condición | Código de negocio |
 |---|---|---|---|
 | `POST /api/v2/devoluciones/evidencias/upload` | `400` | Formato no admitido o tamaño mayor a 5 MB. | — |
-| `POST /api/v2/devoluciones` | `400` | Evidencias visuales faltantes o plazo excedido (> 7 días naturales). | — |
-| `POST /api/v2/devoluciones` | `409` | El pedido no se encuentra en estado `ENTREGADO`. | — |
+| `POST /api/v2/devoluciones` | `400` | Evidencias visuales faltantes (motivo que exige evidencia). | `EVIDENCIA_REQUERIDA` |
+| `POST /api/v2/devoluciones` | `400` | Plazo excedido (> 7 días naturales desde la entrega). | `PLAZO_VENCIDO` |
+| `POST /api/v2/devoluciones` | `409` | El pedido no se encuentra en estado `ENTREGADO`. | `PEDIDO_NO_ENTREGADO` |
 | `GET /api/v2/devoluciones/{devolucionId}` | `404` | El expediente solicitado no existe. | — |
 | `PATCH /api/v2/devoluciones/{devolucionId}/resolucion` | `400` | Rechazo sin fundamento explicativo. | — |
 | `PATCH /api/v2/devoluciones/{devolucionId}/resolucion` | `404` | Expediente no encontrado. | — |
+| `PATCH /api/v2/devoluciones/{devolucionId}/resolucion` | `409` | Cambio aprobado sin stock disponible en Productos (F). | `SIN_STOCK` |
 | `POST /api/v2/reembolsos` | `400` | Monto fuera de rango o estructura inválida. | — |
-| `POST /api/v2/reembolsos` | `403` | Solicitud con origen no permitido (distinto de `ANULACION` o `DEVOLUCION`). | — |
-| `POST /api/v2/reembolsos` | `409` | Conflicto de idempotencia o fallo de pasarela. | — |
+| `POST /api/v2/reembolsos` | `403` | Solicitud con origen no permitido (distinto de `ANULACION` o `DEVOLUCION`). | `ORIGEN_NO_PERMITIDO` |
+| `POST /api/v2/reembolsos` | `409` | La `X-Idempotency-Key` ya existe con datos distintos. | `CLAVE_IDEMPOTENCIA_EN_CONFLICTO` |
+| `POST /api/v2/reembolsos` | `409` | El monto supera el saldo reembolsable del pedido. | `SALDO_INSUFICIENTE` |
 | `POST /api/v2/csat` | `400` | Puntuación fuera de rango (1 al 5). | — |
-| `POST /api/v2/csat` | `409` | Encuesta ya registrada para ese pedido. | — |
+| `POST /api/v2/csat` | `403` | El `pedidoId` no pertenece al `sub` del usuario autenticado. | — |
+| `POST /api/v2/csat` | `422` | Pedido no está en estado terminal `ENTREGADO`. | `ORDER_NOT_DELIVERED` |
+| `POST /api/v2/csat` | `409` | Encuesta ya registrada para ese pedido. | `CSAT_ALREADY_SUBMITTED` |
 | `POST /api/v2/reclamos` | `400` | Datos incompletos del consumidor o motivo no tipificado. | — |
 | `GET /api/v2/reclamos/{codigoSeguimiento}` | `401` | Token ausente o inválido. | — |
-| `GET /api/v2/reclamos/{codigoSeguimiento}` | `404` | Reclamo no encontrado con ese código de seguimiento. | — |
-| `PATCH /api/v2/reclamos/{reclamoId}/respuesta` | `400` | Campo `respuestaVisibleCliente` vacío o nulo. | — |
+| `GET /api/v2/reclamos/{codigoSeguimiento}` | `404` | Reclamo no encontrado con ese código de seguimiento. | `RECLAMO_NO_ENCONTRADO` |
+| `PATCH /api/v2/reclamos/{reclamoId}/respuesta` | `400` | Campo `respuestaVisibleCliente` vacío o nulo. | `RESPUESTA_VACIA` |
+| `PATCH /api/v2/reclamos/{reclamoId}/respuesta` | `409` | El reclamo ya está `ATENDIDO`. | — |
+| `POST /api/v2/eventos` | `400` | `tipo` de evento desconocido. | — |
 
 ---
 

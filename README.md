@@ -149,6 +149,10 @@ G5-Ventas-Postventas/
 │       ├── README.md
 │       └── ADR-004-fuente-verdad-contratos-api.md
 │
+├── integraciones/                 # Acuerdos confirmados con otros módulos del curso
+│   ├── ACUERDO_G1_MARKETPLACE.md
+│   └── RESPUESTAS_G1_MARKETPLACE.md # Respuestas formales enviadas a Marketplace (Jim), por consulta
+│
 ├── specs/
 │   ├── overview.md                # Visión general del módulo D
 │   ├── api-contract.md            # Índice de contratos de API (enlaza a specs/api/)
