@@ -34,9 +34,10 @@ erDiagram
         varchar(80) distrito "null"
         varchar(255) direccion "null"
         varchar(40) codigo_cupon "null"
+        varchar(128) idempotency_key UK "null, cabecera Idempotency-Key de 1.1"
         timestamptz creado_en "not null, default now()"
-        bigint id_cliente "referencia sin FK, null"
-        bigint id_vendedor "referencia sin FK, null"
+        uuid id_cliente "referencia sin FK, null"
+        uuid id_vendedor "referencia sin FK, null"
         bigint id_direccion_entrega "referencia sin FK, null"
     }
     DETALLE_PEDIDO {
@@ -72,8 +73,8 @@ erDiagram
         bigint id PK "identity, not null"
         bigint id_pedido FK,UK "not null"
         varchar(255) motivo "not null"
-        bigint id_solicitante "null"
-        bigint id_autorizador "null"
+        uuid id_solicitante "null"
+        uuid id_autorizador "null"
         varchar(20) estado "not null"
         date fecha "not null"
     }
@@ -103,13 +104,13 @@ erDiagram
     DEVOLUCION {
         bigint id PK "identity, not null"
         bigint id_pedido "referencia sin FK, not null"
-        bigint id_cliente "referencia sin FK, null"
+        uuid id_cliente "referencia sin FK, null"
         varchar(20) tipo "not null"
         varchar(255) motivo "not null"
         text descripcion "null"
         varchar(20) estado "not null"
         varchar(30) resolucion "null"
-        bigint id_autorizador "null"
+        uuid id_autorizador "null"
         text fundamento_rechazo "null"
         date fecha "not null"
     }
@@ -136,7 +137,7 @@ erDiagram
         char(3) moneda "not null, default PEN"
         varchar(100) id_transaccion "null"
         varchar(20) estado "not null, default PENDIENTE"
-        bigint id_autorizador "null"
+        uuid id_autorizador "null"
         date fecha "not null"
     }
     REEMBOLSO_INTENTO {
@@ -152,7 +153,7 @@ erDiagram
         bigint id PK "identity, not null"
         varchar(30) codigo UK "not null"
         bigint id_pedido "referencia sin FK, null"
-        bigint id_cliente "referencia sin FK, null"
+        uuid id_cliente "referencia sin FK, null"
         varchar(20) tipo "not null"
         varchar(60) motivo "not null"
         text detalle "not null"
@@ -180,7 +181,7 @@ erDiagram
     AGREGADO_VENTAS {
         varchar(7) periodo PK "not null"
         varchar(30) canal PK "not null"
-        bigint id_vendedor PK "not null"
+        uuid id_vendedor PK "not null"
         bigint id_producto PK "not null"
         integer unidades "not null"
         numeric(14-2) monto "not null"
@@ -233,7 +234,7 @@ No hay claves foráneas entre los dos esquemas.
 | TEXT | text | Textos largos: detalle, comentario, fundamento_rechazo, respuesta |
 | DATE | date | Fechas sin hora |
 | TIMESTAMP | timestamptz | Fecha y hora con zona horaria |
-| UUID | uuid | Identificador de evento de dominio (outbox_evento.id_evento, postventa.evento_recibido.id_evento) |
+| UUID | uuid | Identificador de evento de dominio (outbox_evento.id_evento, postventa.evento_recibido.id_evento) y de usuario: claim `sub` de Seguridad (id_cliente, id_vendedor, id_solicitante, id_autorizador) |
 | JSONB | jsonb | outbox_evento.payload: el cuerpo del evento tal como se envía a M2 |
 
 ## 4. Valores por defecto
@@ -283,6 +284,7 @@ Valores únicos:
 | Nombre | Tabla | Columnas |
 |---|---|---|
 | pedido_codigo_key | ventas.pedido | codigo |
+| pedido_idempotency_key_key | ventas.pedido | idempotency_key (admite null) |
 | anulacion_id_pedido_key | ventas.anulacion | id_pedido |
 | reclamo_codigo_key | postventa.reclamo | codigo |
 | reembolso_idempotency_key_key | postventa.reembolso | idempotency_key |
@@ -346,7 +348,7 @@ Los tres primeros sirven para buscar por pedido en M2 aunque esas columnas no se
 
 ## 8. Pendientes
 
-- El `.drawio` de este diagrama todavía no incluye `outbox_evento`, `evento_recibido` (ambos esquemas), `devolucion_item`, `reembolso_intento` ni `agregado_metricas`, ni sus índices y CHECK — pendiente de que quien lo mantiene lo actualice y reexporte las imágenes.
+- El `.drawio` de este diagrama todavía no incluye `outbox_evento`, `evento_recibido` (ambos esquemas), `devolucion_item`, `reembolso_intento` ni `agregado_metricas`, ni las columnas nuevas de `devolucion` y `reclamo`, ni sus índices y CHECK (sí tiene los `uuid` y `pedido.idempotency_key`) — pendiente de que quien lo mantiene lo actualice y reexporte las imágenes.
 
 ## 9. Otros modelos
 

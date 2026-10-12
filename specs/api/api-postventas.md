@@ -140,7 +140,7 @@
 {
   "devolucionId": "DEV-2026-0042",
   "pedidoId": "PED-2026-00981",
-  "clienteId": "CLI-8841",
+  "clienteId": "3f9a2b7e-6c1d-4e2a-9b3f-7a1d2c4e5f6a",
   "tipo": "DEVOLUCION_DINERO",
   "estado": "APROBADA",
   "motivo": "PRODUCTO_DEFECTUOSO",
@@ -175,7 +175,7 @@
 {
   "devolucionId": "DEV-2026-0042",
   "pedidoId": "PED-2026-00981",
-  "clienteId": "CLI-8841",
+  "clienteId": "3f9a2b7e-6c1d-4e2a-9b3f-7a1d2c4e5f6a",
   "tipo": "DEVOLUCION_DINERO",
   "estado": "EN_EVALUACION",
   "motivo": "PRODUCTO_DEFECTUOSO",
@@ -204,7 +204,7 @@
 
 ``` json
 {
-  "clienteId": "CLI-8841",
+  "clienteId": "3f9a2b7e-6c1d-4e2a-9b3f-7a1d2c4e5f6a",
   "contenido": [
     {
       "devolucionId": "DEV-2026-0042",
@@ -301,7 +301,7 @@
 ``` json
 {
   "pedidoId": "PED-2026-00981",
-  "clienteId": "CLI-8841",
+  "clienteId": "3f9a2b7e-6c1d-4e2a-9b3f-7a1d2c4e5f6a",
   "canal": "CHATBOT",
   "puntuacion": 5,
   "comentario": "Excelente tiempo de entrega y respuesta rápida"
@@ -516,7 +516,7 @@
   "fecha": "2026-09-27T15:40:00Z",
   "datos": {
     "canal": "MARKETPLACE",
-    "clienteId": "CLI-8841",
+    "clienteId": "3f9a2b7e-6c1d-4e2a-9b3f-7a1d2c4e5f6a",
     "total": 129.90,
     "moneda": "PEN"
   }

@@ -1,9 +1,9 @@
 -- =====================================================================
 -- Módulo D — Ventas y Postventa
 -- Traducción a PostgreSQL del "Diagrama ER - VentasPostventas.drawio"
--- Actualizado el 10/10/2026 para reflejar exactamente lo que hay en Supabase
--- (migraciones crear_esquemas_ventas_postventa, decisiones_estados_canal_eventos
--- y huecos_h2_h3_h5_h6_postventa).
+-- Actualizado el 12/10/2026 para reflejar exactamente lo que hay en Supabase
+-- (migraciones crear_esquemas_ventas_postventa, decisiones_estados_canal_eventos,
+-- huecos_h2_h3_h5_h6_postventa, ids_usuario_a_uuid y pedido_idempotency_key).
 --
 -- Esquema ventas    = M1 (Ventas)
 -- Esquema postventa = M2 (Postventa)
@@ -42,9 +42,10 @@ create table ventas.pedido (
     distrito              varchar(80),
     direccion             varchar(255),
     codigo_cupon          varchar(40),
+    idempotency_key       varchar(128)  unique,   -- cabecera Idempotency-Key de 1.1 (acuerdo H-02)
     creado_en             timestamptz   not null default now(),
-    id_cliente            bigint,   -- referencia externa: módulo G (Seguridad y Usuarios)
-    id_vendedor           bigint,   -- referencia externa: módulo G (Seguridad y Usuarios)
+    id_cliente            uuid,     -- referencia externa: módulo G (Seguridad y Usuarios)
+    id_vendedor           uuid,     -- referencia externa: módulo G (Seguridad y Usuarios)
     id_direccion_entrega  bigint,   -- referencia externa: módulo E (Despacho y Entrega)
     constraint ck_pedido_canal check (canal in ('MARKETPLACE','CHATBOT','RETAIL')),
     constraint ck_pedido_estado check (estado in
@@ -53,8 +54,8 @@ create table ventas.pedido (
         subtotal >= 0 and descuento >= 0 and total >= 0 and costo_envio >= 0)
 );
 
-comment on column ventas.pedido.id_cliente           is 'Referencia externa - módulo G (sin FK física)';
-comment on column ventas.pedido.id_vendedor          is 'Referencia externa - módulo G (sin FK física)';
+comment on column ventas.pedido.id_cliente           is 'Referencia externa - módulo G (sin FK física). UUID del claim sub';
+comment on column ventas.pedido.id_vendedor          is 'Referencia externa - módulo G (sin FK física). UUID del claim sub';
 comment on column ventas.pedido.id_direccion_entrega is 'Referencia externa - módulo E (sin FK física)';
 
 create table ventas.detalle_pedido (
@@ -103,8 +104,8 @@ create table ventas.anulacion (
     id              bigint generated always as identity primary key,
     id_pedido       bigint       not null unique references ventas.pedido(id) on delete cascade,
     motivo          varchar(255) not null,
-    id_solicitante  bigint,
-    id_autorizador  bigint,
+    id_solicitante  uuid,
+    id_autorizador  uuid,
     estado          varchar(20)  not null,
     fecha           date         not null default current_date,
     constraint ck_anulacion_estado check (estado in ('PENDIENTE_AUTORIZACION','EJECUTADA','RECHAZADA'))
@@ -148,11 +149,11 @@ create table postventa.devolucion (
     motivo              varchar(255) not null,
     estado              varchar(20)  not null,
     resolucion          varchar(30),
-    id_autorizador      bigint,
+    id_autorizador      uuid,
     fundamento_rechazo  text,
     fecha               date         not null default current_date,
     descripcion         text,
-    id_cliente          bigint,      -- referencia externa: módulo G
+    id_cliente          uuid,        -- referencia externa: módulo G
     constraint ck_devolucion_estado check (estado in
         ('SOLICITADA','EN_EVALUACION','APROBADA','RECHAZADA','COMPLETADA'))
 );
@@ -191,7 +192,7 @@ create table postventa.reclamo (
     fecha_limite_respuesta      date         not null,
     respuesta_visible_cliente   text,
     canal                       varchar(20)  not null,
-    id_cliente                  bigint,      -- referencia externa: módulo G
+    id_cliente                  uuid,        -- referencia externa: módulo G
     fecha_registro              timestamptz  not null default now(),
     fecha_atencion              timestamptz,
     atendido_por                varchar(50),
@@ -211,7 +212,7 @@ create table postventa.reembolso (
     moneda           char(3)       not null default 'PEN',
     id_transaccion   varchar(100),
     estado           varchar(20)   not null default 'PENDIENTE',
-    id_autorizador   bigint,
+    id_autorizador   uuid,
     fecha            date          not null default current_date,
     id_pedido        bigint,       -- referencia API: el pedido vive en M1 (control de saldo)
     constraint ck_reembolso_tipo_origen check (tipo_origen in ('ANULACION','DEVOLUCION')),
@@ -251,7 +252,7 @@ comment on column postventa.calificacion.id_pedido is 'Referencia API - el pedid
 create table postventa.agregado_ventas (
     periodo          varchar(7)    not null,  -- formato AAAA-MM
     canal            varchar(30)   not null,
-    id_vendedor      bigint        not null,
+    id_vendedor      uuid          not null,
     id_producto      bigint        not null,
     unidades         integer       not null default 0,
     monto            numeric(14,2) not null default 0,

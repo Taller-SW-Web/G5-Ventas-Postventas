@@ -73,7 +73,7 @@ erDiagram
               bigint id_pedido "sin FK, opcional" }
     AGREGADO_VENTAS { varchar periodo PK
                       varchar canal PK
-                      bigint id_vendedor PK
+                      uuid id_vendedor PK
                       bigint id_producto PK }
 ```
 
@@ -187,12 +187,19 @@ Al escribir la guía de implementación del backend, se encontraron huecos entre
 
 Con esto, el total pasó de 11 a 17 tablas (7 en `ventas`, 10 en `postventa`). El detalle de columnas, tipos y CHECK está en [diagrama-logico.md](../../diseno/diagramas/bd/diagrama-logico.md) y [diagrama-fisico.md](../../diseno/diagramas/bd/diagrama-fisico.md) — ambos ya actualizados. El `.drawio` original todavía no refleja esta segunda migración.
 
-## 8. Pendientes
+## 8. Tercera migración — identidad y crear pedido
+
+Cambios aplicados en Supabase después de la segunda migración:
+
+- **`ids_usuario_a_uuid`** (acuerdo A10 con Seguridad): toda persona se identifica con el UUID del claim `sub` del JWT. Pasaron de `bigint` a `uuid`: `pedido.id_cliente`, `pedido.id_vendedor`, `anulacion.id_solicitante`, `anulacion.id_autorizador`, `devolucion.id_cliente`, `devolucion.id_autorizador`, `reclamo.id_cliente`, `reembolso.id_autorizador` y `agregado_ventas.id_vendedor`.
+- **`pedido_idempotency_key`** (acuerdo H-02, endpoint 1.1): `ventas.pedido.idempotency_key varchar(128)`, única y con null permitido (los pedidos anteriores al acuerdo no tienen clave). Guarda la cabecera `Idempotency-Key`: si el canal reintenta, M1 devuelve el pedido ya creado en lugar de crear otro.
+
+## 9. Pendientes
 
 Por definir en equipo:
 
 - En el ER se dibuja la relación devolución-reembolso, pero `reembolso` usa `id_origen` y `tipo_origen`, que puede apuntar a una anulación (M1) o a una devolución (M2). Se dejó sin clave foránea.
-- `reclamo.canal`: el contrato ya lo envía al registrar un reclamo, pero todavía no existe la columna — es el único valor de la lista original que sigue sin definirse. `devolucion.estado`, `anulacion.estado`, `reclamo.estado`, `pedido.canal` y `pago.estado` ya están confirmados (ver diagrama-fisico.md, sección 5).
+- `devolucion.estado`, `anulacion.estado`, `reclamo.estado`, `reclamo.canal`, `pedido.canal` y `pago.estado` ya están confirmados (ver diagrama-fisico.md, sección 5).
 
 Trabajo técnico:
 
@@ -200,7 +207,7 @@ Trabajo técnico:
 - Crear el bucket de Storage para las evidencias de devolución.
 - Conectar los microservicios de Spring Boot.
 
-## 9. Archivos
+## 10. Archivos
 
 - `Diagrama_ER - VentasPostventas.drawio`: diagrama original (11 tablas; pendiente de actualizar con la segunda migración).
 - `ventas_postventa_schema.sql`: script de creación de la base.

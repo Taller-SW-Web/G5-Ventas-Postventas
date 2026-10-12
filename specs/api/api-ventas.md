@@ -1,8 +1,8 @@
 # Contrato de API (OpenAPI / REST) — Microservicio M1: Ventas y Pedidos
 
-**Versión:** 1.4.0
+**Versión:** 1.5.0
 
-**Fecha:** Septiembre 2026
+**Fecha:** Octubre 2026
 
 **Servicio:** M1 (Ventas / Pedidos)
 
@@ -25,20 +25,54 @@
   "detalles": []
 }
 ## Catálogo de Scopes OAuth2 / JWT Expuestos por M1
-- **`ventas:pedidos:escribir`**: Registro de nuevos pedidos (`POST /api/v1/pedidos`). Utilizado por Canales A, B y C.
-- **`ventas:pedidos:leer`**: Consulta de estado, detalle y tracking (`GET /api/v1/pedidos/{id}`). Utilizado por Canales A, B y C.
-- **`ventas:pedidos:anular`**: Cancelación directa en estado inicial por falta de pago (`POST /api/v1/pedidos/{id}/anulaciones`). Utilizado por Canales A, B y C.
-- **`ventas:pedidos:estado`**: Actualización del ciclo de vida y recepción de eventos logísticos (`PATCH /api/v1/pedidos/{id}/estado`, `POST /api/v1/pedidos/{id}/eventos-logistica`). Utilizado por Módulo E (Despacho / Logística).
-- **`ventas:pagos:webhook`**: Confirmación o rechazo de transacciones monetarias (`POST /api/v1/pedidos/{id}/pagos/notificacion`). Utilizado por Pasarela de Pagos.
-- **`ventas:admin`**: Administración, autorización de anulaciones y consulta global. Utilizado por Backoffice / Gestor.
+
+Según el acuerdo A10 con Seguridad (G7) hay dos tipos de token:
+
+- **Token de servicio** (`tipo: "servicio"`, `aud` incluye `api-ventas`): lo usan los otros módulos. Se autoriza por `scope`.
+- **Token de usuario** (`tipo: "acceso"`, sin `aud`): lo usa una persona. Se autoriza por rol: `CLIENTE` o `ADMIN_VENTAS` (el Gestor). Su `sub` es el UUID del usuario.
+
+| Scope (token de servicio) | Endpoints | Lo usa |
+|---|---|---|
+| `ventas:pedidos:crear` | `POST /api/v1/pedidos` (1.1) | Marketplace, Chatbot y Retail |
+| `ventas:pedidos:anular` | `POST /api/v1/pedidos/{id}/anulaciones` (1.7) | Marketplace, Chatbot y Retail |
+| `ventas:pedidos:estado` | `PATCH /api/v1/pedidos/{id}/estado`, `POST /api/v1/pedidos/{id}/eventos-logistica` (1.5, 1.6) | Despacho (E) |
+| `ventas:pagos:webhook` | `POST /api/v1/pedidos/{id}/pagos/notificacion` (1.2) | Simulador de pasarela y Chatbot |
+
+| Rol (token de usuario) | Endpoints |
+|---|---|
+| `CLIENTE` | `GET /api/v1/pedidos/me` (1.4b) y `GET /api/v1/pedidos/{id}` de sus propios pedidos (1.3) |
+| `ADMIN_VENTAS` | Consulta y listado global (1.3, 1.4), anulaciones pendientes y su autorización (1.8, 1.9), y también 1.7 |
+
+`ventas:pedidos:leer` y `ventas:admin` ya no son scopes: esos permisos los da el rol del token de usuario.
 # Endpoints de M1
 ## F1: Ciclo de Vida del Pedido (Responsable: Michael)
 ### 1.1 Crear Pedido
 - **Endpoint:** `POST /api/v1/pedidos`
-Descripción: Registra un nuevo pedido proveniente de Canales A (Marketplace), B (Chatbot) o C (Retail). Incluye obligatoriamente los bloques de canal, contacto, items, envio, pago y el bloque opcional cupon. Inicializa en estado `CREADO`.
+Descripción: Registra un nuevo pedido proveniente de Canales A (Marketplace), B (Chatbot) o C (Retail). Incluye obligatoriamente los bloques de canal, contacto, items, pago y el bloque opcional cupon. `envio` es obligatorio salvo en Retail.
+
+Estado inicial según el canal:
+
+| Canal | Estado inicial | Qué hace M1 |
+|---|---|---|
+| `MARKETPLACE` | `CREADO` | Reserva stock en Productos (F) y pide el cobro al simulador de pasarela. El resultado llega por 1.2 |
+| `CHATBOT` | `CREADO` | Reserva stock en Productos (F). El chatbot cobra y avisa el resultado por 1.2 |
+| `RETAIL` | `PAGADO` y, en la misma operación, `ENTREGADO` (actor `CLIENTE`, motivo `ENTREGA_INMEDIATA_EN_TIENDA`) | No reserva stock ni usa 1.2: la venta ya se cobró en el POS (acuerdo G4) |
+
 ### Headers
-  - `Authorization: Bearer <token_canal>`
+  - `Authorization: Bearer <token_de_servicio_del_canal>` (scope `ventas:pedidos:crear`)
   - `Content-Type: application/json`
+  - `Idempotency-Key: <uuid-v4>` (obligatoria, máximo 128 caracteres; acuerdo H-02)
+
+### Idempotencia (acuerdo H-02)
+
+| Caso | Respuesta |
+|---|---|
+| Clave nueva | `201 Created` y se registra el pedido |
+| Misma clave y mismo cuerpo (reintento) | `200 OK` con el mismo pedido; no se crea otro |
+| Misma clave con otro cuerpo | `409 Conflict`, código `IDEMPOTENCY_KEY_REUSED` |
+| Sin cabecera o con un valor que no es UUID v4 | `400 Bad Request`, código `CABECERA_FALTANTE` |
+
+Un pedido rechazado por validación (`400`) no consume la clave: el canal puede corregir y reintentar con la misma.
 ### Especificación de Validación del Objeto contacto (Auditoría A8 / Legal)
 
 Los campos tipoDocumento y numeroDocumento son estrictamente obligatorios.
@@ -50,10 +84,13 @@ Los campos tipoDocumento y numeroDocumento son estrictamente obligatorios.
 | `CE` | SÍ | `^[a-zA-Z0-9]{8,12}$` | 8 a 12 car. | Carné de Extranjería. Caracteres alfanuméricos sin guiones ni espacios. |
 | `PASAPORTE` | SÍ | `^[a-zA-Z0-9]{6,12}$` | 6 a 12 car. | Pasaporte internacional. Alfanumérico sin caracteres especiales. |
 ### Request Body
+
+`contacto.clienteId` es el UUID del cliente en Seguridad (claim `sub`). Se exige `telefono` o `email` (al menos uno).
+
 {
   "canal": "CHATBOT",
   "contacto": {
-    "clienteId": "CLI-8841",
+    "clienteId": "3f9a2b7e-6c1d-4e2a-9b3f-7a1d2c4e5f6a",
     "nombreCompleto": "Juan Pérez Rodríguez",
     "tipoDocumento": "DNI",
     "numeroDocumento": "72458912",
@@ -93,8 +130,41 @@ Los campos tipoDocumento y numeroDocumento son estrictamente obligatorios.
     "total": 129.90
   }
 }
+### Campos adicionales de Retail (acuerdo G4)
+
+| Campo | Obligatorio | Regla |
+|---|---|---|
+| `envio.tiendaId` | Sí | Código de la tienda donde se hizo la venta. El resto de `envio` se omite |
+| `pago.metodoPago` | Sí | `EFECTIVO`, `TARJETA_POS` o `MIXTO` |
+| `pago.referenciaOperacion` | Con `TARJETA_POS` o `MIXTO` | Número de voucher del POS |
+| `pago.montoEfectivo` y `pago.montoTarjeta` | Con `MIXTO` | Deben sumar `pago.total` |
+| `pago.fechaVenta` | No | Solo para ventas registradas sin conexión. UTC, no futura y como máximo 72 horas antes. Si no se envía, se usa la hora de registro |
+
+```json
+{
+  "canal": "RETAIL",
+  "contacto": { "clienteId": "11111111-1111-1111-1111-111111111111", "nombreCompleto": "Ana Díaz", "tipoDocumento": "DNI", "numeroDocumento": "40123456", "email": "ana@example.com" },
+  "items": [ { "productoId": "PROD-7", "sku": "SKU-7", "cantidad": 2, "precioUnitario": 50.00 } ],
+  "envio": { "tiendaId": "TIENDA-MIRAFLORES" },
+  "pago": {
+    "metodoPago": "MIXTO", "moneda": "PEN",
+    "subtotal": 100.00, "descuentoCupon": 0, "costoEnvio": 0, "total": 100.00,
+    "referenciaOperacion": "VOU-778", "montoEfectivo": 40.00, "montoTarjeta": 60.00,
+    "fechaVenta": "2026-10-12T15:30:00Z"
+  }
+}
+```
+
+### Reglas de montos
+
+- `pago.subtotal` = suma de `cantidad × precioUnitario` de los ítems.
+- `pago.total` = `subtotal − descuentoCupon + costoEnvio`.
+
+Si no se cumplen, se responde `400` con código `MONTOS_INCONSISTENTES`.
+
 ### Respuestas
 #### `201 Created`
+También `200 OK` con el mismo cuerpo cuando es un reintento con la misma `Idempotency-Key`. En Retail, `estado` es `ENTREGADO`.
 ```json
 {
   "pedidoId": "PED-2026-00981",
@@ -119,9 +189,22 @@ Los campos tipoDocumento y numeroDocumento son estrictamente obligatorios.
   ]
 }
 ```
-409 Conflict
+Otros códigos `400` de 1.1:
 
-Fallo de validación de catálogo o stock con el módulo de Productos (F).
+| Código | Cuándo |
+|---|---|
+| `CABECERA_FALTANTE` | Falta `Idempotency-Key` o no es UUID v4 |
+| `DATOS_INVALIDOS` | Campo obligatorio ausente o con formato inválido (incluye `envio` incompleto, sin `telefono` ni `email`, y las reglas de Retail). `detalles` indica el campo |
+| `FORMATO_INVALIDO` | JSON mal formado o valor fuera de catálogo (por ejemplo, un `canal` desconocido) |
+| `MONTOS_INCONSISTENTES` | `subtotal` o `total` no cuadran, o en `MIXTO` los montos no suman `total` |
+| `FECHA_VENTA_FUERA_DE_RANGO` | Retail: `fechaVenta` futura o con más de 72 horas |
+
+#### `409 Conflict`
+
+| Código | Cuándo |
+|---|---|
+| `ITEM_SIN_DISPONIBILIDAD` | Productos (F) no confirma el stock de uno o más ítems. El pedido no se registra |
+| `IDEMPOTENCY_KEY_REUSED` | La `Idempotency-Key` ya se usó con un pedido distinto |
 
 ### 1.2 Notificación de Pago (Webhook de Pasarela)
 - **Endpoint:** `POST /api/v1/pedidos/{pedidoId}/pagos/notificacion`
@@ -160,9 +243,15 @@ Cualquier otro valor responde `400 Bad Request`. Si la misma `transaccionId` lle
   "fechaTransicion": "2026-09-23T00:06:00Z"
 }
 ```
-- **`400 Bad Request`**: Inconsistencia de montos, datos de transacción o `resultado` distinto de `APROBADO` o `RECHAZADO`.
-- **`404 Not Found`**: El pedido indicado no existe.
-- **`409 Conflict`**: El pedido no se encuentra en estado `CREADO`.
+Si la notificación es un reintento, `nuevoEstado` y `fechaTransicion` son los ya registrados.
+
+| HTTP | Código | Cuándo |
+|---|---|---|
+| `400` | `DATOS_INVALIDOS` / `FORMATO_INVALIDO` | Falta `transaccionId`, `monto` o `moneda`, o `resultado` no es `APROBADO` ni `RECHAZADO` |
+| `400` | `MONTOS_INCONSISTENTES` | `monto` o `moneda` no coinciden con el total del pedido |
+| `404` | `PEDIDO_NO_ENCONTRADO` | El pedido indicado no existe |
+| `409` | `ESTADO_NO_PERMITE_PAGO` | El pedido no está en `CREADO` (por ejemplo, un rechazo tardío sobre un pedido ya `PAGADO`). No se modifica y queda en el log para revisión |
+| `409` | `TRANSACCION_DE_OTRO_PEDIDO` | La `transaccionId` ya se registró en otro pedido |
 ### 1.3 Consultar Pedido por ID
 - **Endpoint:** `GET /api/v1/pedidos/{pedidoId}`
 Descripción: Permite a clientes, canales y administradores consultar el estado completo del pedido y su snapshot inmutable.
@@ -176,7 +265,7 @@ Descripción: Permite a clientes, canales y administradores consultar el estado 
   "canal": "CHATBOT",
   "estado": "`EN_PREPARACION`",
   "contacto": {
-    "clienteId": "CLI-8841",
+    "clienteId": "3f9a2b7e-6c1d-4e2a-9b3f-7a1d2c4e5f6a",
     "nombreCompleto": "Juan Pérez Rodríguez",
     "tipoDocumento": "DNI",
     "numeroDocumento": "72458912",
@@ -234,7 +323,7 @@ Descripción: Permite a clientes, canales y administradores consultar el estado 
 Descripción: Permite obtener el listado histórico paginado de pedidos asociados a un cliente.
 - **Headers:** `Authorization: Bearer <token>`
 ### Query Params
-clienteId (requerido para clientes): Identificador del cliente.
+clienteId (requerido para clientes): UUID del cliente en Seguridad (claim `sub`).
 estado (opcional): `CREADO` | `PAGADO` | `EN_PREPARACION` | `DESPACHADO` | `ENTREGADO` | `ANULADO`
 desde (opcional): Fecha inicial ISO.
 hasta (opcional): Fecha final ISO.
@@ -244,7 +333,7 @@ tamano (opcional, default: 10)
 #### `200 OK`
 ```json
 {
-  "clienteId": "CLI-8841",
+  "clienteId": "3f9a2b7e-6c1d-4e2a-9b3f-7a1d2c4e5f6a",
   "contenido": [
     {
       "pedidoId": "PED-2026-00981",
@@ -260,6 +349,37 @@ tamano (opcional, default: 10)
   "totalElementos": 1
 }
 ```
+### 1.4b Listar Mis Pedidos (acuerdo H-03)
+- **Endpoint:** `GET /api/v1/pedidos/me`
+Descripción: Devuelve los pedidos del cliente autenticado. La identidad sale del claim `sub` del token; no se acepta `clienteId` en la URL.
+- **Headers:** `Authorization: Bearer <token_de_usuario>` (rol `CLIENTE`)
+### Query Params
+estado (opcional): `CREADO` | `PAGADO` | `EN_PREPARACION` | `DESPACHADO` | `ENTREGADO` | `ANULADO`
+page (opcional, default: 1, desde 1)
+pageSize (opcional, default: 10, de 1 a 50)
+
+Este endpoint usa `page` y `pageSize` desde 1 (excepción acordada con Marketplace), no `pagina` y `tamano`.
+### Respuestas
+#### `200 OK`
+```json
+{
+  "items": [
+    {
+      "pedidoId": "PED-2026-00981",
+      "canal": "MARKETPLACE",
+      "estado": "PAGADO",
+      "total": 129.90,
+      "moneda": "PEN",
+      "fechaCreacion": "2026-09-23T00:05:00Z"
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "pageSize": 10
+}
+```
+- **`401 Unauthorized`**: Token ausente o inválido.
+- **`403 Forbidden`**: El token no tiene el rol `CLIENTE` (por ejemplo, un token de servicio).
 ### 1.5 Transición de Estado del Pedido
 - **Endpoint:** `PATCH /api/v1/pedidos/{pedidoId}/estado`
 Descripción: Valida la máquina de estados e inserta el evento en el historial. Invocado por Despacho / Logística (E).
