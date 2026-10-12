@@ -57,7 +57,7 @@ G5-Ventas-Postventas-Frontend/             repositorio del frontend
 | 02 | Pedidos (bandeja) | F1 | Michael | `GET /api/v1/pedidos` (1.4, admin) |
 | 03 | Detalle del pedido | F1 | Michael | `GET /api/v1/pedidos/{id}` (1.3) |
 | 04 | Anulaciones | F2 | Luis Arroyo | `POST .../anulaciones` (1.7), `GET .../anulaciones/pendientes` (1.8), `PATCH .../anulaciones/{id}` (1.9) |
-| 05 | Hub Postventa | — | **Sin asignar, ver 1.1 de la guía** | Agrega indicadores de F3 a F6, no tiene endpoint propio |
+| 05 | Hub Postventa | — | Joseph (asignado 2026-10-12 — pantalla "pegamento" entre F3, F4 y F6, ver 1.1 de la guía) | Agrega indicadores de F3 a F6, no tiene endpoint propio |
 | 06 | Devoluciones y cambios | F3 | Joseph | 2.1 a 2.5 |
 | 07 | Reclamos | F6 | Fabrizio | 2.8 a 2.11 |
 | 08 | Reembolsos | F4 | Luis Alejandro | 2.6 |

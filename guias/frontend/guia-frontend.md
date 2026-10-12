@@ -21,7 +21,7 @@ Si esta guía y un mockup/contrato no coinciden, manda el mockup o el contrato; 
 5. W01/Mockup 01 — Dashboard (Fabrizio)
 6. W02–W03/Mockup 02–03 — Pedidos y Detalle (Michael)
 7. W04/Mockup 04 — Anulaciones (Luis Arroyo)
-8. Mockup 05 — Hub Postventa (sin asignar)
+8. Mockup 05 — Hub Postventa (Joseph)
 9. W05/Mockup 06 — Devoluciones y cambios (Joseph)
 10. W06/Mockup 07 — Reclamos (Fabrizio)
 11. W07/Mockup 08 — Reembolsos (Luis Alejandro)
@@ -34,18 +34,18 @@ Si esta guía y un mockup/contrato no coinciden, manda el mockup o el contrato; 
 
 ### 1.1. Quién hace qué
 
-Mismo reparto que el backend (README.md), una pantalla por persona, salvo el Hub:
+Mismo reparto que el backend (README.md), una pantalla por persona:
 
 | Persona | Pantalla(s) | Endpoints que consume |
 |---|---|---|
 | Michael | Pedidos (02), Detalle del pedido (03) | `api-ventas.md` 1.3, 1.4 |
 | Luis Arroyo | Anulaciones (04) | `api-ventas.md` 1.7 a 1.9 |
-| Joseph | Devoluciones y cambios (06) | `api-postventas.md` 2.1 a 2.5 |
+| Joseph | Devoluciones y cambios (06), Hub Postventa (05) | `api-postventas.md` 2.1 a 2.5 |
 | Luis Alejandro | Reembolsos (08) | `api-postventas.md` 2.6 |
 | Johan | Calificaciones (parte de 09) | `api-postventas.md` 2.7 |
 | Fabrizio | Dashboard (01), Reclamos (07), Reportes (parte de 09) | `api-postventas.md` 2.8 a 2.12 |
 
-**Mockup 05 — Hub Postventa — sin asignar todavía.** Es la pantalla que conecta Devoluciones, Reclamos y Reembolsos (ver `diseno/mockups/Mockup 05 - Hub Postventa.md`); no tiene endpoint propio, solo agrega indicadores de las otras tres. Como las tres pantallas que agrupa son de personas distintas (Joseph, Fabrizio, Luis Alejandro), conviene decidir en el grupo quién la arma — podría ser cualquiera de los tres, o el último que termine su pantalla individual. **No la dejen para el final sin dueño.**
+**Mockup 05 — Hub Postventa — asignado a Joseph (2026-10-12).** Es la pantalla que conecta Devoluciones, Reclamos y Reembolsos (ver `diseno/mockups/Mockup 05 - Hub Postventa.md`); no tiene endpoint propio, solo agrega indicadores de las otras tres. Las tres pantallas que agrupa son de personas distintas (Joseph, Fabrizio, Luis Alejandro); se asignó a Joseph por ser la pantalla "pegamento" entre las tres y no sumar más carga a quien ya tiene varios mockups (Fabrizio) ni a quien está más justo de tiempo (Luis Alejandro).
 
 ### 1.2. Qué se puede avanzar ya, sin esperar a nadie
 
@@ -158,7 +158,7 @@ Centralizado, no uno por pantalla (stack-frontend.md, sección 5.1):
 
 ---
 
-## 8. Hub Postventa (Mockup 05, sin asignar)
+## 8. Hub Postventa (Mockup 05, Joseph)
 
 **Pantallas del mockup:** `Hub_Postventa`, `Atencion_Prioritaria`, `Modal_Detalle_prioritario` — mismo patrón de "atención prioritaria" que el Dashboard (Mockup 01), pero acotado a postventa (reclamos + devoluciones).
 

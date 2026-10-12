@@ -344,8 +344,8 @@ Cada responsable actualiza sus entidades para que coincidan con estas columnas y
 | H9 | `ventas.historial_estado.actor` (CHECK) | Se agrega `SISTEMA_PRODUCTOS` a los valores permitidos | Michael (**ya aplicado** — ya está en `ActorHistorial.java` y `MaquinaEstados.java`) |
 | H9 | `ventas.evento_recibido.origen` (CHECK) | Se agrega `SISTEMA_PRODUCTOS` | Michael (**ya aplicado**) |
 | H9 | `ventas.pedido.reserva_id` | Columna `varchar(100)`, null mientras la reserva está pendiente o en `RETAIL` | Michael (**ya aplicado** — `Pedido.java` ya la usa) |
-| H10 | `ventas.pedido.tienda_id` | Columna `varchar(40)`, null salvo `RETAIL` | Michael — **falta usarla**: el código actual guarda `tiendaId` dentro de `direccion` como workaround, hay que cambiarlo para usar la columna real |
-| H10 | `ventas.pago.monto_efectivo`, `monto_tarjeta`, `fecha_venta` | Columnas nuevas para `RETAIL` con `metodoPago: MIXTO` o venta sin conexión | Michael — **falta usarlas**: `CrearPedidoService` valida estos campos pero no los guarda, se pierden |
+| H10 | `ventas.pedido.tienda_id` | Columna `varchar(40)`, null salvo `RETAIL` | Michael (**corregido 2026-10-12** — `Pedido.java` y `CrearPedidoService` ya la usan, dejó de guardarse dentro de `direccion`) |
+| H10 | `ventas.pago.monto_efectivo`, `monto_tarjeta`, `fecha_venta` | Columnas nuevas para `RETAIL` con `metodoPago: MIXTO` o venta sin conexión | Michael (**corregido 2026-10-12** — `Pago.java` y `CrearPedidoService` ya las guardan) — **falta confirmar con Michael si ya aplicó el `ALTER TABLE` sobre la Supabase real**, no solo en la entidad |
 | H2 | `postventa.devolucion` | Columnas `descripcion` e `id_cliente` | Joseph |
 | H2 | `postventa.devolucion_item` | Tabla nueva: `id_devolucion`, `id_producto`, `cantidad` (> 0) | Joseph |
 | H3 | `postventa.reembolso` | Columna `id_pedido` | Luis Alejandro |
@@ -409,7 +409,7 @@ Matriz de ESP-03 (sección 7.2), actualizada al 2026-10-12 con Retail (G4) y el 
 | `DESPACHADO` | `ENTREGADO` | `SISTEMA_LOGISTICA` | — |
 | `DESPACHADO` | `ANULADO` | `SISTEMA_LOGISTICA` | `ENTREGA_FALLIDA_DEFINITIVA` |
 
-**Pendiente en el código (no está en `MaquinaEstados.PERMITIDAS` todavía):** la fila `PAGADO → ANULADO` con actor `SISTEMA_PRODUCTOS` — hoy el mapa solo tiene `Set.of(CLIENTE, GESTOR)` para esa transición. El equipo ya decidió (2026-10-12) que el caso Chatbot-ya-pagó-sin-stock se anula automático con reembolso (opción A), así que falta agregar `SISTEMA_PRODUCTOS` ahí y disparar la solicitud de reembolso. Avisado a Michael.
+**Corregido (2026-10-12):** la fila `PAGADO → ANULADO` ya incluye `SISTEMA_PRODUCTOS` en `MaquinaEstados.PERMITIDAS`. `ResultadoReservaService.rechazada()` registra la anulación (nueva clase `AnulacionSistemaService`, bien aislada de F2 — no pisa el trabajo de Luis Arroyo) y dispara el reembolso automático a M2.
 
 Qué hace `cambiar(...)`:
 
@@ -470,7 +470,7 @@ Mapeo del request a la tabla `pedido` (no `RETAIL`):
 | `pago.moneda`, `subtotal`, `total` | `moneda`, `subtotal`, `total` |
 | Cabecera `Idempotency-Key` | `idempotency_key` |
 
-Mapeo adicional para `RETAIL` — **pendiente de corregir en el código** (ver H10, 4.1): hoy `envio.tiendaId` se guarda temporalmente en la columna `direccion` como workaround porque la entidad todavía no tiene `tienda_id`; `pago.montoEfectivo`/`montoTarjeta` se validan pero no se guardan en ningún lado. Falta mapear ambos a las columnas reales cuando `Pedido.java`/`Pago.java` las incluyan.
+Mapeo adicional para `RETAIL` — **corregido 2026-10-12** (ver H10, 4.1): `envio.tiendaId` ya se guarda en `pedido.tienda_id`, y `pago.montoEfectivo`/`montoTarjeta`/`fechaVenta` en sus columnas reales de `pago`.
 
 `envio.departamento`, `provincia` y `referencia` no tienen columna: no se guardan.
 
@@ -521,9 +521,9 @@ Agregar `enviarEvento(String payloadJson)` a `PostventaClient`. En modo simulado
 Al 2026-10-12, revisando el repo directamente:
 
 - [x] `compartido/`: excepciones, `GlobalExceptionHandler` completo, `CodigoPublico`, Jackson en UTC
-- [x] `MaquinaEstados` con su prueba (todas las filas de la matriz y al menos 5 transiciones prohibidas) — **falta** agregar `SISTEMA_PRODUCTOS` a `PAGADO → ANULADO` (ver 5.2)
+- [x] `MaquinaEstados` con su prueba (todas las filas de la matriz y al menos 5 transiciones prohibidas), incluyendo `SISTEMA_PRODUCTOS` en `PAGADO → ANULADO` (corregido 2026-10-12, ver 5.2)
 - [x] Entidades de M1 validadas contra Supabase (`servicio-ventas` arranca) y `EventoRecibido` listo para la idempotencia de 1.2 y 1.6
-- [x] 1.1 crear, con validación de documento, total, idempotencia y la variante Retail — **falta** que `tienda_id`/`monto_efectivo`/`monto_tarjeta` se guarden en sus columnas reales en vez del workaround (ver H10)
+- [x] 1.1 crear, con validación de documento, total, idempotencia y la variante Retail — `tienda_id`/`monto_efectivo`/`monto_tarjeta`/`fecha_venta` ya se guardan en sus columnas reales (corregido 2026-10-12, ver H10)
 - [x] `ResultadoReservaService` listo para aplicar la respuesta de la reserva (confirmada/rechazada) — **falta** el `@RabbitListener` real de `po.sales.q` (hoy solo se llama en modo simulado desde `CrearPedidoService`)
 - [x] 1.2 notificación de pago, idempotente
 - [x] 1.4b (`/pedidos/me`, acuerdo H-03) — `PedidoService.listarMios`
@@ -641,16 +641,10 @@ En el controller, la ruta `/anulaciones/pendientes` debe declararse antes que `/
 
 ### 6.5. Métodos que usa F1
 
-**Hueco nuevo encontrado al revisar el código (2026-10-12), sin decisión todavía:** `NotificacionPagoService` (1.2) ya hace `CREADO → ANULADO` por pago rechazado directo con `maquinaEstados.cambiar(...)`, pero **no libera la reserva de stock ni restaura el cupón** — no llama a `ProductosClient.liberar(...)` ni a nada de F2. Esto contradice `F1-Ciclo de vida del pedido.md` CA-07b, que dice que esa transición "libera la reserva de stock en Productos... automáticamente". Falta decidir **quién** lo hace:
+**Corregido (2026-10-12), opción A elegida:** `NotificacionPagoService` (1.2) resuelve el pago rechazado solo, sin pasar por F2 — después de `maquinaEstados.cambiar(..., ANULADO, PASARELA_PAGOS, ...)` llama directo a `ProductosClient.liberar(reservaId)` (o `confirmar` si el resultado fue aprobado), y si había cupón aplicado, también a `productos.restaurarCupon(...)`. Maneja bien la carrera con la reserva: si `reservaId` todavía no llegó cuando se procesa el pago, `ResultadoReservaService` la libera apenas llegue, viendo el pedido ya `ANULADO`. No quedó ningún método nuevo para F2 — `registrarPorPagoRechazado` que proponía esta guía originalmente no se construyó, ni hace falta.
 
-- **Opción A:** `NotificacionPagoService` llama a `ProductosClient.liberar(...)` directamente (F1 se resuelve solo, sin tocar F2).
-- **Opción B:** F1 le pide a F2 un método tipo `registrarPorPagoRechazado(Pedido)` (como proponía esta guía originalmente) que guarda una fila en `anulacion` para trazabilidad y libera el stock.
-
-Esta guía no elige por nadie — avisar en el grupo (Michael y Luis Arroyo) para decidir antes de construirlo, porque cambia si el método vive en F1 o en F2.
-
-| Método (si se elige la opción B) | Lo llamaría | Qué haría |
+| Método | Lo llama | Qué hace |
 |---|---|---|
-| `registrarPorPagoRechazado(Pedido)` | `NotificacionPagoService` | Guardar `anulacion` `EJECUTADA` con `PAGO_NO_COMPLETADO` y liberar stock |
 | `anularPorEntregaFallida(Pedido, String detalle)` | El service de 1.6 (hoy es un stub en `PedidoController`, no existe todavía — ver 5.9) | `DESPACHADO → ANULADO` con `SISTEMA_LOGISTICA`, repone stock y pide reembolso |
 
 **Ojo:** 1.5 y 1.6 todavía no están implementados (son stubs 501, ver 5.9), así que `anularPorEntregaFallida` tampoco se puede probar de punta a punta todavía.
@@ -658,12 +652,10 @@ Esta guía no elige por nadie — avisar en el grupo (Michael y Luis Arroyo) par
 ### 6.6. Lista para terminar F2
 
 - [ ] `MotivoAnulacion` y validaciones de 6.2 (`STOCK_NO_DISPONIBLE`/`CUPON_RECHAZADO` NO van aquí, ver 6.1)
-- [ ] Anulación directa (`CREADO`, `PAGADO`) y pendiente (`EN_PREPARACION`)
+- [ ] Anulación directa (`CREADO`, `PAGADO`) y pendiente (`EN_PREPARACION`) — ojo con la tabla `ventas.anulacion`: Michael ya la usa (`AnulacionSistemaService`) para el caso de stock rechazado tras pago, revisarla antes de diseñar la tuya para no chocar con sus filas `EJECUTADA`
 - [ ] Efectos según la tabla de 6.3, incluyendo liberar stock (6.3.1) con clave de idempotencia fija
 - [ ] Verificar con Seguridad que la cuenta del cliente siga activa antes de anular (6.3.1)
 - [ ] Bandeja: listar pendientes, aprobar y rechazar
-- [ ] Decidir con Michael quién libera stock en el pago rechazado (6.5) antes de construirlo
-- [ ] Métodos de 6.5 para F1 (según lo que se decida)
 - [ ] Criterios de aceptación CA-01 a CA-06 de ESP-05 y los de ESP-06
 
 ---
@@ -1043,7 +1035,7 @@ Catálogo real (acuerdo A10, `integraciones/ACUERDO_G7_SEGURIDAD.md`, `api-venta
 | `GET /api/v2/dashboard/**` | rol `ADMIN_VENTAS` |
 | `POST /api/v2/eventos` | scope `postventa:reembolsos:procesar` (credencial de servicio de M1 — no pasa por el Gateway) |
 
-**Pendiente, código real con bug:** `postventa/compartido/SecurityConfig.java` todavía tiene la tabla vieja — exige `SCOPE_postventa:devoluciones:leer`, `SCOPE_postventa:reclamos:leer` y `SCOPE_postventa:csat:escribir` (scopes que Seguridad nunca va a emitir, así que esas rutas quedarían **inaccesibles para siempre** con la seguridad real encendida) y usa `SCOPE_ventas:admin` en vez de `hasRole("ADMIN_VENTAS")`. Hay que corregirlo antes de construir `/devoluciones/me`, `/reclamos/me` y `/csat` de verdad — avisar a quien lo tenga asignado (`compartido/` de M2 es de Michael, "igual al de M1", pero ahora mismo no lo es).
+**Corregido (2026-10-12):** `postventa/compartido/SecurityConfig.java` ya coincide exactamente con esta tabla — `/devoluciones/me`, `/reclamos/me` y `/csat` piden rol `CLIENTE`, nada de los scopes viejos que Seguridad nunca iba a emitir.
 
 Los tokens de servicio (M1 llamando a M2, M2 llamando a M1, y el simulador llamando a la 1.2 con `ventas:pagos:webhook`) se piden al Módulo G. Mientras tanto, se prueba con la seguridad apagada.
 
