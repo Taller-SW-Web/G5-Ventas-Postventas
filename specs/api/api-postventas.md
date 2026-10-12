@@ -29,21 +29,17 @@
 -   **`postventa:devoluciones:escribir`**: Registro de solicitudes de
     devolución y subida de archivos adjuntos. Utilizado por Canales A, B
     y C.
--   **`postventa:devoluciones:leer`**: Consulta de expedientes de
-    devolución y estado de trámite. Utilizado por Canales A, B y C.
 -   **`postventa:reembolsos:procesar`**: Procesamiento de desembolsos
     monetarios originados exclusivamente por M1 (`ANULACION`) o M2
     (`DEVOLUCION`). Utilizado por M1 y M2 internamente.
 -   **`postventa:reclamos:escribir`**: Registro formal de reclamos y
     quejas en el Libro de Reclamaciones. Utilizado por Canales A, B y C.
--   **`postventa:reclamos:leer`**: Consulta pública del estado y la
-    respuesta formal visible del reclamo. Utilizado por Canales A, B y
-    C.
--   **`postventa:csat:escribir`**: Envío de calificaciones de
-    satisfacción de compra. Utilizado por Canales A, B y C.
--   **`ventas:admin`**: Gestión administrativa completa (dictamen de
-    devoluciones, emisión de respuesta formal a reclamos y métricas de
-    dashboard). Utilizado por Backoffice / Gestor.
+
+**`postventa:devoluciones:leer` y `postventa:reclamos:leer` no existen como scopes para canales** (acuerdo con Seguridad, 2026-10-10): el listado por `clienteId` con token de servicio permitía que cualquier canal leyera los datos de cualquier cliente. Se reemplazó por el patrón de `/pedidos/me` — ver `2.4b` y `2.10b`, que usan el token del cliente (rol `CLIENTE`, filtrado por `sub`), sin scope. El listado administrativo (`2.4`, `2.10`) sigue existiendo, pero requiere rol `ADMIN_VENTAS`, no scope.
+
+**`postventa:csat:escribir` tampoco es un scope real** (corrección, 2026-10-12 — estaba mal registrado en el acuerdo A10 con Seguridad, ver `integraciones/ACUERDO_G7_SEGURIDAD.md`): `POST /api/v2/csat` (sección 2.7) exige verificar que `pedidoId` pertenezca al `sub` del usuario autenticado (acuerdo H-04 con Marketplace), lo que solo es posible si el token es el del propio cliente — un token de servicio del canal nunca tiene un `sub` de cliente real. Por eso este endpoint usa el mismo patrón que `/pedidos/me`: token del cliente, rol `CLIENTE`, sin scope.
+
+**`ventas:admin` no es un scope real** — Seguridad no lo registra porque depende de identidad de persona, no de módulo. Gestión administrativa completa (dictamen de devoluciones, emisión de respuesta formal a reclamos y métricas de dashboard) se resuelve con el claim `roles` del token del usuario incluyendo `ADMIN_VENTAS` (catálogo cerrado de Seguridad; "Gestor" es solo el nombre que usamos en specs/interfaz).
 
 ## Endpoints de M2
 
@@ -187,13 +183,12 @@
 
 -   **`404 Not Found`**: El expediente solicitado no existe.
 
-#### 2.4 Listar Devoluciones por Cliente
+#### 2.4 Listar Devoluciones por Cliente (uso administrativo)
 
 -   **Endpoint:** `GET /api/v2/devoluciones`
--   **Headers:** `Authorization: Bearer <token>`
+-   **Headers:** `Authorization: Bearer <token_gestor>` (requiere rol `ADMIN_VENTAS`, claim `roles` del JWT — no es un scope). Para que un cliente consulte sus propias devoluciones, usar **2.4b** (`/devoluciones/me`), no este endpoint.
 -   **Query Params:**
-    -   `clienteId` (requerido para clientes): Identificador del
-        cliente.
+    -   `clienteId` (requerido): Identificador del cliente.
     -   `estado` (opcional):
         `SOLICITADA | EN_EVALUACION | APROBADA | RECHAZADA | COMPLETADA`
     -   `tipo` (opcional): `CAMBIO | DEVOLUCION_DINERO`
@@ -222,13 +217,27 @@
 }
 ```
 
+#### 2.4b Listar Mis Devoluciones
+
+-   **Endpoint:** `GET /api/v2/devoluciones/me`
+-   **Descripción:** Historial de devoluciones del cliente autenticado, para que un canal muestre "mis devoluciones" sin exponer `clienteId` en la URL. La identidad se toma exclusivamente del JWT (`sub`); nunca se acepta `clienteId` por query string.
+-   **Headers:** `Authorization: Bearer <token_cliente>` (requiere rol `CLIENTE`, claim `roles` del JWT — no es un scope)
+-   **Query Params:**
+    -   `estado` (opcional):
+        `SOLICITADA | EN_EVALUACION | APROBADA | RECHAZADA | COMPLETADA`
+    -   `tipo` (opcional): `CAMBIO | DEVOLUCION_DINERO`
+    -   `pagina` (opcional, default: `0`)
+    -   `tamano` (opcional, default: `10`)
+-   **Respuestas:**
+    -   **`200 OK`** — mismo formato que 2.4, sin el campo `clienteId` en la raíz (ya está implícito en el token).
+
 #### 2.5 Resolver Expediente de Devolución
 
 -   **Endpoint:** `PATCH /api/v2/devoluciones/{devolucionId}/resolucion`
 -   **Descripción:** El Gestor aprueba o rechaza el expediente. Si es
     rechazo, exige fundamento no vacío. Si se aprueba con
     `tipo: DEVOLUCION_DINERO`, deriva la instrucción de reembolso a F4.
--   **Headers:** `Authorization: Bearer <token_gestor>`
+-   **Headers:** `Authorization: Bearer <token_gestor>` (requiere rol `ADMIN_VENTAS`)
 -   **Request Body:**
 
 ``` json
@@ -243,6 +252,7 @@
     -   **`200 OK`**: Actualizado exitosamente.
     -   **`400 Bad Request`**: Rechazo sin fundamento explicativo.
     -   **`404 Not Found`**: Expediente no encontrado.
+    -   **`409 Conflict`** (`SIN_STOCK`): Aprobación con `tipo: CAMBIO` sin stock disponible en Productos (F). El Gestor puede volver a resolver como reembolso o rechazo.
 
 ### F4: Reembolsos y Extornos (Responsable: Luis Alejandro)
 
@@ -287,15 +297,18 @@
 ```
 
 -   **`400 Bad Request`**: Monto fuera de rango o estructura inválida.
--   **`403 Forbidden`**: Solicitud con origen no permitido (distinto de
+-   **`403 Forbidden`** (`ORIGEN_NO_PERMITIDO`): Solicitud con origen no permitido (distinto de
     `ANULACION` o `DEVOLUCION`).
--   **`409 Conflict`**: Conflicto de idempotencia o fallo de pasarela.
+-   **`409 Conflict`** (`CLAVE_IDEMPOTENCIA_EN_CONFLICTO`): La `X-Idempotency-Key` ya existe para una solicitud con datos distintos (origen, monto, moneda), o la pasarela respondió con error.
+-   **`409 Conflict`** (`SALDO_INSUFICIENTE`): El monto, sumado a los reembolsos `EXITOSO`/`PENDIENTE` ya registrados para el mismo pedido, supera el total pagado.
 
 ### F5: Calificación de Experiencia / CSAT (Responsable: Johan)
 
 #### 2.7 Registrar Encuesta CSAT
 
 -   **Endpoint:** `POST /api/v2/csat`
+-   **Headers:** `Authorization: Bearer <token_cliente>` (requiere rol `CLIENTE`, claim `roles` del JWT — no es un scope; el `sub` del token es el que se valida contra `pedidoId` en el `403`)
+-   **Acuerdo H-04 con Marketplace:** Marketplace usa una escala de 3 botones (Mal/Regular/Bien), con mapeo interno `1 (Mal) → sentiment: "NEGATIVE"`, `3 (Regular) → sentiment: "NEUTRAL"`, `5 (Bien) → sentiment: "POSITIVE"` — el campo `sentiment` es una etiqueta propia de Marketplace, no se guarda de nuestro lado; nosotros solo recibimos `puntuacion` (siempre `1`, `3` o `5`, nunca `2` ni `4`). No requiere cambio de esquema de nuestro lado. Mientras consolidan su propia tabla de motivos estructurados, Marketplace puede incluir motivos concatenados dentro de `comentario` con el prefijo `"Motivos: [RAZON_1, RAZON_2] - "` seguido del comentario libre — se guarda tal cual en `calificacion.comentario` (texto libre, sin parseo de nuestro lado).
 -   **Request Body:**
 
 ``` json
@@ -311,7 +324,9 @@
 -   **Respuestas:**
     -   **`201 Created`**: Encuesta guardada.
     -   **`400 Bad Request`**: Puntuación fuera de rango (1 al 5).
-    -   **`409 Conflict`**: Encuesta ya registrada para ese pedido.
+    -   **`403 Forbidden`**: El `pedidoId` no pertenece al `sub` del usuario autenticado en el JWT (acuerdo H-04).
+    -   **`422 Unprocessable Entity`** (`ORDER_NOT_DELIVERED`): El pedido no está en estado terminal `ENTREGADO`. *(Excepción al código `PEDIDO_NO_ENTREGADO`/`409` que usa el resto de este contrato — para este endpoint específico se usó literalmente el código y HTTP status acordados con Marketplace en H-04; ver nota en [catalogo-errores.md](catalogo-errores.md).)*
+    -   **`409 Conflict`** (`CSAT_ALREADY_SUBMITTED`): Ya existe una encuesta registrada para ese pedido. *(Mismo caso que `CALIFICACION_DUPLICADA` en el resto del repo; aquí se usa el nombre acordado con Marketplace.)*
 
 ### F6: Reclamos y Dashboard (Responsable: Fabrizio)
 
@@ -394,10 +409,10 @@
 -   **`404 Not Found`**: Reclamo no encontrado con ese código de
     seguimiento.
 
-#### 2.10 Listar Reclamos por Cliente / Consumidor
+#### 2.10 Listar Reclamos por Cliente / Consumidor (uso administrativo)
 
 -   **Endpoint:** `GET /api/v2/reclamos`
--   **Headers:** `Authorization: Bearer <token>`
+-   **Headers:** `Authorization: Bearer <token_gestor>` (requiere rol `ADMIN_VENTAS`, claim `roles` del JWT — no es un scope). Para que un cliente consulte sus propios reclamos, usar **2.10b** (`/reclamos/me`), no este endpoint. Búsqueda por `documento` (consumidor sin cuenta, Libro de Reclamaciones) solo disponible aquí.
 -   **Query Params:**
     -   `documento` (opcional): Número de documento de identidad del
         reclamante.
@@ -428,12 +443,25 @@
 }
 ```
 
+#### 2.10b Listar Mis Reclamos
+
+-   **Endpoint:** `GET /api/v2/reclamos/me`
+-   **Descripción:** Historial de reclamos del cliente autenticado, para que un canal muestre "mis reclamos" sin exponer `clienteId` en la URL. La identidad se toma exclusivamente del JWT (`sub`); nunca se acepta `clienteId` ni `documento` por query string (esa búsqueda es solo administrativa, ver 2.10).
+-   **Headers:** `Authorization: Bearer <token_cliente>` (requiere rol `CLIENTE`, claim `roles` del JWT — no es un scope)
+-   **Query Params:**
+    -   `estado` (opcional):
+        `REGISTRADO | EN_PROCESO | ATENDIDO | DERIVADO`
+    -   `pagina` (opcional, default: `0`)
+    -   `tamano` (opcional, default: `10`)
+-   **Respuestas:**
+    -   **`200 OK`** — mismo formato que 2.10.
+
 #### 2.11 Responder y Resolver Reclamo
 
 -   **Endpoint:** `PATCH /api/v2/reclamos/{reclamoId}/respuesta`
 -   **Descripción:** El Gestor emite la respuesta formal que será
     visible para el cliente (Requisito A10).
--   **Headers:** `Authorization: Bearer <token_gestor>`
+-   **Headers:** `Authorization: Bearer <token_gestor>` (requiere rol `ADMIN_VENTAS`)
 -   **Request Body:**
 
 ``` json
@@ -456,7 +484,8 @@
 }
 ```
 
--   **`400 Bad Request`**: Campo `respuestaVisibleCliente` vacío o nulo.
+-   **`400 Bad Request`** (`RESPUESTA_VACIA`): Campo `respuestaVisibleCliente` vacío o nulo.
+-   **`409 Conflict`**: El reclamo ya está `ATENDIDO`.
 
 #### 2.12 Consultar Métricas del Dashboard
 
@@ -511,18 +540,23 @@
 ``` json
 {
   "idEvento": "3f2c9a10-6b7d-4e21-9c55-1a2b3c4d5e6f",
-  "tipo": "pedido.entregado",
+  "tipo": "pedido.pagado",
   "pedidoId": "PED-2026-00981",
   "fecha": "2026-09-27T15:40:00Z",
   "datos": {
     "canal": "MARKETPLACE",
     "clienteId": "3f9a2b7e-6c1d-4e2a-9b3f-7a1d2c4e5f6a",
     "total": 129.90,
-    "moneda": "PEN"
+    "moneda": "PEN",
+    "motivo": null,
+    "items": [
+      { "productoId": 101, "cantidad": 1, "importe": 129.90 }
+    ]
   }
 }
 ```
 
+-   `datos.vendedorId` y `datos.items` solo vienen en `pedido.pagado` (se usan para `agregado_ventas`); en `pedido.anulado` y `pedido.entregado` pueden omitirse. `datos.motivo` es obligatorio solo en `pedido.anulado`.
 -   `tipo`: `pedido.pagado | pedido.anulado | pedido.entregado`.
 -   `idEvento`: UUID generado por M1. Si M1 reintenta, envía el mismo
     valor.

@@ -43,7 +43,7 @@
 
 ### 2.4. Estados del Pago (M1)
 * *PENDIENTE:* El pedido fue creado y la pasarela todavía no informa el resultado del cobro.
-* *CONFIRMADO:* La pasarela aprobó el cobro (envía `resultado: APROBADO`). El pedido pasa a `PAGADO`.
+* *CONFIRMADO:* La pasarela aprobó el cobro (envía `resultado: APROBADO`, se guarda como `CONFIRMADO`). El pedido pasa a `PAGADO`.
 * *RECHAZADO:* La pasarela rechazó el cobro (envía `resultado: RECHAZADO`). El pedido pasa a `ANULADO` con motivo `PAGO_NO_COMPLETADO`.
 
 ### 2.5. Estados de la Anulación (M1)
@@ -63,7 +63,7 @@
 
 * *Cliente / Consumidor:* Persona natural o jurídica que adquiere productos a través de los canales digitales o presenciales y ejerce sus derechos de compra y postventa.
 * *Canal (Channel):* Aplicación de frontend o interfaz de entrada que interactúa con el cliente (CHATBOT, MARKETPLACE, RETAIL).
-* *Gestor de Ventas / Postventa:* Usuario administrativo interno con permisos y roles elevados (GESTOR, ADMIN) para autorizar anulaciones complejas, evaluar devoluciones y dictaminar resoluciones a reclamos.
+* *Gestor de Ventas / Postventa:* Usuario administrativo interno para autorizar anulaciones complejas, evaluar devoluciones y dictaminar resoluciones a reclamos. "Gestor" es el nombre que usamos en specs/interfaz; el rol real del catálogo cerrado de Seguridad es `ADMIN_VENTAS` (ver `AGENTS.md`).
 * *Pasarela de Pagos (Payment Gateway):* Sistema externo encargado de la captura, autorización y liquidación de pagos electrónicos (tarjetas, transferencias).
 * *Módulo de Despacho y Logística (Módulo E):* Servicio externo a Ventas responsable de la asignación de transportistas, rutas de entrega y notificación del estado del envío.
 * *Módulo de Seguridad y Usuarios (Módulo G):* Servicio centralizado de autenticación, control de accesos (RBAC), emisión de tokens JWT y gestión del maestro de cuentas de usuario.

@@ -2,6 +2,10 @@
 
 Implementación del [modelo lógico](diagrama-logico.md) en PostgreSQL 17 sobre Supabase (proyecto `nsfrwxrjidyckgfriyhv`). Incluye los tipos reales, valores por defecto, restricciones, índices y la configuración de seguridad. El script que crea todo es [ventas_postventa_schema.sql](../../../infra/bd/ventas_postventa_schema.sql), aplicado como la migración `crear_esquemas_ventas_postventa`.
 
+> **Pendiente de aplicar en Supabase:** las columnas que referencian un usuario de Seguridad (`id_cliente`, `id_vendedor`, `id_solicitante`, `id_autorizador`) pasaron de `bigint` a `uuid`, confirmado por el módulo de Seguridad (`sub` del JWT es `uuid`) — ver `integraciones/ACUERDO_G7_SEGURIDAD.md`. Este documento y el script ya reflejan el tipo correcto; falta la migración real.
+>
+> **Pendiente de aplicar en Supabase:** `pedido.tienda_id` y `pago.monto_efectivo`/`monto_tarjeta`/`fecha_venta` son columnas nuevas del acuerdo con Retail (G4, 2026-10-12 — ver `integraciones/ACUERDO_G4_RETAIL.md`): el pedido `RETAIL` nace `PAGADO` y transiciona a `ENTREGADO` en la misma operación, sin envío. Este documento y el script ya las reflejan; falta la migración real.
+
 ## 1. Diagrama
 
 Esquema ventas (M1):
@@ -39,6 +43,7 @@ erDiagram
         uuid id_cliente "referencia sin FK, null"
         uuid id_vendedor "referencia sin FK, null"
         bigint id_direccion_entrega "referencia sin FK, null"
+        varchar(40) tienda_id "null, solo RETAIL"
     }
     DETALLE_PEDIDO {
         bigint id PK "identity, not null"
@@ -55,10 +60,13 @@ erDiagram
         bigint id PK "identity, not null"
         bigint id_pedido FK "not null"
         varchar(30) metodo "not null"
-        varchar(100) referencia "null"
+        varchar(100) referencia "null, también referenciaOperacion del POS en RETAIL"
         numeric(12-2) monto "not null"
         varchar(20) estado "not null"
         timestamptz fecha_proceso "null"
+        numeric(12-2) monto_efectivo "null, solo RETAIL con metodo MIXTO"
+        numeric(12-2) monto_tarjeta "null, solo RETAIL con metodo MIXTO"
+        timestamptz fecha_venta "null, solo RETAIL, venta sin conexión hasta 72h atrás"
     }
     HISTORIAL_ESTADO {
         bigint id PK "identity, not null"

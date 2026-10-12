@@ -14,7 +14,7 @@ Garantizar que todo endpoint que modifique o exponga datos de pedidos, anulacion
 | Regla | Descripción |
 |---|---|
 | Validación de token | Toda solicitud a un endpoint protegido debe incluir un `Authorization: Bearer <token>` válido, emitido por el módulo de Seguridad (G). Un token ausente, expirado o inválido responde `401 Unauthorized`. |
-| Validación de rol | Las acciones administrativas (aprobar/rechazar anulaciones `EN_PREPARACION`, resolver expedientes, consultar el dashboard) requieren rol `GESTOR`/`ADMIN`. Un rol insuficiente, o un rol presente en el token pero no reconocido por el catálogo del sistema, responde `403 Forbidden` (nunca `500`). |
+| Validación de rol | Las acciones administrativas (aprobar/rechazar anulaciones `EN_PREPARACION`, resolver expedientes, consultar el dashboard) requieren rol `ADMIN_VENTAS` (catálogo cerrado de Seguridad). Un rol insuficiente, o un rol presente en el token pero no reconocido por el catálogo del sistema, responde `403 Forbidden` (nunca `500`). |
 | Validación de pertenencia del recurso | Un Cliente solo puede consultar o anular **sus propios** pedidos. Intentar operar sobre un pedido de otro cliente responde `403 Forbidden`, aunque el token sea válido. |
 | Validación de origen de servicio | Endpoints invocados por sistemas internos (Canal, Despacho, pasarela de pago) exigen un token de servicio específico, distinto del token de usuario final. |
 
@@ -51,7 +51,7 @@ Incluye:
 
 #### CA-04. Aceptación con token y rol válidos
 
-- **DADO** un Gestor autenticado con rol `GESTOR` y token válido.
+- **DADO** un Gestor autenticado con rol `ADMIN_VENTAS` y token válido.
 - **CUANDO** aprueba una anulación `EN_PREPARACION`.
 - **ENTONCES** el sistema procesa la solicitud normalmente, sin bloqueos de seguridad.
 
@@ -62,7 +62,7 @@ Incluye:
 | CA-01 | Enviar solicitudes sin token, con token expirado y con token malformado. | Integración | `401 Unauthorized` en los tres casos. |
 | CA-02 | Enviar solicitud de aprobación de anulación con un token de rol `CLIENTE`. | Integración | `403 Forbidden`. |
 | CA-03 | Enviar solicitud de anulación de un `pedidoId` que no pertenece al cliente autenticado. | Integración | `403 Forbidden`. |
-| CA-04 | Enviar solicitud de aprobación con token de rol `GESTOR` válido. | Integración | `200 OK` / procesamiento exitoso. |
+| CA-04 | Enviar solicitud de aprobación con token de rol `ADMIN_VENTAS` válido. | Integración | `200 OK` / procesamiento exitoso. |
 
 ## 6. Fuera de alcance
 

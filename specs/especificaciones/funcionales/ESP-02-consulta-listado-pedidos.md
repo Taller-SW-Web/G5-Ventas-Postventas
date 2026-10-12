@@ -26,7 +26,8 @@ Esta especificación es la única puerta de lectura hacia las tablas de M1 desde
 Esta especificación comprende:
 
 * Consulta de un pedido por identificador, incluyendo ítems, bloques (`canal`, `cupon`, `envio`, `contacto`, `pago`), estado actual e historial.
-* Listado de pedidos de un cliente, con filtro por estado.
+* Listado de pedidos de un cliente específico (uso administrativo del Gestor, por `clienteId`).
+* Listado de "mis pedidos" del cliente autenticado, sin exponer `clienteId` (acuerdo H-03 con Marketplace, ver sección 7.2b).
 * Control de qué actor puede consultar qué pedidos.
 
 La modificación del estado del pedido no forma parte de esta especificación (ver **ESP-03**).
@@ -77,12 +78,19 @@ Devuelve detalle o listado
 3. El sistema recupera el pedido, sus ítems, bloques (`canal`, `cupon`, `envio`, `contacto`, `pago`), estado actual e historial.
 4. El sistema devuelve el detalle completo.
 
-### 7.2 Flujo principal — listado por cliente
+### 7.2 Flujo principal — listado por cliente (Gestor)
 
-1. Un canal solicita el listado de pedidos de un cliente, con un filtro opcional de `estado`.
-2. El sistema valida que el canal represente a ese cliente.
+1. El Gestor solicita el listado de pedidos de un `clienteId` específico, con filtros opcionales.
+2. El sistema valida que el solicitante tenga rol administrativo.
 3. El sistema recupera los pedidos que cumplen el filtro.
 4. El sistema devuelve el listado.
+
+### 7.2b Flujo principal — mis pedidos (acuerdo H-03 con Marketplace)
+
+1. El cliente autenticado (vía canal) solicita su propio historial de pedidos, sin indicar `clienteId`.
+2. El sistema identifica al cliente exclusivamente a partir del JWT (`sub`/`customerId`).
+3. El sistema recupera los pedidos de ese cliente, con filtro opcional de `estado` y paginación (`page`/`pageSize`).
+4. El sistema devuelve el listado; si no tiene compras previas, devuelve una lista vacía (`200 OK`), nunca `404`.
 
 ### 7.3 Flujos alternativos
 
@@ -115,8 +123,10 @@ Devuelve detalle o listado
 | Endpoint            | Parámetro     | Tipo        | Obligatorio | Descripción                        |
 | --------------------- | --------------- | ------------ | :---------: | ------------------------------------- |
 | Consulta por id        | `pedidoId`       | UUID         |      Sí     | Identificador del pedido.             |
-| Listado por cliente     | `clienteId`      | Texto        |      Sí     | Cliente cuyos pedidos se listan.      |
-| Listado por cliente     | `estado`         | Enumeración  |      No     | Filtro por estado del pedido.         |
+| Listado por cliente (Gestor) | `clienteId`      | Texto        |      Sí     | Cliente cuyos pedidos se listan.      |
+| Listado por cliente (Gestor) | `estado`         | Enumeración  |      No     | Filtro por estado del pedido.         |
+| Mis pedidos (`/me`)     | `estado`         | Enumeración  |      No     | Filtro por estado del pedido.         |
+| Mis pedidos (`/me`)     | `page`, `pageSize` | Entero     |      No     | Paginación (default `1`/`10`, `pageSize` máx. `50`). |
 
 ### 8.2 Datos de salida (detalle)
 
@@ -136,6 +146,7 @@ Devuelve detalle o listado
 2. El Gestor puede leer cualquier pedido, sin restricción de cliente.
 3. La consulta es de solo lectura; ningún endpoint de esta especificación modifica el pedido.
 4. El historial devuelto debe estar siempre ordenado cronológicamente.
+5. El listado de "mis pedidos" (`/pedidos/me`) nunca acepta `clienteId` por query string — la identidad se toma exclusivamente del JWT (acuerdo H-03 con Marketplace, ver `api-ventas.md` 1.4b).
 
 ---
 
@@ -158,8 +169,9 @@ Esta especificación no modifica el estado del pedido ni genera historial — so
 ## 12. Integraciones y API
 
 ```http
-GET /api/pedidos/{pedidoId}
-GET /api/pedidos?clienteId={id}&estado={estado}
+GET /api/v1/pedidos/{pedidoId}
+GET /api/v1/pedidos?clienteId={id}&estado={estado}        # Gestor
+GET /api/v1/pedidos/me?estado={estado}&page={n}&pageSize={n}   # cliente autenticado (H-03)
 ```
 
 > Las rutas y estructuras definitivas deben mantenerse alineadas con `specs/api-contract.md`.

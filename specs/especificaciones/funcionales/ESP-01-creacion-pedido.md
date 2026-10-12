@@ -62,6 +62,7 @@ Antes de crear un pedido se debe cumplir lo siguiente:
 5. La solicitud debe incluir el bloque `contacto` con al menos un medio de contacto del cliente.
 6. El precio y la disponibilidad de cada ítem deben validarse contra Productos (F).
 7. Si se envía el bloque `cupon`, el código debe existir y estar vigente.
+8. La solicitud debe incluir una cabecera `Idempotency-Key` (UUID v4, máximo 128 caracteres) — ver sección 9, regla 11 (acuerdo H-02 con Marketplace).
 
 ---
 
@@ -92,9 +93,9 @@ Se registra el pedido en estado CREADO
 2. El sistema valida que el canal esté autenticado y su token sea válido, y que envíe la cabecera `Idempotency-Key`. Si esa clave ya creó un pedido con el mismo cuerpo, devuelve ese pedido (`200`) sin crear otro.
 3. El sistema valida que el bloque `canal` identifique correctamente el origen (Marketplace, Chatbot o Retail).
 4. El sistema valida que existan uno o más ítems, cada uno con producto y cantidad válidos.
-5. El sistema consulta a Productos (F) el precio y disponibilidad de cada ítem.
+5. El sistema consulta a Productos (F) el precio y disponibilidad de cada ítem, y solicita la reserva de stock con `POST /api/v1/inventario/reservas` (acuerdo con Productos, 2026-10-11 — ver `integraciones/ACUERDO_G6_PRODUCTOS.md`). La respuesta `202 Accepted` solo confirma que el comando fue admitido, no que la reserva ya se concretó; el resultado definitivo llega después de forma asíncrona. **Excepto para `RETAIL`** (confirmado 2026-10-12 con G4): el POS ya descontó el stock central de Productos directamente al momento de la venta, antes de esta llamada — M1 no reserva ni confirma nada con Productos para este canal, solo registra el pedido (ver regla 13).
 6. Si se incluyó el bloque `cupon`, el sistema valida su vigencia y calcula el descuento aplicable.
-7. El sistema valida que el bloque `envio` incluya una dirección de entrega existente.
+7. El sistema valida que el bloque `envio` incluya una dirección de entrega existente — excepto para `RETAIL`, donde `envio` es opcional y en su lugar se valida `tiendaId` (ver regla 13).
 8. El sistema valida que el bloque `contacto` incluya al menos un medio de contacto.
 9. El sistema registra el bloque `pago` como referencia del medio de pago declarado (sin procesar el cobro — ver ESP-03).
 10. El sistema calcula subtotal, descuento (si hubo cupón) y total.
@@ -102,6 +103,7 @@ Se registra el pedido en estado CREADO
 12. El sistema registra el primer historial de estado (`null → CREADO`, actor `CANAL_CHATBOT` para Chatbot o `CLIENTE` para Marketplace).
 12.1. Marketplace: después de registrar el pedido, M1 pide el cobro al simulador de pasarela. El resultado llega por 1.2 (ver ESP-03).
 13. El sistema devuelve al canal la confirmación con el identificador del pedido.
+14. Si el canal no construye su propia simulación de pago (ej. Marketplace), inmediatamente después M1 invoca al simulador de pasarela compartido para iniciar el cobro simulado — el canal no interviene en este paso ni recibe su respuesta directamente. Si el canal sí construye su propia simulación (ej. Chatbot), este paso no aplica: es el propio canal quien notificará el resultado directamente (ver regla 12). Si el canal es Retail, este paso tampoco aplica: el pedido ya nació `PAGADO` y transicionó a `ENTREGADO` en los pasos 11-12b, no hay nada que notificar después (ver regla 13). En los casos de Marketplace y Chatbot, el resultado llega de forma asíncrona vía la notificación de pago (ver ESP-03, actor `PASARELA_PAGOS`).
 
 ### 7.1.1 Variante Retail (acuerdo G4)
 
@@ -165,12 +167,16 @@ Se registra el pedido en estado CREADO
 | `items[]`    | `productoId`        | UUID / identificador    |      Sí     | Producto solicitado.                                              |
 | `items[]`    | `cantidad`          | Entero                  |      Sí     | Cantidad solicitada (> 0).                                        |
 | `cupon`      | `codigo`            | Texto                   |      No     | Código de cupón aplicado, si existe.                              |
-| `envio`      | `direccionId`       | UUID / identificador    |      Sí     | Dirección de entrega registrada del cliente.                     |
+| `envio`      | `direccionId`       | UUID / identificador    | Sí, salvo `RETAIL` | Dirección de entrega registrada del cliente. Para `RETAIL` el bloque `envio` es opcional (regla 13). |
 | `envio`      | `tipoEntrega`       | Enumeración             |      No     | `DOMICILIO` \| `RECOJO_TIENDA` (por defecto `DOMICILIO`).         |
+| `envio`      | `tiendaId`          | Texto                   | Sí, solo `RETAIL` | Código de la tienda donde ocurrió la venta (ej. `TIENDA-MIRAFLORES`). Reemplaza a `direccionId` para este canal — el cliente se lleva el producto en el momento, nunca hay envío a domicilio (confirmado 2026-10-12 con G4). |
 | `contacto`   | `telefono`          | Texto                   | Condicional | Al menos uno entre `telefono` y `email` es obligatorio.          |
 | `contacto`   | `email`             | Texto                   | Condicional | Al menos uno entre `telefono` y `email` es obligatorio.          |
-| `pago`       | `metodo`            | Enumeración             |      Sí     | Medio de pago declarado por el cliente (referencia, no procesamiento). |
+| `pago`       | `metodo`            | Enumeración             |      Sí     | Medio de pago declarado por el cliente (referencia, no procesamiento). Para `RETAIL`: `EFECTIVO` \| `TARJETA_POS` \| `MIXTO` (confirmado 2026-10-12 con G4). |
 | `pago`       | `referencia`        | Texto                   |      No     | Referencia externa del medio de pago, si aplica.                 |
+| `pago`       | `referenciaOperacion` | Texto                 | Sí, si `RETAIL` con `TARJETA_POS` o `MIXTO` | Número de voucher del POS. No se guarda código de autorización ni últimos 4 dígitos — el arqueo queda del lado de Retail. |
+| `pago`       | `montoEfectivo` / `montoTarjeta` | Decimal     | Sí, solo si `metodo: MIXTO` | Desglose del pago combinado en una venta `RETAIL`.               |
+| `pago`       | `fechaVenta`        | Fecha/hora (UTC, ISO-8601) | No (solo `RETAIL`, venta sin conexión) | Fecha real de la venta, hasta 72 h atrás (regla 13), ej. `2026-10-11T14:20:00Z`. No reemplaza el `fechaHora` de trazabilidad (RNF-03), que siempre registra el momento real de la llamada. |
 
 ### 8.2 Datos de salida
 
@@ -180,7 +186,7 @@ Cuando el pedido se registra correctamente, el sistema devuelve información que
 | ------------------ | --------------------------------------------------------- |
 | `pedidoId`          | Identificador único del pedido.                            |
 | `codigo`            | Código legible del pedido.                                 |
-| `estado`            | Estado actual. Inicialmente `CREADO`.                       |
+| `estado`            | Estado actual. Inicialmente `CREADO`, salvo `RETAIL` (regla 13), que inicia y queda directo en `ENTREGADO` (pasando por `PAGADO` en la misma operación). |
 | `subtotal`          | Suma de los ítems antes de descuento.                       |
 | `descuento`         | Monto de descuento aplicado por el cupón, si corresponde.  |
 | `total`             | Monto final del pedido.                                     |
@@ -210,7 +216,7 @@ El pedido debe conservar como mínimo:
 * Bloque `cupon` aplicado, si existe, con el descuento calculado.
 * Bloque `envio` (dirección y tipo de entrega).
 * Bloque `contacto` (teléfono y/o email).
-* Bloque `pago` (método y referencia declarados).
+* Bloque `pago` (método y referencia declarados; además `fechaVenta` si el canal es `RETAIL`).
 * Estado actual y fecha de creación.
 
 ---

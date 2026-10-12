@@ -232,6 +232,8 @@ Valores de `resultado`:
 | `APROBADO` | `CONFIRMADO` | `CREADO` → `PAGADO` | `PASARELA_PAGOS` |
 | `RECHAZADO` | `RECHAZADO` | `CREADO` → `ANULADO`, motivo `PAGO_NO_COMPLETADO` | `PASARELA_PAGOS` |
 
+La transición a `ANULADO` por rechazo libera la reserva de stock en Productos y, si había cupón aplicado, publica su restauración, automáticamente y sin intervención del Gestor, sin generar solicitud de reembolso hacia F4 — ver [F1-Ciclo de vida del pedido.md](../funcionalidades/F1-Ciclo%20de%20vida%20del%20pedido.md), CA-07b.
+
 Cualquier otro valor responde `400 Bad Request`. Si la misma `transaccionId` llega dos veces, se responde `200 OK` con el resultado ya registrado, sin repetir el cambio.
 ### Respuestas
 #### `200 OK`
@@ -318,10 +320,11 @@ Descripción: Permite a clientes, canales y administradores consultar el estado 
 - **`401 Unauthorized`**: Token ausente o inválido.
 - **`403 Forbidden`**: El cliente autenticado no es el titular de la orden.
 - **`404 Not Found`**: El pedido solicitado no existe.
-### 1.4 Listar Pedidos por Cliente
+### 1.4 Listar Pedidos por Cliente (uso administrativo)
+
 - **Endpoint:** `GET /api/v1/pedidos`
-Descripción: Permite obtener el listado histórico paginado de pedidos asociados a un cliente.
-- **Headers:** `Authorization: Bearer <token>`
+Descripción: Listado paginado de pedidos para el Gestor/Backoffice — requiere indicar explícitamente el `clienteId` a consultar. Para que un canal muestre "mis pedidos" al propio cliente autenticado, usar **1.4b** (`/pedidos/me`), no este endpoint.
+- **Headers:** `Authorization: Bearer <token_gestor>` (requiere rol `ADMIN_VENTAS`, claim `roles` del JWT — no es un scope, ver catálogo de scopes)
 ### Query Params
 clienteId (requerido para clientes): UUID del cliente en Seguridad (claim `sub`).
 estado (opcional): `CREADO` | `PAGADO` | `EN_PREPARACION` | `DESPACHADO` | `ENTREGADO` | `ANULADO`
@@ -423,7 +426,7 @@ Descripción: Despacho (E) notifica entrega fallida definitiva o rechazo en puer
 ### 1.7 Solicitar Anulación
 - **Endpoint:** `POST /api/v1/pedidos/{pedidoId}/anulaciones`
 Descripción: Cancela el pedido. Soporta cancelación automática e inmediata por el canal en estado `CREADO` por motivo `PAGO_NO_COMPLETADO` (A9) sin intervención del Gestor.
-- **Headers:** `Authorization: Bearer <token>`
+- **Headers:** `Authorization: Bearer <token_canal>` — token de servicio del canal (`tipo: "servicio"`, scope `ventas:pedidos:anular`), no el token del cliente.
 ### Request Body
 {
   "motivo": "`PAGO_NO_COMPLETADO`",
@@ -464,7 +467,7 @@ Requiere autorización del Gestor si está en `EN_PREPARACION`:
 
 - **Endpoint:** `GET /api/v1/pedidos/anulaciones/pendientes`
 Descripción: Lista las anulaciones en `PENDIENTE_AUTORIZACION` que esperan decisión del Gestor (bandeja de F2).
-- **Headers:** `Authorization: Bearer <token_gestor>` (scope `ventas:admin`)
+- **Headers:** `Authorization: Bearer <token_gestor>` (requiere rol `ADMIN_VENTAS`, claim `roles` del JWT — no es un scope, ver catálogo de scopes)
 ### Query Params
 pagina (opcional, default: 0)
 tamano (opcional, default: 10)
@@ -490,7 +493,7 @@ tamano (opcional, default: 10)
 
 - **Endpoint:** `PATCH /api/v1/pedidos/{pedidoId}/anulaciones/{anulacionId}`
 Descripción: El Gestor resuelve una anulación en `PENDIENTE_AUTORIZACION`. Si aprueba, F1 ejecuta `EN_PREPARACION → ANULADO` y dispara los efectos de F2 (ESP-06). Si rechaza, el pedido conserva su estado.
-- **Headers:** `Authorization: Bearer <token_gestor>` (scope `ventas:admin`)
+- **Headers:** `Authorization: Bearer <token_gestor>` (requiere rol `ADMIN_VENTAS`, claim `roles` del JWT — no es un scope, ver catálogo de scopes)
 ### Request Body
 ```json
 {
@@ -511,3 +514,37 @@ Descripción: El Gestor resuelve una anulación en `PENDIENTE_AUTORIZACION`. Si 
 Si `decision` es `RECHAZADA`, `estadoPedido` vuelve a `EN_PREPARACION` y `estadoAnulacion` queda en `RECHAZADA`.
 ### Errores
 - **`409 Conflict`**: La anulación no está en `PENDIENTE_AUTORIZACION`, o el pedido ya no está en `EN_PREPARACION` (por ejemplo, ya despachó) — en ese caso la anulación pasa a `RECHAZADA`.
+
+---
+
+## Eventos salientes de M1 hacia Marketplace
+
+### 1.10 Webhook de Estado de Envío (acuerdo H-05 con Marketplace)
+
+- **Evento:** `pedidos.envio.estado_actualizado` (versión `1.0.0`)
+- **Descripción:** M1 actúa como intermediario entre Despacho (Módulo E) y Marketplace, para que Marketplace no se acople directamente a los eventos internos de Despacho. Cuando M1 recibe de Despacho una actualización pública de estado (`DESPACHADO`, `ENTREGADO`, u otra que el equipo defina como pública), M1 notifica a Marketplace con este webhook.
+- **Mecanismo de entrega:** pendiente de diseño técnico (reintentos, backoff, cola de salida). Es responsabilidad de quien implemente F1 definirlo; este documento solo fija el contrato que Marketplace ya aceptó.
+
+**Cuerpo del evento:**
+
+```json
+{
+  "eventId": "evt_uuid_123456",
+  "eventType": "ShipmentStatusUpdated",
+  "version": "1.0.0",
+  "timestamp": "2026-10-09T21:40:00Z",
+  "emitter": "modulo-ventas",
+  "data": {
+    "orderId": "PED-2026-00981",
+    "publicStatus": "DESPACHADO",
+    "trackingNumber": "TRK-987654",
+    "estimatedDeliveryDate": "2026-10-12"
+  }
+}
+```
+
+**Garantías de entrega:**
+- **Deduplicación:** Marketplace almacena y valida el `eventId` recibido, para no duplicar notificaciones al usuario final si M1 reintenta.
+- **Privacidad:** el payload no expone datos sensibles ni direcciones detalladas — solo identificadores de tracking y estados públicos.
+
+> Este webhook es independiente de los eventos internos de dominio que M1 publica hacia M2 (`pedido.pagado`, `pedido.anulado`, `pedido.entregado`, ver [catalogo-eventos.md](catalogo-eventos.md)). Tiene su propio nombre, formato y destino — no reutiliza el mecanismo de `outbox_evento`/M2 tal cual; el mecanismo de entrega hacia Marketplace todavía está por diseñarse.

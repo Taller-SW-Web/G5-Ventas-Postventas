@@ -13,7 +13,7 @@ Registrar la respuesta formal emitida por el Gestor para un reclamo, hacerla vis
 ## 2. Contrato de API
 
 - **Método y endpoint:** `PATCH /api/v2/reclamos/{reclamoId}/respuesta`
-- **Autenticación:** `Authorization: Bearer <token_gestor>`
+- **Autenticación:** `Authorization: Bearer <token_gestor>` (requiere rol `ADMIN_VENTAS`)
 - **Parámetro de ruta:** `reclamoId`, identificador del reclamo que será atendido.
 - **Content-Type:** `application/json`
 - **Resultado exitoso:** `200 OK`

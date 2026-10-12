@@ -47,7 +47,7 @@ La ejecución del reembolso corresponde a **F4 — Reembolsos y extornos**, medi
 | ------------------- | --------------------------------------------------------------------------------- |
 | **Gestor**          | Evalúa la solicitud y determina si corresponde aprobarla o rechazarla.            |
 | **M2 — Postventa**  | Gestiona el expediente, valida las reglas de resolución y mantiene su estado.     |
-| **Productos — F**   | Valida la disponibilidad de stock cuando se solicita un cambio.                   |
+| **Productos — F**   | Valida la disponibilidad de stock cuando se solicita un cambio, y reintegra al inventario la unidad devuelta cuando la resolución es `CAMBIO` o `REEMBOLSO` (acuerdo 2026-10-11, ver `integraciones/ACUERDO_G6_PRODUCTOS.md`). |
 | **Despacho — E**    | Coordina la logística necesaria para un cambio de producto.                       |
 | **F4 — Reembolsos** | Procesa el reembolso cuando la resolución corresponde a una devolución de dinero. |
 
@@ -136,9 +136,10 @@ COMPLETADA      F4 — Reembolso
 
 1. El Gestor selecciona `CAMBIO`.
 2. M2 consulta a Productos la disponibilidad del nuevo producto.
-3. Si existe stock, se registra la resolución como `APROBADA`.
-4. M2 coordina con Despacho la logística del cambio.
-5. Una vez confirmado el cambio, la solicitud pasa a `COMPLETADA`.
+3. Si existe stock, se registra la resolución como `APROBADA`. La aprobación del Gestor (basada en la evidencia de ESP-07) es, para efectos de este sistema, la confirmación de que la unidad devuelta fue recibida y aceptada — no existe un paso físico de recepción separado.
+4. M2 solicita a Productos el reintegro de la(s) unidad(es) devuelta(s) (`POST /api/v1/inventario/reintegros`, acuerdo con Productos, 2026-10-11 — ver `integraciones/ACUERDO_G6_PRODUCTOS.md`), admitiendo reintegros parciales por línea/cantidad.
+5. M2 coordina con Despacho la logística del cambio.
+6. Una vez confirmado el cambio, la solicitud pasa a `COMPLETADA`.
 
 </details>
 
@@ -159,9 +160,10 @@ COMPLETADA      F4 — Reembolso
 
 1. El Gestor selecciona `REEMBOLSO`.
 2. M2 valida que la solicitud pueda generar un reembolso.
-3. M2 envía la solicitud correspondiente a F4.
-4. F4 procesa el reembolso según su propia especificación.
-5. Si F4 confirma el resultado exitoso, la solicitud puede pasar a `COMPLETADA`.
+3. M2 solicita a Productos el reintegro de la(s) unidad(es) devuelta(s) (`POST /api/v1/inventario/reintegros`, mismo criterio que en `CAMBIO`: la aprobación del Gestor confirma la recepción).
+4. M2 envía la solicitud correspondiente a F4.
+5. F4 procesa el reembolso según su propia especificación.
+6. Si F4 confirma el resultado exitoso, la solicitud puede pasar a `COMPLETADA`.
 6. M2 conserva la referencia de la operación de reembolso.
 
 </details>
