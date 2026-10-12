@@ -1,8 +1,14 @@
 # Guía para programar el frontend - Módulo D Ventas y Postventa
 
-El repositorio `G5-Ventas-Postventas-Frontend` está vacío (2026-10-12) — esta guía es para arrancarlo desde cero, a diferencia de la guía de backend (que corrige código ya existente). Se usa junto con `guias/frontend/estructura-frontend.md`, `specs/stack-frontend.md`, `specs/api-contract.md` (o `specs/api/api-ventas.md` y `api-postventas.md`, más detallados) y los mockups en `diseno/mockups/`.
+El repositorio `G5-Ventas-Postventas-Frontend` está vacío (2026-10-12) — esta guía es para arrancarlo desde cero, a diferencia de la guía de backend (que corrige código ya existente). Se usa junto con `guias/frontend/estructura-frontend.md`, `specs/stack-frontend.md`, `specs/api-contract.md` (o `specs/api/api-ventas.md` y `api-postventas.md`, más detallados) y los mockups de alta fidelidad (Figma, exportados como imágenes `M0N_...`, uno por pantalla y por cada modal/overlay que la compone — más detallados que los `.md` de `diseno/mockups/`).
 
 Si esta guía y un mockup/contrato no coinciden, manda el mockup o el contrato; avisa en el grupo para corregir la guía.
+
+> **Los mockups todavía no son el diseño final.** Al 2026-10-12 faltan dos correcciones de UX/UI antes de darlos por cerrados:
+> 1. **Paleta de colores del Dashboard** — hoy usa 5 colores distintos en las tarjetas de KPI (naranja, azul, rojo, verde, celeste) y en los gráficos; se va a corregir para reducir la saturación y que el **naranja sea el color predominante**. No hardcodear esos 5 colores como definitivos en el theme de Mantine.
+> 2. **Páginas 1 a 9 actualizadas con las 3 propuestas de UX/UI aprobadas (páginas 11, 12 y 13 del archivo de diseño)**, y el flujo interactivo de la página 10 reflejando esos cambios — todavía no está aplicado a los mockups oficiales.
+>
+> Lo que hay ahora sirve para empezar a programar estructura, datos y lógica — no para dar por cerrado el detalle visual final. Revisen la versión más reciente antes de pulir estilos.
 
 ---
 
@@ -117,14 +123,21 @@ Centralizado, no uno por pantalla (stack-frontend.md, sección 5.1):
 
 ## 5. Dashboard (Mockup 01, Fabrizio)
 
+**Pantallas del mockup:** `Dashboard_Principal`, `Atencion_Prioritaria`, `Modal_Detalle_prioritario`.
+
+- **Layout confirmado en el mockup:** barra lateral fija (`VENTAS / POSTVENTA`) con 4 accesos — Dashboard, Pedidos, Postventa, Reportes — más filtros de `Periodo` (rango de fechas) y `Canal` arriba, con botones `Aplicar filtros`/`Limpiar`.
+- **Tarjetas de KPI:** Ingresos, Ticket promedio, Tasa de anulación, Tasa de devolución, Atención (reclamos abiertos) — cada una con variación vs. periodo anterior. **Hoy usan 5 colores distintos de acento; va a corregirse a una paleta dominada por naranja (ver advertencia al inicio de esta guía)** — no hardcodear esos 5 colores.
+- Gráficos: tendencia de ventas (línea), ventas por canal (barras, `Marketplace`/`Chatbot`/`Retail`), distribución de pedidos por estado (dona).
 - **Endpoint:** `GET /api/v2/dashboard/metricas` (2.12), rol `ADMIN_VENTAS`.
 - Filtros `desde`, `hasta` (obligatorios), `canal` (opcional, `MARKETPLACE`/`CHATBOT`/`RETAIL` — nunca `WEB`, ver `AGENTS.md` sección 2 punto 4).
 - Indicadores: pedidos totales/anulados/entregados, devoluciones aprobadas, monto reembolsado PEN, CSAT promedio, reclamos pendientes de SLA.
-- "Atención prioritaria" (ver `Contexto y Flujo - Mockup.md`, sección 5) es una vista complementaria que cruza datos de varias pantallas — no tiene endpoint propio documentado todavía; confirmar con Fabrizio cómo arma esa consulta (probablemente combinando 1.8 de anulaciones pendientes, reclamos vencidos de 2.9/2.10, y devoluciones `EN_EVALUACION`).
+- "Atención prioritaria" (panel propio en el Dashboard, más una vista ampliada `Ver todas` con su propio modal de detalle) cruza datos de varias pantallas — no tiene endpoint propio documentado todavía; confirmar con Fabrizio cómo arma esa consulta (probablemente combinando 1.8 de anulaciones pendientes, reclamos vencidos de 2.9/2.10, y devoluciones `EN_EVALUACION`).
 
 ---
 
 ## 6. Pedidos y Detalle del pedido (Mockup 02–03, Michael)
+
+**Pantallas del mockup:** `Bandeja_Pedidos_Principal` (02), `Detalle_Pedido_Principal` (03) — a diferencia de las demás, Michael no tiene modales/overlays adicionales listados en el mockup, solo las dos pantallas principales.
 
 - **Bandeja (02):** `GET /api/v1/pedidos` (1.4, uso administrativo, rol `ADMIN_VENTAS`) — filtros `clienteId`, `estado`, `desde`, `hasta`, paginado.
 - **Detalle (03):** `GET /api/v1/pedidos/{pedidoId}` (1.3) — items, pago, envío (o `tiendaId` si es `RETAIL`, ver `api-ventas.md` "Campos adicionales de Retail"), historial de estados completo.
@@ -136,6 +149,8 @@ Centralizado, no uno por pantalla (stack-frontend.md, sección 5.1):
 
 ## 7. Anulaciones (Mockup 04, Luis Arroyo)
 
+**Pantallas del mockup:** `Anulaciones_Principal`, `Modal_Confirmar_aprobacion`, `Modal_Confirmar_rechazo` — dos modales de confirmación separados, uno por decisión (no un solo modal genérico con un toggle).
+
 - **Endpoint:** `POST /api/v1/pedidos/{pedidoId}/anulaciones` (1.7) para solicitar; `GET .../anulaciones/pendientes` (1.8) y `PATCH .../anulaciones/{anulacionId}` (1.9) para la bandeja del Gestor, ambos rol `ADMIN_VENTAS`.
 - Catálogo de motivos cerrado — ver `guias/backend/guia-backend.md` sección 6.1. El formulario de anulación nunca debe aceptar texto libre como motivo, es un selector contra ese catálogo. **No incluir `STOCK_NO_DISPONIBLE` ni `CUPON_RECHAZADO` en el selector del Gestor** — esos dos los dispara Productos automáticamente, nunca una persona.
 - `EN_PREPARACION` necesita el modal de autorización (aprobar/rechazar), con `comentario` obligatorio si se rechaza.
@@ -145,11 +160,15 @@ Centralizado, no uno por pantalla (stack-frontend.md, sección 5.1):
 
 ## 8. Hub Postventa (Mockup 05, sin asignar)
 
-Ver 1.1 — agrupa indicadores de Devoluciones, Reclamos y Reembolsos, sin endpoint propio. Construirla después de que esas tres pantallas tengan su resumen/listado funcionando, para poder reusar esos mismos `services`.
+**Pantallas del mockup:** `Hub_Postventa`, `Atencion_Prioritaria`, `Modal_Detalle_prioritario` — mismo patrón de "atención prioritaria" que el Dashboard (Mockup 01), pero acotado a postventa (reclamos + devoluciones).
+
+Es una pantalla simple: 3 tarjetas de resumen (devoluciones pendientes, reclamos abiertos, reembolsos en proceso), 3 tarjetas de acceso a módulo con botón `Ir al módulo`, y el panel de atención prioritaria con `Ver casos prioritarios`. No tiene formularios ni tablas propias — es puramente navegación y conteos que ya expone cada pantalla individual (ver 1.1 — agrupa indicadores de Devoluciones, Reclamos y Reembolsos, sin endpoint propio). Construirla después de que esas tres pantallas tengan su resumen/listado funcionando, para poder reusar esos mismos `services`.
 
 ---
 
 ## 9. Devoluciones y cambios (Mockup 06, Joseph)
+
+**Pantallas del mockup:** `Devoluciones_y_Cambios_Principal`, `Modal_Confirmar_aprobacion`, `Modal_Confirmar_rechazo`, `Modal_Confirmar_cambio`, `Modal_Derivar_reembolso`, `Modal_Comprobante_adjunto`, `Modal_Vista_previa_evidencia` — es la pantalla con más estados de las nueve (7 en total). Los tres modales de resolución (`aprobacion`/`rechazo`/`cambio`) son distintos entre sí, no un solo modal con un selector — y `Modal_Derivar_reembolso` es un paso aparte después de aprobar con `DEVOLUCION_DINERO`, antes de pasar a Reembolsos (Mockup 08).
 
 - **Endpoints:** 2.1 (subir evidencia), 2.2 (registrar), 2.3 (consultar), 2.4 (listado administrativo), 2.5 (resolver) — todos `api-postventas.md`.
 - El plazo es 7 días naturales desde la entrega — mostrarlo en el expediente, no solo validarlo al resolver.
@@ -160,6 +179,8 @@ Ver 1.1 — agrupa indicadores de Devoluciones, Reclamos y Reembolsos, sin endpo
 
 ## 10. Reclamos (Mockup 07, Fabrizio)
 
+**Pantallas del mockup:** `Reclamos_Principal`, `Modal_Responder_reclamo`, `Modal_Marcar_atendido`, `Overlay_PDF_reclamo` — responder y marcar como atendido son dos pasos/modales separados, no uno solo; el PDF se abre en un overlay dedicado, no una descarga directa.
+
 - **Endpoints:** 2.8 (registrar, normalmente desde el canal, no desde el Gestor), 2.9 (consultar por código), 2.10/2.10b (listar), 2.11 (responder) — `api-postventas.md`.
 - `respuestaVisibleCliente` es obligatorio para cerrar — el botón "Marcar como atendido" debe quedar deshabilitado hasta que el campo tenga contenido (stack-frontend.md, sección 5.4).
 - Mostrar el SLA (plazo de 15 días hábiles) como algo **distinto** del estado de atención — un reclamo puede estar `EN_PROCESO` y tener el plazo vencido a la vez; no ocultar eso.
@@ -168,13 +189,18 @@ Ver 1.1 — agrupa indicadores de Devoluciones, Reclamos y Reembolsos, sin endpo
 
 ## 11. Reembolsos (Mockup 08, Luis Alejandro)
 
+**Pantallas del mockup:** `Reembolsos_Principal` (filtros `Buscar`/`Estado`/`Origen`/`Fecha de creación`, tabla con Código/Fecha, Pedido, Cliente, Origen, Monto, Estado, Acción), `Modal_Autorizar_reembolso`, `Modal_Ejecutar_reembolso`, `Modal_Reintento_seguro`, `Overlay_Resultado_reembolso` — **autorizar y ejecutar son dos modales distintos y consecutivos**, no un solo botón "procesar": confirma exactamente el recorrido de `Contexto y Flujo - Mockup.md` sección 9 (`Autorizar cuando corresponde → Ejecutar → Consultar resultado`).
+
 - **Endpoint:** `POST /api/v2/reembolsos` (2.6), requiere cabecera `X-Idempotency-Key` siempre (RNF-08) — generarla una vez por intento de envío (UUID), no una por cada click, para que un doble click no dispare dos reembolsos.
-- Estados: `PENDIENTE`, `EXITOSO`, `FALLIDO`. Un `FALLIDO` o `PENDIENTE` sin confirmar habilita "Reintento seguro" — reenviar con la **misma** clave de idempotencia guardada, no generar una nueva.
+- Estados: `PENDIENTE`, `EXITOSO`, `FALLIDO`. Un `FALLIDO` o `PENDIENTE` sin confirmar habilita `Modal_Reintento_seguro` — reenviar con la **misma** clave de idempotencia guardada, no generar una nueva.
+- El resultado final se muestra en `Overlay_Resultado_reembolso`, no en un simple cambio de badge en la tabla — es una pantalla propia de confirmación.
 - Deshabilitar el botón de ejecutar mientras la operación está en curso (stack-frontend.md, sección 5.3) — es la única defensa de UX contra doble envío, la validación real la hace el backend.
 
 ---
 
 ## 12. Calificaciones y reportes (Mockup 09, Johan + Fabrizio)
+
+**Pantallas del mockup:** `Calificaciones_y_Reportes_Principal`, `Modal_Comparar_reportes`, `Modal_Exportar_reporte`, `Overlay_Detalle_CSAT`, `Overlay_Detalle_Operacion`, `Overlay_Comentarios`, `Overlay_Resumen`, `Overlay_Distribucion_por_canal`, `Overlay_Exportacion_completada` — la pantalla con más estados de las nueve (9 en total), reflejo de que mezcla dos funcionalidades (F5 y F6). Conviene que Johan y Fabrizio se repartan los overlays según a qué dato pertenecen (`Detalle_CSAT`/`Comentarios` → Johan; `Detalle_Operacion`/`Distribucion_por_canal`/`Resumen` → Fabrizio) antes de empezar, para no pisarse el componente principal.
 
 - **Calificaciones (Johan):** `POST /api/v2/csat` (2.7) no lo llama el Gestor — lo llama el canal tras la entrega. Esta pantalla es de **solo lectura** para el Gestor: consulta resultados, no registra encuestas. Si hace falta una vista de encuesta real (para que el cliente la responda), es una vista pública aparte (ver sección 4), no parte de este mockup.
 - **Reportes (Fabrizio):** reusa 2.12 (mismo endpoint que el Dashboard), con filtros de periodo/canal y comparación contra el periodo anterior. "Exportar" en el mockup es solo una simulación visual (ver `Contexto y Flujo - Mockup.md`, sección 12) — no hay endpoint de exportación en el contrato todavía (ESP-16, fuera de alcance por ahora).
