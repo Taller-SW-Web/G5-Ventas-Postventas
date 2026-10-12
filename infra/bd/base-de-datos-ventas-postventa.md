@@ -193,6 +193,7 @@ Cambios aplicados en Supabase después de la segunda migración:
 
 - **`ids_usuario_a_uuid`** (acuerdo A10 con Seguridad): toda persona se identifica con el UUID del claim `sub` del JWT. Pasaron de `bigint` a `uuid`: `pedido.id_cliente`, `pedido.id_vendedor`, `anulacion.id_solicitante`, `anulacion.id_autorizador`, `devolucion.id_cliente`, `devolucion.id_autorizador`, `reclamo.id_cliente`, `reembolso.id_autorizador` y `agregado_ventas.id_vendedor`.
 - **`pedido_idempotency_key`** (acuerdo H-02, endpoint 1.1): `ventas.pedido.idempotency_key varchar(128)`, única y con null permitido (los pedidos anteriores al acuerdo no tienen clave). Guarda la cabecera `Idempotency-Key`: si el canal reintenta, M1 devuelve el pedido ya creado en lugar de crear otro.
+- **`pedido_reserva_productos`** (acuerdo G6 con Productos): `ventas.pedido.reserva_id varchar(100)`, null mientras la reserva está pendiente y en Retail; guarda el `reservaId` que Productos devuelve por RabbitMQ y que se usa para confirmar o liberar el stock. Además, `SISTEMA_PRODUCTOS` se agrega a los CHECK de `historial_estado.actor` (anulación por falta de stock; provisional hasta que el equipo lo apruebe en ESP-03) y de `evento_recibido.origen` (idempotencia del resultado de la reserva).
 
 ## 9. Pendientes
 

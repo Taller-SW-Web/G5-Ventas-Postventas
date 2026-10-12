@@ -3,20 +3,8 @@
 -- Traducción a PostgreSQL del "Diagrama ER - VentasPostventas.drawio"
 -- Actualizado el 12/10/2026 para reflejar exactamente lo que hay en Supabase
 -- (migraciones crear_esquemas_ventas_postventa, decisiones_estados_canal_eventos,
--- huecos_h2_h3_h5_h6_postventa, ids_usuario_a_uuid y pedido_idempotency_key).
---
--- PENDIENTE DE APLICAR EN SUPABASE: las columnas id_cliente, id_vendedor,
--- id_solicitante y id_autorizador (ventas.pedido, ventas.anulacion,
--- postventa.devolucion, postventa.reclamo, postventa.reembolso,
--- postventa.agregado_ventas) se corrigieron de bigint a uuid, según
--- confirmó el módulo de Seguridad (sub del JWT es uuid). Este archivo ya
--- refleja el tipo correcto; falta la migración real sobre Supabase.
---
--- PENDIENTE DE APLICAR EN SUPABASE: ventas.pedido.tienda_id y
--- ventas.pago.monto_efectivo/monto_tarjeta/fecha_venta son columnas nuevas
--- del acuerdo con Retail (G4, 2026-10-12, ver integraciones/ACUERDO_G4_RETAIL.md)
--- — el pedido nace PAGADO y transiciona a ENTREGADO en la misma operación
--- para el canal RETAIL. Este archivo ya las refleja; falta la migración real.
+-- huecos_h2_h3_h5_h6_postventa, ids_usuario_a_uuid, pedido_idempotency_key
+-- y pedido_reserva_productos).
 --
 -- Esquema ventas    = M1 (Ventas)
 -- Esquema postventa = M2 (Postventa)
@@ -56,11 +44,11 @@ create table ventas.pedido (
     direccion             varchar(255),
     codigo_cupon          varchar(40),
     idempotency_key       varchar(128)  unique,   -- cabecera Idempotency-Key de 1.1 (acuerdo H-02)
+    reserva_id            varchar(100),           -- reservaId de Productos (G6); null pendiente o RETAIL
     creado_en             timestamptz   not null default now(),
     id_cliente            uuid,     -- referencia externa: módulo G (Seguridad y Usuarios)
     id_vendedor           uuid,     -- referencia externa: módulo G (Seguridad y Usuarios)
     id_direccion_entrega  bigint,   -- referencia externa: módulo E (Despacho y Entrega)
-    tienda_id             varchar(40),   -- solo RETAIL: código de tienda (ej. TIENDA-MIRAFLORES), reemplaza a envío
     constraint ck_pedido_canal check (canal in ('MARKETPLACE','CHATBOT','RETAIL')),
     constraint ck_pedido_estado check (estado in
         ('CREADO','PAGADO','EN_PREPARACION','DESPACHADO','ENTREGADO','ANULADO')),
@@ -89,20 +77,15 @@ create table ventas.detalle_pedido (
 comment on column ventas.detalle_pedido.id_producto is 'Referencia externa - módulo F (sin FK física)';
 
 create table ventas.pago (
-    id              bigint generated always as identity primary key,
-    id_pedido       bigint        not null references ventas.pedido(id) on delete cascade,
-    metodo          varchar(30)   not null,
-    referencia      varchar(100),   -- también usado como referenciaOperacion del POS en RETAIL
-    monto           numeric(12,2) not null,
-    estado          varchar(20)   not null,
-    fecha_proceso   timestamptz,
-    monto_efectivo  numeric(12,2),   -- solo RETAIL con metodo MIXTO
-    monto_tarjeta   numeric(12,2),   -- solo RETAIL con metodo MIXTO
-    fecha_venta     timestamptz,     -- solo RETAIL: fecha real de una venta sin conexión, hasta 72h atrás
+    id             bigint generated always as identity primary key,
+    id_pedido      bigint        not null references ventas.pedido(id) on delete cascade,
+    metodo         varchar(30)   not null,
+    referencia     varchar(100),
+    monto          numeric(12,2) not null,
+    estado         varchar(20)   not null,
+    fecha_proceso  timestamptz,
     constraint ck_pago_monto  check (monto >= 0),
-    constraint ck_pago_estado check (estado in ('PENDIENTE','CONFIRMADO','RECHAZADO')),
-    constraint ck_pago_montos_mixto check (monto_efectivo is null or monto_efectivo >= 0),
-    constraint ck_pago_montos_mixto2 check (monto_tarjeta is null or monto_tarjeta >= 0)
+    constraint ck_pago_estado check (estado in ('PENDIENTE','CONFIRMADO','RECHAZADO'))
 );
 
 create table ventas.historial_estado (
@@ -114,7 +97,7 @@ create table ventas.historial_estado (
     motivo           varchar(60),
     fecha_hora       timestamptz  not null default now(),
     constraint ck_historial_actor check (actor in
-        ('CLIENTE','GESTOR','CANAL_CHATBOT','PASARELA_PAGOS','SISTEMA_LOGISTICA'))
+        ('CLIENTE','GESTOR','CANAL_CHATBOT','PASARELA_PAGOS','SISTEMA_LOGISTICA','SISTEMA_PRODUCTOS'))
 );
 
 comment on column ventas.historial_estado.motivo is 'Incluye valores como PAGO_NO_COMPLETADO';
@@ -148,7 +131,7 @@ create table ventas.evento_recibido (
     id_evento    varchar(100) primary key,  -- transaccionId de la pasarela o guiaRemision:evento
     origen       varchar(30)  not null,
     recibido_en  timestamptz  not null default now(),
-    constraint ck_evento_recibido_origen check (origen in ('PASARELA_PAGOS','SISTEMA_LOGISTICA'))
+    constraint ck_evento_recibido_origen check (origen in ('PASARELA_PAGOS','SISTEMA_LOGISTICA','SISTEMA_PRODUCTOS'))
 );
 
 -- Índices para las claves foráneas de M1

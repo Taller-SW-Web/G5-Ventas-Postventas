@@ -42,11 +42,11 @@ erDiagram
         varchar(255) direccion
         varchar(40) codigo_cupon
         varchar(128) idempotency_key UK
+        varchar(100) reserva_id
         timestamp creado_en "NN"
         uuid id_cliente "referencia sin FK"
         uuid id_vendedor "referencia sin FK"
         bigint id_direccion_entrega "referencia sin FK"
-        varchar(40) tienda_id "solo RETAIL"
     }
     DETALLE_PEDIDO {
         bigint id PK
@@ -63,13 +63,10 @@ erDiagram
         bigint id PK
         bigint id_pedido FK "NN"
         varchar(30) metodo "NN"
-        varchar(100) referencia "también referenciaOperacion del POS en RETAIL"
+        varchar(100) referencia
         decimal(12-2) monto "NN"
         varchar(20) estado "NN"
         timestamp fecha_proceso
-        decimal(12-2) monto_efectivo "solo RETAIL con metodo MIXTO"
-        decimal(12-2) monto_tarjeta "solo RETAIL con metodo MIXTO"
-        timestamp fecha_venta "solo RETAIL, venta sin conexión hasta 72h atrás"
     }
     HISTORIAL_ESTADO {
         bigint id PK
@@ -245,7 +242,7 @@ ventas (M1):
 pedido           ([id], codigo UK, canal, fecha, estado, moneda, subtotal, descuento, total,
                   nombre_contacto, tipo_documento, numero_documento, telefono, email,
                   modalidad_envio, costo_envio, destinatario, distrito, direccion, codigo_cupon,
-                  idempotency_key UK, creado_en, id_cliente ⇢ G, id_vendedor ⇢ G, id_direccion_entrega ⇢ E)
+                  idempotency_key UK, reserva_id ⇢ F, creado_en, id_cliente ⇢ G, id_vendedor ⇢ G, id_direccion_entrega ⇢ E)
 
 detalle_pedido   ([id], id_pedido → pedido.id, id_producto ⇢ F, sku, descripcion, cantidad,
                   precio_unitario, descuento, importe)
@@ -319,17 +316,14 @@ Sin clave foránea:
 | Columna | Apunta a | Motivo |
 |---|---|---|
 | devolucion.id_pedido | ventas.pedido | Está en otro microservicio; se valida con la API de M1 |
-| devolucion.id_cliente, devolucion.id_autorizador | Módulo G | Usuarios de Seguridad y Usuarios, tipo `uuid` (= claim `sub` del JWT) |
+| devolucion.id_cliente | Módulo G | Usuarios de Seguridad y Usuarios |
 | devolucion_item.id_producto | Módulo F | Catálogo de Productos y Ofertas |
 | reembolso.id_pedido | ventas.pedido | Para controlar el saldo reembolsable del pedido (ESP-09) |
-| reembolso.id_autorizador | Módulo G | Usuarios de Seguridad y Usuarios, tipo `uuid` (= claim `sub` del JWT) |
 | reclamo.id_pedido | ventas.pedido | Igual que el anterior; es opcional |
-| reclamo.id_cliente | Módulo G | Usuarios de Seguridad y Usuarios, tipo `uuid` (= claim `sub` del JWT) |
+| reclamo.id_cliente | Módulo G | Usuarios de Seguridad y Usuarios |
 | calificacion.id_pedido | ventas.pedido | Igual que el anterior; es único |
 | reembolso.id_origen | ventas.anulacion o postventa.devolucion | Depende de tipo_origen y una de las tablas está en M1 |
-| pedido.id_cliente, pedido.id_vendedor | Módulo G | Usuarios de Seguridad y Usuarios, tipo `uuid` (= claim `sub` del JWT) |
-| anulacion.id_solicitante, anulacion.id_autorizador | Módulo G | Usuarios de Seguridad y Usuarios, tipo `uuid` (= claim `sub` del JWT) |
-| agregado_ventas.id_vendedor | Módulo G | Usuarios de Seguridad y Usuarios, tipo `uuid` (= claim `sub` del JWT) |
+| pedido.id_cliente, pedido.id_vendedor | Módulo G | Usuarios de Seguridad y Usuarios |
 | pedido.id_direccion_entrega | Módulo E | Dato de Despacho y Entrega |
 | detalle_pedido.id_producto | Módulo F | Catálogo de Productos y Ofertas |
 
@@ -338,16 +332,16 @@ Sin clave foránea:
 M1:
 
 1. pedido.codigo es único. pedido.idempotency_key también (acuerdo H-02): una misma cabecera Idempotency-Key no crea dos pedidos; es null en pedidos anteriores al acuerdo.
+   pedido.reserva_id es el reservaId que asigna Productos (F) al confirmar la reserva de stock (acuerdo G6); es null mientras la reserva está pendiente y siempre en RETAIL.
 2. pedido.estado solo admite CREADO, PAGADO, EN_PREPARACION, DESPACHADO, ENTREGADO y ANULADO. Las transiciones las controla M1 (ESP-03).
 3. Un pedido tiene como máximo una anulación.
 4. detalle_pedido.cantidad es mayor que cero y los montos no pueden ser negativos.
 5. historial_estado solo recibe inserciones.
-6. pago.estado solo admite PENDIENTE, CONFIRMADO y RECHAZADO (restricción `ck_pago_estado` en Supabase y enum `EstadoPago` de `servicio-ventas`; la pasarela envía `resultado: APROBADO`, que se traduce a `CONFIRMADO`).
+6. pago.estado solo admite PENDIENTE, CONFIRMADO y RECHAZADO (restricción `ck_pago_estado` en Supabase y enum `EstadoPago` de `servicio-ventas`).
 7. pedido.canal solo admite MARKETPLACE, CHATBOT y RETAIL (enum `CanalVenta`).
 8. anulacion.estado solo admite PENDIENTE_AUTORIZACION, EJECUTADA y RECHAZADA.
 9. outbox_evento.id_evento es la clave primaria (la genera M1); un evento no se marca `enviado_en` hasta que M2 confirma la recepción (ver evento_recibido en postventa).
 10. evento_recibido.id_evento es la clave primaria; evita que una misma notificación externa (pasarela o Despacho) duplique una transición.
-11. pedido.idempotency_key es única; una clave repetida con el mismo payload devuelve el pedido ya creado, con payload distinto responde `409 IDEMPOTENCY_KEY_REUSED` (acuerdo H-02 con Marketplace, ver `api-ventas.md` 1.1).
 
 M2:
 
@@ -361,7 +355,7 @@ M2:
 8. reembolso.id_pedido se usa para calcular el saldo reembolsable del pedido (suma de intentos EXITOSO y PENDIENTE del mismo pedido no puede superar su total).
 9. (id_reembolso, numero_intento) es único en reembolso_intento; nunca se edita ni se borra un intento ya registrado (ESP-10).
 10. reclamo.codigo es único. reclamo.estado solo admite REGISTRADO, EN_PROCESO, ATENDIDO y DERIVADO; pasa de REGISTRADO a EN_PROCESO y llega a ATENDIDO solo con respuesta visible al cliente (ESP-13, ESP-14).
-11. reclamo.plazo_dias_habiles es 15 por defecto. reclamo.canal solo admite MARKETPLACE, CHATBOT y RETAIL.
+11. reclamo.plazo_dias_habiles es 15 por defecto.
 12. calificacion.puntaje va de 1 a 5, con una calificación por pedido.
 13. agregado_ventas se actualiza con eventos.
 14. agregado_metricas tiene como máximo una fila por (fecha, canal); se actualiza con upsert a partir de eventos y de las acciones de F3 a F6.
