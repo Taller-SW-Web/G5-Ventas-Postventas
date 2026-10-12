@@ -110,7 +110,7 @@ Se registra el pedido en estado CREADO
 1. Retail envía la venta ya cobrada en el POS, con `envio.tiendaId` en lugar de dirección y los datos del cobro (`metodoPago` `EFECTIVO`, `TARJETA_POS` o `MIXTO`, `referenciaOperacion`, montos de `MIXTO`).
 2. No se consulta stock a Productos (F): el producto ya salió de la tienda.
 3. El pedido se persiste en `PAGADO` (pago `CONFIRMADO`) y, en la misma operación, pasa a `ENTREGADO` (actor `CLIENTE`, motivo `ENTREGA_INMEDIATA_EN_TIENDA`).
-4. Si la venta se registró sin conexión, `fechaVenta` (UTC, máximo 72 horas antes) se usa como fecha del pedido y del historial.
+4. Si la venta se registró sin conexión, `fechaVenta` (UTC, máximo 72 horas antes) se usa como fecha del pedido y del historial `PAGADO → ENTREGADO`. El historial `null → PAGADO` siempre registra la hora real de la llamada (RNF-03).
 
 ### 7.2 Flujos alternativos
 

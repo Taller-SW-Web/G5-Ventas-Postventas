@@ -103,7 +103,6 @@ CREADO ──────► PAGADO ──────► EN_PREPARACION ──�
 | `EN_PREPARACION`       | `DESPACHADO`      | Confirmación de Despacho (E)                | `SISTEMA_LOGISTICA`   | —                          | No                    |
 | `EN_PREPARACION`       | `ANULADO`         | Solicitud de anulación aprobada (ver F2)    | `GESTOR`     | Catálogo de ESP-05        | **Sí**                |
 | `DESPACHADO`           | `ENTREGADO`       | Notificación de entrega de Despacho (E)     | `SISTEMA_LOGISTICA`   | —                          | No                    |
-| `PAGADO`               | `ENTREGADO`       | Venta en tienda, en la misma operación que 1.1 (**solo `RETAIL`**, acuerdo G4) | `CLIENTE` | `ENTREGA_INMEDIATA_EN_TIENDA` | No |
 | `DESPACHADO`           | `ANULADO`         | Entrega fallida definitiva (Despacho, ver api-ventas.md 1.6) | `SISTEMA_LOGISTICA` | `ENTREGA_FALLIDA_DEFINITIVA` | No         |
 
 > Los valores de `Actor` corresponden al enum real de `historial_estado.actor` en base de datos: `CLIENTE`, `GESTOR`, `CANAL_CHATBOT`, `PASARELA_PAGOS`, `SISTEMA_LOGISTICA` (ver [diagrama-fisico.md](../../../diseno/diagramas/bd/diagrama-fisico.md)).
