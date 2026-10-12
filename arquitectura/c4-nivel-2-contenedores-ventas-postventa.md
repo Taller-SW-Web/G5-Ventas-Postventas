@@ -58,6 +58,7 @@ flowchart TB
     M2 --> BD2
     M2 -->|"Guarda evidencias"| STO
 
+    M1 -->|"Pide el cobro (Marketplace)"| PAS
     PAS -->|"Notificación de cobro"| M1
     M2 -->|"Extorno idempotente"| PAS
 
@@ -82,7 +83,7 @@ flowchart TB
 | Esquema `ventas` | pedido, detalle_pedido, pago, historial_estado, anulacion | PostgreSQL administrado por Supabase | Esquema aislado | Solo M1 |
 | Esquema `postventa` | devolucion, evidencia_devolucion, reembolso, reclamo, calificacion, agregado_ventas | PostgreSQL administrado por Supabase | Esquema aislado | Solo M2 |
 | Evidencias | Fotografías y documentos de devoluciones | Supabase Storage privado | Bucket privado | Solo M2 |
-| Simulador de pasarela | Simula cobros (avisa a M1) y extornos (los pide M2); sin base de datos, se comporta como sistema externo | Java 21, Spring Boot mínimo | Servicio propio en Render | M1 (recibe notificación de cobro), M2 (recibe solicitud de extorno) |
+| Simulador de pasarela | Simula cobros (los pide M1 para pedidos Marketplace y avisa el resultado por 1.2) y extornos (los pide M2); sin base de datos, se comporta como sistema externo | Java 21, Spring Boot mínimo | Servicio propio en Render | M1 (le pide cobros y recibe la notificación), M2 (recibe solicitud de extorno) |
 
 El modelo de datos de ambos esquemas está en [diseno/diagramas/bd/](../diseno/diagramas/bd/).
 
@@ -116,8 +117,8 @@ M2 nunca escribe en el esquema `ventas`. Cuando necesita datos del pedido, los c
 |---|---|---|
 | Canal crea, consulta o anula un pedido | API REST síncrona mediante el Gateway (`/api/v1/pedidos`) | ESP-01, ESP-02, ESP-05 |
 | Canal o Gestor opera postventa | API REST síncrona mediante el Gateway (`/api/v2/...`) | ESP-07 a ESP-16 |
-| M1 solicita un cobro simulado | API REST síncrona hacia el simulador, inmediatamente después de crear el pedido con la reserva de stock confirmada — ningún canal invoca al simulador ni al webhook de notificación directamente | ESP-01 |
-| Pasarela informa el resultado del cobro | `POST /api/v1/pedidos/{pedidoId}/pagos/notificacion` (scope `ventas:pagos:webhook`) | ESP-03 |
+| M1 pide el cobro de un pedido Marketplace | `POST /pasarela/v1/cobros` al simulador, después de registrar el pedido (si falla, el pedido queda `CREADO`) | ESP-01 |
+| Pasarela (o Chatbot) informa el resultado del cobro | `POST /api/v1/pedidos/{pedidoId}/pagos/notificacion` (scope `ventas:pagos:webhook`) | ESP-03 |
 | Despacho informa estados | `PATCH /api/v1/pedidos/{pedidoId}/estado` (scope `ventas:pedidos:estado`, actor `SISTEMA_LOGISTICA`) | ESP-03 |
 | Despacho informa entrega fallida definitiva | `POST /api/v1/pedidos/{pedidoId}/eventos-logistica`; M1 anula el pedido y solicita el reembolso | ESP-05, ESP-06 |
 | M1 solicita un reembolso a M2 | `POST /api/v2/reembolsos` con `X-Idempotency-Key` y origen `ANULACION` (scope `postventa:reembolsos:procesar`) | ESP-06, ESP-09, RNF-08 |

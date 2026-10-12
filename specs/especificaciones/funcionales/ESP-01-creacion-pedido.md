@@ -29,7 +29,8 @@ Esta especificación comprende:
 * Validación de la estructura completa: identificación del canal, ítems, cupón (opcional), datos de envío, datos de contacto y datos de pago.
 * Consulta de precio/disponibilidad de cada ítem contra Productos y Ofertas (F).
 * Validación y aplicación del cupón, si fue enviado.
-* Persistencia del pedido con estado inicial `CREADO`, salvo el caso Retail (ver regla 13): el cobro ya ocurrió físicamente en el POS antes de la llamada, así que el pedido se persiste directo en `PAGADO`.
+* Persistencia del pedido con estado inicial `CREADO` (Marketplace y Chatbot) o `PAGADO` → `ENTREGADO` (Retail, acuerdo G4).
+* Idempotencia de la creación con la cabecera `Idempotency-Key` (acuerdo H-02).
 * Registro del primer historial de estado.
 
 La confirmación del pago y las transiciones posteriores corresponden a **ESP-03**. La generación y publicación de eventos corresponde a **ESP-04**.
@@ -89,7 +90,7 @@ Se registra el pedido en estado CREADO
 ### 7.1 Flujo principal
 
 1. El canal arma la solicitud de creación con los bloques `canal`, `items`, `cupon` (opcional), `envio`, `contacto` y `pago`.
-2. El sistema valida que el canal esté autenticado y su token sea válido.
+2. El sistema valida que el canal esté autenticado y su token sea válido, y que envíe la cabecera `Idempotency-Key`. Si esa clave ya creó un pedido con el mismo cuerpo, devuelve ese pedido (`200`) sin crear otro.
 3. El sistema valida que el bloque `canal` identifique correctamente el origen (Marketplace, Chatbot o Retail).
 4. El sistema valida que existan uno o más ítems, cada uno con producto y cantidad válidos.
 5. El sistema consulta a Productos (F) el precio y disponibilidad de cada ítem, y solicita la reserva de stock con `POST /api/v1/inventario/reservas` (acuerdo con Productos, 2026-10-11 — ver `integraciones/ACUERDO_G6_PRODUCTOS.md`). La respuesta `202 Accepted` solo confirma que el comando fue admitido, no que la reserva ya se concretó; el resultado definitivo llega después de forma asíncrona. **Excepto para `RETAIL`** (confirmado 2026-10-12 con G4): el POS ya descontó el stock central de Productos directamente al momento de la venta, antes de esta llamada — M1 no reserva ni confirma nada con Productos para este canal, solo registra el pedido (ver regla 13).
@@ -98,11 +99,18 @@ Se registra el pedido en estado CREADO
 8. El sistema valida que el bloque `contacto` incluya al menos un medio de contacto.
 9. El sistema registra el bloque `pago` como referencia del medio de pago declarado (sin procesar el cobro — ver ESP-03).
 10. El sistema calcula subtotal, descuento (si hubo cupón) y total.
-11. El sistema persiste el pedido con estado inicial `CREADO` — excepto si `canal.tipo` es `RETAIL`, donde el cobro ya ocurrió físicamente en el POS antes de esta llamada: el pedido se persiste directo en `PAGADO` (ver regla 13).
-12. El sistema registra el primer historial de estado (`null → CREADO` para Marketplace/Chatbot, `null → PAGADO` para Retail; actor: canal).
-12b. Si `canal.tipo` es `RETAIL`, el sistema transiciona el pedido en la misma operación a `ENTREGADO` y registra un segundo historial `PAGADO → ENTREGADO` (actor `CLIENTE`, motivo `ENTREGA_INMEDIATA_EN_TIENDA`, ver regla 13 y ESP-03 CA-04b). No aplica a Marketplace ni Chatbot.
+11. El sistema persiste el pedido con estado inicial `CREADO` y guarda la `Idempotency-Key`.
+12. El sistema registra el primer historial de estado (`null → CREADO`, actor `CANAL_CHATBOT` para Chatbot o `CLIENTE` para Marketplace).
+12.1. Marketplace: después de registrar el pedido, M1 pide el cobro al simulador de pasarela. El resultado llega por 1.2 (ver ESP-03).
 13. El sistema devuelve al canal la confirmación con el identificador del pedido.
 14. Si el canal no construye su propia simulación de pago (ej. Marketplace), inmediatamente después M1 invoca al simulador de pasarela compartido para iniciar el cobro simulado — el canal no interviene en este paso ni recibe su respuesta directamente. Si el canal sí construye su propia simulación (ej. Chatbot), este paso no aplica: es el propio canal quien notificará el resultado directamente (ver regla 12). Si el canal es Retail, este paso tampoco aplica: el pedido ya nació `PAGADO` y transicionó a `ENTREGADO` en los pasos 11-12b, no hay nada que notificar después (ver regla 13). En los casos de Marketplace y Chatbot, el resultado llega de forma asíncrona vía la notificación de pago (ver ESP-03, actor `PASARELA_PAGOS`).
+
+### 7.1.1 Variante Retail (acuerdo G4)
+
+1. Retail envía la venta ya cobrada en el POS, con `envio.tiendaId` en lugar de dirección y los datos del cobro (`metodoPago` `EFECTIVO`, `TARJETA_POS` o `MIXTO`, `referenciaOperacion`, montos de `MIXTO`).
+2. No se consulta stock a Productos (F): el producto ya salió de la tienda.
+3. El pedido se persiste en `PAGADO` (pago `CONFIRMADO`) y, en la misma operación, pasa a `ENTREGADO` (actor `CLIENTE`, motivo `ENTREGA_INMEDIATA_EN_TIENDA`).
+4. Si la venta se registró sin conexión, `fechaVenta` (UTC, máximo 72 horas antes) se usa como fecha del pedido y del historial.
 
 ### 7.2 Flujos alternativos
 
@@ -219,15 +227,13 @@ El pedido debe conservar como mínimo:
 2. Un pedido no puede crearse sin al menos un ítem válido.
 3. El precio de cada ítem se fija (snapshot) al momento de la creación y no cambia si el catálogo se actualiza después.
 4. Un pedido no puede crearse si algún ítem no tiene disponibilidad confirmada — no se permite creación parcial.
-5. El bloque `envio` es obligatorio, con dirección de entrega válida — excepto para `RETAIL` (confirmado 2026-10-12 con G4), donde `envio` es opcional y en su lugar es obligatorio `envio.tiendaId`: el cliente se lleva el producto en el momento de la venta, nunca hay entrega a domicilio para este canal (si el cliente de una tienda quiere envío a domicilio, compra por Marketplace).
+5. El bloque `envio` es obligatorio, con dirección de entrega válida, salvo en Retail, donde solo se exige `envio.tiendaId`.
 6. El bloque `contacto` es obligatorio, con al menos un medio de contacto (teléfono o email).
 7. El bloque `pago` se registra como referencia declarada por el cliente; el procesamiento del cobro no ocurre en esta especificación (ver ESP-03).
 8. Si se envía un cupón, debe validarse su vigencia antes de aplicar el descuento; un cupón inválido rechaza toda la solicitud.
-9. Todo pedido creado debe iniciar en estado `CREADO`, excepto el caso Retail de la regla 13, que inicia directo en `PAGADO`.
+9. Todo pedido de Marketplace o Chatbot inicia en estado `CREADO`. La única excepción es Retail, que inicia en `PAGADO` y pasa a `ENTREGADO` en la misma operación (acuerdo G4).
 10. El primer registro de historial se genera en la misma operación que la creación, nunca por separado.
-11. La cabecera `Idempotency-Key` es obligatoria (acuerdo H-02 con Marketplace). Misma clave + mismo payload devuelve el pedido ya creado sin duplicar ni reservar stock dos veces; misma clave + payload distinto rechaza con `409 Conflict` (`IDEMPOTENCY_KEY_REUSED`); si la solicitud falla por validación, la clave no se persiste y puede reintentarse.
-12. Quién dispara el cobro simulado depende del canal (ver `AGENTS.md`, sección 2, punto 8): para canales que no construyen su propia simulación de pago (Marketplace), M1 invoca al simulador de pasarela compartido inmediatamente después de crear el pedido, y el canal solo consulta su estado hasta ver `PAGADO` (ver ESP-02). Para canales cuyo producto exige su propia experiencia de pago (Chatbot), es su propio backend quien notifica directamente `POST /api/v1/pedidos/{pedidoId}/pagos/notificacion`, con su propia credencial de servicio autorizada — no usa el simulador compartido. En ningún caso un canal invoca ese endpoint sin una credencial de servicio explícitamente autorizada para ello.
-13. **Caso Retail — pedido nace `PAGADO` y transiciona a `ENTREGADO` en la misma operación (confirmado 2026-10-12, ver `integraciones/ACUERDO_G4_RETAIL.md`):** en una venta de mostrador, el cobro ya ocurrió físicamente en el POS antes de que exista el pedido en nuestro sistema, y el cliente se lleva el producto en el momento. `POST /pedidos` con `canal.tipo: RETAIL` persiste el pedido directo en `PAGADO` (con los datos declarados del cobro en el bloque `pago`: `metodoPago`, `referenciaOperacion`, y `montoEfectivo`/`montoTarjeta` si es `MIXTO`), y en la misma operación lo transiciona a `ENTREGADO` (ver ESP-03, regla 8 y CA-04b) — no invoca `1.2`, no reserva ni confirma stock con Productos (F, ya lo descontó el POS), y Despacho no participa en absoluto. El bloque `envio` es opcional; en su lugar es obligatorio `tiendaId`. Retail puede incluir el campo opcional `fechaVenta` (UTC, ISO-8601, fecha y hora completas) para registrar la fecha real de una venta sin conexión reconciliada al reconectar, hasta 72 horas atrás; se usa como `fechaHora` del historial `PAGADO → ENTREGADO` (porque ahí sí refleja cuándo ocurrió la entrega real), pero no reemplaza el `fechaHora` del historial `null → PAGADO`, que siempre registra el momento real de esta llamada. El primer historial queda en dos registros: `null → PAGADO` (actor del canal) y `PAGADO → ENTREGADO` (actor `CLIENTE`, motivo `ENTREGA_INMEDIATA_EN_TIENDA`). El plazo de 7 días de F3 (devoluciones) corre desde este segundo registro, y también se activa la encuesta CSAT de F5.
+11. La cabecera `Idempotency-Key` (UUID v4) es obligatoria. La misma clave con el mismo cuerpo devuelve el pedido ya creado; con otro cuerpo responde `409` (`IDEMPOTENCY_KEY_REUSED`). Una solicitud rechazada por validación no consume la clave.
 
 ---
 
@@ -242,11 +248,10 @@ El pedido debe conservar como mínimo:
 | Bloque `envio` inválido   | `direccionId` ausente o inexistente                    | `400 Bad Request`     |
 | Bloque `contacto` inválido| `telefono` y `email` ambos ausentes                    | `400 Bad Request`     |
 | Cupón inválido            | Código de cupón inexistente o vencido                 | `409 Conflict`        |
-| Cabecera de idempotencia ausente | `Idempotency-Key` no enviada o con formato inválido | `400 Bad Request` (`CABECERA_FALTANTE`) |
-| Clave de idempotencia reutilizada | Misma `Idempotency-Key`, payload distinto al original | `409 Conflict` (`IDEMPOTENCY_KEY_REUSED`) |
-| `fechaVenta` fuera de rango (solo `RETAIL`) | Más de 72 h atrás | `400 Bad Request` (`FECHA_VENTA_FUERA_DE_RANGO`) |
-| Bloque `envio` inválido (`RETAIL`) | `tiendaId` ausente o inexistente | `400 Bad Request` |
-| Bloque `pago` inválido (`RETAIL`) | `referenciaOperacion` ausente con `metodo: TARJETA_POS` o `MIXTO`; o `montoEfectivo`/`montoTarjeta` ausente con `metodo: MIXTO` | `400 Bad Request` |
+| Sin `Idempotency-Key`     | Cabecera ausente o no es UUID v4                       | `400 Bad Request` (`CABECERA_FALTANTE`) |
+| Clave repetida            | Misma `Idempotency-Key` con otro cuerpo                | `409 Conflict` (`IDEMPOTENCY_KEY_REUSED`) |
+| Montos inconsistentes     | `subtotal` o `total` no cuadran con los ítems          | `400 Bad Request` (`MONTOS_INCONSISTENTES`) |
+| Retail fuera de plazo     | `fechaVenta` futura o con más de 72 horas              | `400 Bad Request` (`FECHA_VENTA_FUERA_DE_RANGO`) |
 | Error de dependencia      | Fallo al consultar Productos (F) o Seguridad (G)      | Error controlado según contrato API |
 
 Los mensajes de error deben ser claros para el canal y no deben exponer información interna del sistema.
@@ -266,11 +271,13 @@ Ejemplo:
 
 ### 11.1 Estado inicial
 
-Todo pedido creado correctamente inicia en:
+Todo pedido de Marketplace o Chatbot creado correctamente inicia en:
 
 ```text
 CREADO
 ```
+
+Un pedido Retail queda en `ENTREGADO` al terminar la creación (`null → PAGADO → ENTREGADO`).
 
 El flujo posterior de transiciones se desarrolla en **ESP-03**.
 
@@ -375,6 +382,26 @@ Con un cuerpo similar a:
 **CUANDO** se confirma la solicitud.
 
 **ENTONCES** el sistema rechaza toda la solicitud con `409 Conflict`, sin crear el pedido.
+
+---
+
+### CA-06 — Reintento con la misma Idempotency-Key
+
+**DADO** que un canal ya creó un pedido con una `Idempotency-Key`.
+
+**CUANDO** reenvía la misma solicitud con la misma clave.
+
+**ENTONCES** el sistema responde `200` con el mismo pedido y no crea otro. Si el cuerpo es distinto, responde `409` (`IDEMPOTENCY_KEY_REUSED`).
+
+---
+
+### CA-07 — Venta Retail
+
+**DADO** una venta cobrada en el POS de una tienda.
+
+**CUANDO** Retail la registra con `envio.tiendaId` y los datos del cobro.
+
+**ENTONCES** el sistema crea el pedido sin reservar stock, lo deja en `ENTREGADO` con historial `null → PAGADO → ENTREGADO` y responde `201` con `estado: ENTREGADO`.
 
 ---
 

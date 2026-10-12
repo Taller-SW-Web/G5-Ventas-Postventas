@@ -40,7 +40,7 @@ La publicación de eventos de dominio derivada de estas transiciones corresponde
 | -------------------------------------- | ------------------------------------ | ----------------------------------------------------------------------------------- |
 | **Pasarela de pago (notificación)**    | `PASARELA_PAGOS` | Notifica la confirmación o el rechazo del pago, disparando `CREADO → PAGADO` o `CREADO → ANULADO`. |
 | **Canal**                               | `CANAL_CHATBOT` | Avisa que el pago no se completó y dispara la anulación por `PAGO_NO_COMPLETADO`, sin intervención del Gestor. |
-| **Cliente**                             | `CLIENTE` | Solicita la anulación directa de su pedido en `CREADO` o `PAGADO` (ver F2). En una venta de mostrador (`RETAIL`), también es el actor registrado para `PAGADO → ENTREGADO`, porque la entrega ocurre con el cliente presente, sin intervención de Despacho. |
+| **Cliente**                             | `CLIENTE` | Solicita la anulación directa de su pedido en `CREADO` o `PAGADO` (ver F2). En Retail, recibe el producto en la tienda (`PAGADO → ENTREGADO`, acuerdo G4). |
 | **Gestor**                              | `GESTOR` | Anula directamente en `CREADO` o `PAGADO` y autoriza anulaciones desde `EN_PREPARACION` (ver F2); consulta el historial. |
 | **Despacho y Entrega (E)**              | `SISTEMA_LOGISTICA` | Notifica `DESPACHADO` y `ENTREGADO` (o entrega fallida) mediante su llamada a la API de F1. |
 | **M1 — Ventas**                         | — | Valida cada transición contra la máquina de estados y registra el historial.        |
@@ -75,7 +75,9 @@ Aplica el cambio y registra el historial
 
 ```text
 CREADO ──────► PAGADO ──────► EN_PREPARACION ──────► DESPACHADO ──────► ENTREGADO
-│              │              │                      │                      ▲
+│              │  │                                                      ▲
+│              │  └──────────────────────────────────────────────────────┘  solo RETAIL: entrega inmediata en tienda (CLIENTE)
+│              │              │                      │
 │              │              │                      └──► ANULADO  (entrega fallida definitiva, por SISTEMA_LOGISTICA; sin autorización)
 │              │              │
 │              │              └──► ANULADO  (solicitud F2, requiere autorización del Gestor)
@@ -101,6 +103,7 @@ CREADO ──────► PAGADO ──────► EN_PREPARACION ──�
 | `EN_PREPARACION`       | `DESPACHADO`      | Confirmación de Despacho (E)                | `SISTEMA_LOGISTICA`   | —                          | No                    |
 | `EN_PREPARACION`       | `ANULADO`         | Solicitud de anulación aprobada (ver F2)    | `GESTOR`     | Catálogo de ESP-05        | **Sí**                |
 | `DESPACHADO`           | `ENTREGADO`       | Notificación de entrega de Despacho (E)     | `SISTEMA_LOGISTICA`   | —                          | No                    |
+| `PAGADO`               | `ENTREGADO`       | Venta en tienda, en la misma operación que 1.1 (**solo `RETAIL`**, acuerdo G4) | `CLIENTE` | `ENTREGA_INMEDIATA_EN_TIENDA` | No |
 | `DESPACHADO`           | `ANULADO`         | Entrega fallida definitiva (Despacho, ver api-ventas.md 1.6) | `SISTEMA_LOGISTICA` | `ENTREGA_FALLIDA_DEFINITIVA` | No         |
 
 > Los valores de `Actor` corresponden al enum real de `historial_estado.actor` en base de datos: `CLIENTE`, `GESTOR`, `CANAL_CHATBOT`, `PASARELA_PAGOS`, `SISTEMA_LOGISTICA` (ver [diagrama-fisico.md](../../../diseno/diagramas/bd/diagrama-fisico.md)).
@@ -177,7 +180,8 @@ Cualquier transición fuera de esta tabla se rechaza, incluso con permisos de `A
 5. Toda transición a `ANULADO` exige un motivo tipificado.
 6. Toda transición queda registrada en el historial con actor, motivo (si aplica) y fecha/hora en UTC.
 7. Las notificaciones externas (pasarela, Despacho) deben procesarse de forma idempotente.
-8. **`PAGADO → ENTREGADO` directa para venta de mostrador** (confirmado 2026-10-12 con G4, solo canal `RETAIL` sin bloque `envio`): M1 la ejecuta en la misma operación que crea el pedido — no es un paso posterior ni requiere una segunda llamada. Despacho no participa en absoluto. Se registra con actor `CLIENTE` y motivo `ENTREGA_INMEDIATA_EN_TIENDA`. El `fechaHora` de este registro es la hora real de la venta: la hora de la llamada si fue en el momento, o el valor de `fechaVenta` si la venta se reconcilió después por falta de conexión (ver `ESP-01` regla 13) — en ambos casos refleja cuándo ocurrió la entrega real, no cuándo se procesó la reconciliación. Se publica el evento `pedido entregado` igual que para cualquier otro canal (ver ESP-04), y el plazo de 7 días de F3 (devoluciones) corre desde este `fechaHora`. Para Marketplace y Chatbot no cambia nada: siguen llegando a `ENTREGADO` únicamente vía `DESPACHADO`.
+8. La creación del pedido (1.1) escribe el primer registro del historial con `estadoAnterior = null`: `CREADO` en Marketplace y Chatbot (actor `CLIENTE` o `CANAL_CHATBOT`), `PAGADO` en Retail (actor `CLIENTE`).
+9. La transición `PAGADO → ENTREGADO` solo aplica a pedidos `RETAIL` (acuerdo G4): la venta se cobra y se entrega en la tienda, así que no pasa por `EN_PREPARACION` ni `DESPACHADO`. M1 la aplica en la misma operación que crea el pedido, con la `fechaVenta` como fecha del historial. Para Marketplace y Chatbot esta transición responde `409 Conflict`.
 
 ---
 
@@ -290,6 +294,18 @@ Ejemplo — notificación de pago no completado:
 **CUANDO** la misma notificación se reintenta.
 
 **ENTONCES** el sistema reconoce el reintento y no duplica la transición ni el historial.
+
+---
+
+### CA-05.1 — Venta Retail: entrega inmediata en tienda
+
+**DADO** una venta registrada desde Retail (`canal: RETAIL`) con su cobro hecho en el POS.
+
+**CUANDO** M1 crea el pedido (1.1).
+
+**ENTONCES** el historial queda con dos registros (`null → PAGADO` y `PAGADO → ENTREGADO`, actor `CLIENTE`, motivo `ENTREGA_INMEDIATA_EN_TIENDA`), se publican `pedido.pagado` y `pedido.entregado`, y la respuesta trae `estado: ENTREGADO`.
+
+**Y** si un pedido de Marketplace o Chatbot en `PAGADO` intenta pasar a `ENTREGADO`, se responde `409 Conflict`.
 
 ---
 
