@@ -43,6 +43,7 @@ La publicación de eventos de dominio derivada de estas transiciones corresponde
 | **Cliente**                             | `CLIENTE` | Solicita la anulación directa de su pedido en `CREADO` o `PAGADO` (ver F2). En Retail, recibe el producto en la tienda (`PAGADO → ENTREGADO`, acuerdo G4). |
 | **Gestor**                              | `GESTOR` | Anula directamente en `CREADO` o `PAGADO` y autoriza anulaciones desde `EN_PREPARACION` (ver F2); consulta el historial. |
 | **Despacho y Entrega (E)**              | `SISTEMA_LOGISTICA` | Notifica `DESPACHADO` y `ENTREGADO` (o entrega fallida) mediante su llamada a la API de F1. |
+| **Productos y Ofertas (F)**             | `SISTEMA_PRODUCTOS` | Notifica el rechazo asíncrono de la reserva de stock o del consumo de cupón (vía RabbitMQ), disparando `CREADO → ANULADO` o `PAGADO → ANULADO` (caso Chatbot), sin intervención del Gestor. Aprobado en equipo 2026-10-12. |
 | **M1 — Ventas**                         | — | Valida cada transición contra la máquina de estados y registra el historial.        |
 
 ---
@@ -75,18 +76,16 @@ Aplica el cambio y registra el historial
 
 ```text
 CREADO ──────► PAGADO ──────► EN_PREPARACION ──────► DESPACHADO ──────► ENTREGADO
-│              │  │                                                      ▲
-│              │  └──────────────────────────────────────────────────────┘  solo RETAIL: entrega inmediata en tienda (CLIENTE)
 │              │              │                      │
 │              │              │                      └──► ANULADO  (entrega fallida definitiva, por SISTEMA_LOGISTICA; sin autorización)
 │              │              │
 │              │              └──► ANULADO  (solicitud F2, requiere autorización del Gestor)
 │              │
-│              ├──► ANULADO  (solicitud F2 del Cliente o Gestor, sin autorización)
+│              ├──► ANULADO  (solicitud F2 del Cliente o Gestor, sin autorización; o rechazo de stock de Productos, SISTEMA_PRODUCTOS, caso Chatbot)
 │              │
 │              └──► ENTREGADO  (venta de mostrador, canal RETAIL sin envío, misma operación de creación — Despacho no participa)
 │
-└──► ANULADO  (pago rechazado por la pasarela, aviso del canal o solicitud F2; sin autorización)
+└──► ANULADO  (pago rechazado por la pasarela, aviso del canal, solicitud F2, o rechazo de stock/cupón de Productos; sin autorización)
 ```
 
 ### 7.2 Matriz de transiciones
@@ -97,15 +96,17 @@ CREADO ──────► PAGADO ──────► EN_PREPARACION ──�
 | `CREADO`               | `ANULADO`         | Notificación de la pasarela (`resultado: RECHAZADO`) | `PASARELA_PAGOS`   | `PAGO_NO_COMPLETADO`      | No                    |
 | `CREADO`               | `ANULADO`         | Aviso del canal de pago no completado       | `CANAL_CHATBOT`      | `PAGO_NO_COMPLETADO`      | No                    |
 | `CREADO`               | `ANULADO`         | Solicitud de anulación (ver F2)             | `CLIENTE` o `GESTOR` | Catálogo de ESP-05, salvo `PAGO_NO_COMPLETADO` | No       |
+| `CREADO`               | `ANULADO`         | Productos rechaza la reserva de stock o el consumo de cupón (async, RabbitMQ) — aprobado en equipo 2026-10-12 | `SISTEMA_PRODUCTOS` | `STOCK_NO_DISPONIBLE` o `CUPON_RECHAZADO` | No |
 | `PAGADO`               | `EN_PREPARACION`  | Acción interna del flujo de preparación     | `SISTEMA_LOGISTICA`    | —                          | No                    |
 | `PAGADO`               | `ENTREGADO`       | Venta de mostrador (canal `RETAIL`, sin envío) — en la misma operación de creación, confirmado 2026-10-12 con G4 | `CLIENTE`   | `ENTREGA_INMEDIATA_EN_TIENDA` | No                    |
 | `PAGADO`               | `ANULADO`         | Solicitud de anulación (ver F2)             | `CLIENTE` o `GESTOR` | Catálogo de ESP-05, salvo `PAGO_NO_COMPLETADO` | No       |
+| `PAGADO`               | `ANULADO`         | Productos rechaza la reserva de stock después del pago (caso Chatbot: cobra antes de que Productos confirme) — origina reembolso automático a F4 | `SISTEMA_PRODUCTOS` | `STOCK_NO_DISPONIBLE` | No |
 | `EN_PREPARACION`       | `DESPACHADO`      | Confirmación de Despacho (E)                | `SISTEMA_LOGISTICA`   | —                          | No                    |
 | `EN_PREPARACION`       | `ANULADO`         | Solicitud de anulación aprobada (ver F2)    | `GESTOR`     | Catálogo de ESP-05        | **Sí**                |
 | `DESPACHADO`           | `ENTREGADO`       | Notificación de entrega de Despacho (E)     | `SISTEMA_LOGISTICA`   | —                          | No                    |
 | `DESPACHADO`           | `ANULADO`         | Entrega fallida definitiva (Despacho, ver api-ventas.md 1.6) | `SISTEMA_LOGISTICA` | `ENTREGA_FALLIDA_DEFINITIVA` | No         |
 
-> Los valores de `Actor` corresponden al enum real de `historial_estado.actor` en base de datos: `CLIENTE`, `GESTOR`, `CANAL_CHATBOT`, `PASARELA_PAGOS`, `SISTEMA_LOGISTICA` (ver [diagrama-fisico.md](../../../diseno/diagramas/bd/diagrama-fisico.md)).
+> Los valores de `Actor` corresponden al enum real de `historial_estado.actor` en base de datos: `CLIENTE`, `GESTOR`, `CANAL_CHATBOT`, `PASARELA_PAGOS`, `SISTEMA_LOGISTICA`, `SISTEMA_PRODUCTOS` (ver [diagrama-fisico.md](../../../diseno/diagramas/bd/diagrama-fisico.md)).
 
 Cualquier transición fuera de esta tabla se rechaza, incluso con permisos de `ADMIN`.
 
@@ -174,13 +175,14 @@ Cualquier transición fuera de esta tabla se rechaza, incluso con permisos de `A
 
 1. M1 es el único dueño del estado del pedido; ninguna transición fuera de la matriz de la sección 7.2 está permitida, ni siquiera con permisos de `ADMIN`.
 2. La transición `CREADO → PAGADO` solo puede dispararla la notificación de la pasarela de pago.
-3. Las transiciones `CREADO → ANULADO` y `PAGADO → ANULADO` **no requieren autorización del Gestor**: las dispara la pasarela o el canal (`PAGO_NO_COMPLETADO`) o una solicitud de anulación de F2. Solo la anulación desde `EN_PREPARACION` requiere autorización (ver F2).
+3. Las transiciones `CREADO → ANULADO` y `PAGADO → ANULADO` **no requieren autorización del Gestor**: las dispara la pasarela, el canal (`PAGO_NO_COMPLETADO`), una solicitud de anulación de F2, o Productos (`STOCK_NO_DISPONIBLE`/`CUPON_RECHAZADO`). Solo la anulación desde `EN_PREPARACION` requiere autorización (ver F2).
 4. La transición `DESPACHADO → ANULADO` solo la dispara Despacho (`SISTEMA_LOGISTICA`) por `ENTREGA_FALLIDA_DEFINITIVA` (ver api-ventas.md, 1.6), sin intervención del Gestor.
 5. Toda transición a `ANULADO` exige un motivo tipificado.
 6. Toda transición queda registrada en el historial con actor, motivo (si aplica) y fecha/hora en UTC.
 7. Las notificaciones externas (pasarela, Despacho) deben procesarse de forma idempotente.
 8. La creación del pedido (1.1) escribe el primer registro del historial con `estadoAnterior = null`: `CREADO` en Marketplace y Chatbot (actor `CLIENTE` o `CANAL_CHATBOT`), `PAGADO` en Retail (actor `CLIENTE`).
 9. La transición `PAGADO → ENTREGADO` solo aplica a pedidos `RETAIL` (acuerdo G4): la venta se cobra y se entrega en la tienda, así que no pasa por `EN_PREPARACION` ni `DESPACHADO`. M1 la aplica en la misma operación que crea el pedido, con la `fechaVenta` como fecha del historial. Para Marketplace y Chatbot esta transición responde `409 Conflict`.
+10. **Rechazo asíncrono de Productos** (aprobado en equipo, 2026-10-12): la respuesta a la reserva de stock o al consumo de cupón llega después del `202 Accepted` inicial, por RabbitMQ (`po.sales.q`/`po.results.x`). Si Productos rechaza, M1 transiciona el pedido a `ANULADO` sin intervención del Gestor — desde `CREADO` en el caso general (motivo `STOCK_NO_DISPONIBLE` o `CUPON_RECHAZADO`, actor `SISTEMA_PRODUCTOS`), y desde `PAGADO` solo para rechazo de stock cuando el canal ya cobró antes de la confirmación (caso Chatbot; misma regla 3 que cualquier `PAGADO → ANULADO`, origina solicitud de reembolso a F4 por ESP-06 RF-02). **Excepción:** un cupón rechazado sobre un pedido ya `PAGADO` no se anula — queda registrado como inconsistencia visible para que el Gestor lo revise, sin transición de estado (ver ESP-01, regla 12).
 
 ---
 
@@ -197,7 +199,7 @@ Cualquier transición fuera de esta tabla se rechaza, incluso con permisos de `A
 
 ## 11. Estado y trazabilidad
 
-El historial debe quedar siempre ordenado cronológicamente y debe permitir distinguir por qué un pedido llegó a `ANULADO`: por `PAGO_NO_COMPLETADO` (actor `PASARELA_PAGOS` o `CANAL_CHATBOT`), por una solicitud directa desde `CREADO` o `PAGADO` (actor `CLIENTE` o `GESTOR`), por una anulación autorizada desde `EN_PREPARACION` (actor `GESTOR`, ver F2) o por entrega fallida definitiva desde `DESPACHADO` (actor `SISTEMA_LOGISTICA`, motivo `ENTREGA_FALLIDA_DEFINITIVA`). Todas terminan en `ANULADO`, pero con actor y motivo distintos.
+El historial debe quedar siempre ordenado cronológicamente y debe permitir distinguir por qué un pedido llegó a `ANULADO`: por `PAGO_NO_COMPLETADO` (actor `PASARELA_PAGOS` o `CANAL_CHATBOT`), por una solicitud directa desde `CREADO` o `PAGADO` (actor `CLIENTE` o `GESTOR`), por una anulación autorizada desde `EN_PREPARACION` (actor `GESTOR`, ver F2), por entrega fallida definitiva desde `DESPACHADO` (actor `SISTEMA_LOGISTICA`, motivo `ENTREGA_FALLIDA_DEFINITIVA`), o por rechazo de Productos (actor `SISTEMA_PRODUCTOS`, motivo `STOCK_NO_DISPONIBLE` o `CUPON_RECHAZADO`). Todas terminan en `ANULADO`, pero con actor y motivo distintos.
 
 De la misma forma, el historial debe distinguir cómo un pedido llegó a `ENTREGADO`: por notificación de Despacho desde `DESPACHADO` (actor `SISTEMA_LOGISTICA`, Marketplace y Chatbot) o directo desde `PAGADO` en la misma operación de creación (actor `CLIENTE`, motivo `ENTREGA_INMEDIATA_EN_TIENDA`, solo `RETAIL`).
 
@@ -253,6 +255,26 @@ Ejemplo — notificación de pago no completado:
 **CUANDO** F2 solicita su anulación con un motivo del catálogo de ESP-05 (por ejemplo, `ARREPENTIMIENTO_COMPRA`).
 
 **ENTONCES** el sistema transiciona el pedido a `ANULADO`, registra el historial con actor `CLIENTE` o `GESTOR` y el motivo, y **no requiere autorización del Gestor**.
+
+---
+
+### CA-02.2 — Anulación por rechazo asíncrono de stock o cupón (Productos), sin Gestor
+
+**DADO** un pedido en estado `CREADO` con una reserva de stock o un consumo de cupón pendiente de confirmación.
+
+**CUANDO** Productos responde el rechazo por RabbitMQ (`po.results.x`).
+
+**ENTONCES** el sistema transiciona el pedido a `ANULADO` con motivo `STOCK_NO_DISPONIBLE` o `CUPON_RECHAZADO` según corresponda, registra el historial con actor `SISTEMA_PRODUCTOS`, y **no requiere autorización del Gestor**.
+
+---
+
+### CA-02.3 — Anulación por rechazo de stock tras pago ya confirmado (caso Chatbot), con reembolso automático
+
+**DADO** un pedido en estado `PAGADO` (Chatbot cobró antes de que Productos confirmara el stock).
+
+**CUANDO** Productos responde el rechazo de la reserva por RabbitMQ.
+
+**ENTONCES** el sistema transiciona el pedido a `ANULADO` con motivo `STOCK_NO_DISPONIBLE`, registra el historial con actor `SISTEMA_PRODUCTOS`, no requiere autorización del Gestor, y origina exactamente una solicitud de reembolso hacia F4 (misma regla que cualquier `PAGADO → ANULADO`, ver ESP-06 RF-02).
 
 ---
 

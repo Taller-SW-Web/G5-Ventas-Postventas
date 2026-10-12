@@ -234,6 +234,7 @@ El pedido debe conservar como mínimo:
 9. Todo pedido de Marketplace o Chatbot inicia en estado `CREADO`. La única excepción es Retail, que inicia en `PAGADO` y pasa a `ENTREGADO` en la misma operación (acuerdo G4).
 10. El primer registro de historial se genera en la misma operación que la creación, nunca por separado.
 11. La cabecera `Idempotency-Key` (UUID v4) es obligatoria. La misma clave con el mismo cuerpo devuelve el pedido ya creado; con otro cuerpo responde `409` (`IDEMPOTENCY_KEY_REUSED`). Una solicitud rechazada por validación no consume la clave.
+12. **Rechazo asíncrono de Productos** (aprobado en equipo, 2026-10-12): la reserva de stock y el consumo de cupón se confirman después del `202 Accepted` inicial, por RabbitMQ (ver tema 1 y 2 de la guía de implementación del backend). Si Productos rechaza la reserva de stock, el pedido se anula automáticamente (`CREADO → ANULADO` o `PAGADO → ANULADO` si el canal ya cobró — ver ESP-03 regla 10, ESP-05 catálogo de motivos). Si Productos rechaza el cupón, el pedido se anula igual **solo si sigue en `CREADO`**; si ya está `PAGADO`, no se anula — se registra como inconsistencia visible para que el Gestor la revise, el pedido conserva su estado (mismo patrón que ESP-06, "Registro de inconsistencias").
 
 ---
 
