@@ -16,7 +16,7 @@ Nada — Seguridad no consume ninguna API de Ventas/Postventa. Es puramente un p
 
 | Cliente | Scopes concedidos |
 |---|---|
-| `modulo-marketplace` | `ventas:pedidos:crear`, `ventas:pedidos:anular`, `postventa:devoluciones:escribir`, `postventa:reclamos:escribir`, `postventa:csat:escribir` |
+| `modulo-marketplace` | `ventas:pedidos:crear`, `ventas:pedidos:anular`, `postventa:devoluciones:escribir`, `postventa:reclamos:escribir` |
 | `modulo-chatbot` | lo mismo que `modulo-marketplace` + `ventas:pagos:webhook` |
 | `modulo-retail` | lo mismo que `modulo-marketplace` |
 | `modulo-despacho` | `ventas:pedidos:estado` |
@@ -36,7 +36,7 @@ Nada — Seguridad no consume ninguna API de Ventas/Postventa. Es puramente un p
 |---|---|
 | `modulo-ventas` | `despachos:crear`, `despachos:cancelar` |
 
-**Retirados del acuerdo (no son necesarios):** `ventas:pedidos:leer`, `ventas:admin` (no son scopes reales, se resuelven por rol), `postventa:devoluciones:leer`, `postventa:reclamos:leer` (reemplazados por `/devoluciones/me` y `/reclamos/me`, sin scope), `tokens:introspeccion` para Ventas/Postventa (reemplazado por `usuarios:leer`), scope adicional para el simulador de pasarela (declinado, decisión nuestra).
+**Retirados del acuerdo (no son necesarios):** `ventas:pedidos:leer`, `ventas:admin` (no son scopes reales, se resuelven por rol), `postventa:devoluciones:leer`, `postventa:reclamos:leer` (reemplazados por `/devoluciones/me` y `/reclamos/me`, sin scope), `tokens:introspeccion` para Ventas/Postventa (reemplazado por `usuarios:leer`), scope adicional para el simulador de pasarela (declinado, decisión nuestra), **`postventa:csat:escribir`** (corrección 2026-10-12, ver pendientes — este también debería haberse resuelto por rol `CLIENTE`, no scope, por la verificación de titularidad del acuerdo H-04 con Marketplace).
 
 ## Decisiones confirmadas
 
@@ -64,6 +64,7 @@ Nada — Seguridad no consume ninguna API de Ventas/Postventa. Es puramente un p
 ## Pendiente de confirmar / resolver
 
 - **`usuarios:leer:documento` para `modulo-ventas`:** sigue **provisional**. Depende de si la emisión de comprobantes/boletas termina siendo responsabilidad de Ventas o de Retail (G4) — ver `integraciones/CONSULTA_G4_RETAIL.md`, punto 6. Apenas Retail responda, confirmamos sí/no a Seguridad en el mismo issue #42.
+- **Retirar `postventa:csat:escribir` del acuerdo A10:** detectado el 2026-10-12 al responder una consulta de Chatbot (G3) — este scope no debería existir, `POST /api/v2/csat` necesita el token del propio cliente (verificación de titularidad del acuerdo H-04), no un token de servicio del canal. Falta avisarle a Seguridad en el issue #42 para que lo retiren de `modulo-marketplace`, `modulo-chatbot` y `modulo-retail`.
 
 ## Historial
 
@@ -74,3 +75,4 @@ Nada — Seguridad no consume ninguna API de Ventas/Postventa. Es puramente un p
 - 2026-10-11: Se detecta el mismo problema de `clienteId` por query string en `api-postventas.md` (devoluciones y reclamos); se agregan `/devoluciones/me` y `/reclamos/me`, y se avisa a Seguridad para retirar los scopes de lectura correspondientes.
 - 2026-10-11: Se confirma que `modulo-ventas` también necesita `despachos:crear`/`despachos:cancelar`.
 - 2026-10-11: Seguridad confirma la asignación A10 final completa y aclara los límites de su rol en el acuerdo. Queda cerrado salvo `usuarios:leer:documento` (pendiente de Retail).
+- 2026-10-12: Al responder una consulta de Chatbot (G3) sobre CSAT, se detecta que `postventa:csat:escribir` tampoco debería ser un scope — mismo caso que `devoluciones:leer`/`reclamos:leer`. Se corrige `api-postventas.md`; falta avisar a Seguridad en el issue #42.

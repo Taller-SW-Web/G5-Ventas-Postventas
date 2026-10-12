@@ -34,10 +34,10 @@
     (`DEVOLUCION`). Utilizado por M1 y M2 internamente.
 -   **`postventa:reclamos:escribir`**: Registro formal de reclamos y
     quejas en el Libro de Reclamaciones. Utilizado por Canales A, B y C.
--   **`postventa:csat:escribir`**: Envío de calificaciones de
-    satisfacción de compra. Utilizado por Canales A, B y C.
 
 **`postventa:devoluciones:leer` y `postventa:reclamos:leer` no existen como scopes para canales** (acuerdo con Seguridad, 2026-10-10): el listado por `clienteId` con token de servicio permitía que cualquier canal leyera los datos de cualquier cliente. Se reemplazó por el patrón de `/pedidos/me` — ver `2.4b` y `2.10b`, que usan el token del cliente (rol `CLIENTE`, filtrado por `sub`), sin scope. El listado administrativo (`2.4`, `2.10`) sigue existiendo, pero requiere rol `ADMIN_VENTAS`, no scope.
+
+**`postventa:csat:escribir` tampoco es un scope real** (corrección, 2026-10-12 — estaba mal registrado en el acuerdo A10 con Seguridad, ver `integraciones/ACUERDO_G7_SEGURIDAD.md`): `POST /api/v2/csat` (sección 2.7) exige verificar que `pedidoId` pertenezca al `sub` del usuario autenticado (acuerdo H-04 con Marketplace), lo que solo es posible si el token es el del propio cliente — un token de servicio del canal nunca tiene un `sub` de cliente real. Por eso este endpoint usa el mismo patrón que `/pedidos/me`: token del cliente, rol `CLIENTE`, sin scope.
 
 **`ventas:admin` no es un scope real** — Seguridad no lo registra porque depende de identidad de persona, no de módulo. Gestión administrativa completa (dictamen de devoluciones, emisión de respuesta formal a reclamos y métricas de dashboard) se resuelve con el claim `roles` del token del usuario incluyendo `ADMIN_VENTAS` (catálogo cerrado de Seguridad; "Gestor" es solo el nombre que usamos en specs/interfaz).
 
@@ -307,6 +307,7 @@
 #### 2.7 Registrar Encuesta CSAT
 
 -   **Endpoint:** `POST /api/v2/csat`
+-   **Headers:** `Authorization: Bearer <token_cliente>` (requiere rol `CLIENTE`, claim `roles` del JWT — no es un scope; el `sub` del token es el que se valida contra `pedidoId` en el `403`)
 -   **Acuerdo H-04 con Marketplace:** Marketplace usa una escala de 3 botones (Mal/Regular/Bien), con mapeo interno `1 (Mal) → sentiment: "NEGATIVE"`, `3 (Regular) → sentiment: "NEUTRAL"`, `5 (Bien) → sentiment: "POSITIVE"` — el campo `sentiment` es una etiqueta propia de Marketplace, no se guarda de nuestro lado; nosotros solo recibimos `puntuacion` (siempre `1`, `3` o `5`, nunca `2` ni `4`). No requiere cambio de esquema de nuestro lado. Mientras consolidan su propia tabla de motivos estructurados, Marketplace puede incluir motivos concatenados dentro de `comentario` con el prefijo `"Motivos: [RAZON_1, RAZON_2] - "` seguido del comentario libre — se guarda tal cual en `calificacion.comentario` (texto libre, sin parseo de nuestro lado).
 -   **Request Body:**
 
