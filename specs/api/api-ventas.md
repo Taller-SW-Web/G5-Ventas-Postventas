@@ -41,7 +41,7 @@ Registrados con Seguridad como acuerdo A10 (2026-10-10, ver `integraciones/ACUER
 
 De Seguridad:
 - **`usuarios:leer`** (`GET /usuarios/{clienteId}`, devuelve `estado` de la cuenta): concedido a `modulo-ventas` y `modulo-postventa`, para verificar que el cliente siga activo antes de una operación sensible (anular, reembolsar). Reemplaza a `tokens:introspeccion`, que no aplica aquí porque M1/M2 nunca reciben el token del propio usuario (salvo `/pedidos/me`).
-- **`usuarios:leer:documento`**: **provisional**, solo para `modulo-ventas`. Depende de si la emisión de comprobantes/boletas termina siendo responsabilidad de Ventas o de Retail — ver `integraciones/CONSULTA_G4_RETAIL.md`.
+- **`usuarios:leer:documento` ya no es necesario** (resuelto 2026-10-12): la emisión de comprobantes/boletas es responsabilidad exclusiva de Retail, no de Ventas (ver `integraciones/ACUERDO_G4_RETAIL.md`, R6). Retirado del catálogo — falta avisarle a Seguridad en el issue #42 para que lo retire de `modulo-ventas` (ver `integraciones/ACUERDO_G7_SEGURIDAD.md`).
 
 De Despacho (`aud: api-despacho`, definidos por Despacho — ver su `api-contract.md` §3.4):
 - **`despachos:crear`**: concedido a `modulo-ventas`, para solicitar la creación de un despacho cuando el pedido está pagado y preparado.

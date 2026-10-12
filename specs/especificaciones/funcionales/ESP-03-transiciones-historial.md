@@ -40,7 +40,7 @@ La publicación de eventos de dominio derivada de estas transiciones corresponde
 | -------------------------------------- | ------------------------------------ | ----------------------------------------------------------------------------------- |
 | **Pasarela de pago (notificación)**    | `PASARELA_PAGOS` | Notifica la confirmación o el rechazo del pago, disparando `CREADO → PAGADO` o `CREADO → ANULADO`. |
 | **Canal**                               | `CANAL_CHATBOT` | Avisa que el pago no se completó y dispara la anulación por `PAGO_NO_COMPLETADO`, sin intervención del Gestor. |
-| **Cliente**                             | `CLIENTE` | Solicita la anulación directa de su pedido en `CREADO` o `PAGADO` (ver F2). |
+| **Cliente**                             | `CLIENTE` | Solicita la anulación directa de su pedido en `CREADO` o `PAGADO` (ver F2). En una venta de mostrador (`RETAIL`), también es el actor registrado para `PAGADO → ENTREGADO`, porque la entrega ocurre con el cliente presente, sin intervención de Despacho. |
 | **Gestor**                              | `GESTOR` | Anula directamente en `CREADO` o `PAGADO` y autoriza anulaciones desde `EN_PREPARACION` (ver F2); consulta el historial. |
 | **Despacho y Entrega (E)**              | `SISTEMA_LOGISTICA` | Notifica `DESPACHADO` y `ENTREGADO` (o entrega fallida) mediante su llamada a la API de F1. |
 | **M1 — Ventas**                         | — | Valida cada transición contra la máquina de estados y registra el historial.        |
@@ -75,12 +75,14 @@ Aplica el cambio y registra el historial
 
 ```text
 CREADO ──────► PAGADO ──────► EN_PREPARACION ──────► DESPACHADO ──────► ENTREGADO
-│              │              │                      │
+│              │              │                      │                      ▲
 │              │              │                      └──► ANULADO  (entrega fallida definitiva, por SISTEMA_LOGISTICA; sin autorización)
 │              │              │
 │              │              └──► ANULADO  (solicitud F2, requiere autorización del Gestor)
 │              │
-│              └──► ANULADO  (solicitud F2 del Cliente o Gestor, sin autorización)
+│              ├──► ANULADO  (solicitud F2 del Cliente o Gestor, sin autorización)
+│              │
+│              └──► ENTREGADO  (venta de mostrador, canal RETAIL sin envío, misma operación de creación — Despacho no participa)
 │
 └──► ANULADO  (pago rechazado por la pasarela, aviso del canal o solicitud F2; sin autorización)
 ```
@@ -94,6 +96,7 @@ CREADO ──────► PAGADO ──────► EN_PREPARACION ──�
 | `CREADO`               | `ANULADO`         | Aviso del canal de pago no completado       | `CANAL_CHATBOT`      | `PAGO_NO_COMPLETADO`      | No                    |
 | `CREADO`               | `ANULADO`         | Solicitud de anulación (ver F2)             | `CLIENTE` o `GESTOR` | Catálogo de ESP-05, salvo `PAGO_NO_COMPLETADO` | No       |
 | `PAGADO`               | `EN_PREPARACION`  | Acción interna del flujo de preparación     | `SISTEMA_LOGISTICA`    | —                          | No                    |
+| `PAGADO`               | `ENTREGADO`       | Venta de mostrador (canal `RETAIL`, sin envío) — en la misma operación de creación, confirmado 2026-10-12 con G4 | `CLIENTE`   | `ENTREGA_INMEDIATA_EN_TIENDA` | No                    |
 | `PAGADO`               | `ANULADO`         | Solicitud de anulación (ver F2)             | `CLIENTE` o `GESTOR` | Catálogo de ESP-05, salvo `PAGO_NO_COMPLETADO` | No       |
 | `EN_PREPARACION`       | `DESPACHADO`      | Confirmación de Despacho (E)                | `SISTEMA_LOGISTICA`   | —                          | No                    |
 | `EN_PREPARACION`       | `ANULADO`         | Solicitud de anulación aprobada (ver F2)    | `GESTOR`     | Catálogo de ESP-05        | **Sí**                |
@@ -174,6 +177,7 @@ Cualquier transición fuera de esta tabla se rechaza, incluso con permisos de `A
 5. Toda transición a `ANULADO` exige un motivo tipificado.
 6. Toda transición queda registrada en el historial con actor, motivo (si aplica) y fecha/hora en UTC.
 7. Las notificaciones externas (pasarela, Despacho) deben procesarse de forma idempotente.
+8. **`PAGADO → ENTREGADO` directa para venta de mostrador** (confirmado 2026-10-12 con G4, solo canal `RETAIL` sin bloque `envio`): M1 la ejecuta en la misma operación que crea el pedido — no es un paso posterior ni requiere una segunda llamada. Despacho no participa en absoluto. Se registra con actor `CLIENTE` y motivo `ENTREGA_INMEDIATA_EN_TIENDA`. El `fechaHora` de este registro es la hora real de la venta: la hora de la llamada si fue en el momento, o el valor de `fechaVenta` si la venta se reconcilió después por falta de conexión (ver `ESP-01` regla 13) — en ambos casos refleja cuándo ocurrió la entrega real, no cuándo se procesó la reconciliación. Se publica el evento `pedido entregado` igual que para cualquier otro canal (ver ESP-04), y el plazo de 7 días de F3 (devoluciones) corre desde este `fechaHora`. Para Marketplace y Chatbot no cambia nada: siguen llegando a `ENTREGADO` únicamente vía `DESPACHADO`.
 
 ---
 
@@ -191,6 +195,8 @@ Cualquier transición fuera de esta tabla se rechaza, incluso con permisos de `A
 ## 11. Estado y trazabilidad
 
 El historial debe quedar siempre ordenado cronológicamente y debe permitir distinguir por qué un pedido llegó a `ANULADO`: por `PAGO_NO_COMPLETADO` (actor `PASARELA_PAGOS` o `CANAL_CHATBOT`), por una solicitud directa desde `CREADO` o `PAGADO` (actor `CLIENTE` o `GESTOR`), por una anulación autorizada desde `EN_PREPARACION` (actor `GESTOR`, ver F2) o por entrega fallida definitiva desde `DESPACHADO` (actor `SISTEMA_LOGISTICA`, motivo `ENTREGA_FALLIDA_DEFINITIVA`). Todas terminan en `ANULADO`, pero con actor y motivo distintos.
+
+De la misma forma, el historial debe distinguir cómo un pedido llegó a `ENTREGADO`: por notificación de Despacho desde `DESPACHADO` (actor `SISTEMA_LOGISTICA`, Marketplace y Chatbot) o directo desde `PAGADO` en la misma operación de creación (actor `CLIENTE`, motivo `ENTREGA_INMEDIATA_EN_TIENDA`, solo `RETAIL`).
 
 ---
 
@@ -264,6 +270,16 @@ Ejemplo — notificación de pago no completado:
 **CUANDO** el módulo Despacho y Entrega notifica la entrega exitosa.
 
 **ENTONCES** el sistema transiciona el pedido a `ENTREGADO`, registrando el actor como `SISTEMA_LOGISTICA`.
+
+---
+
+### CA-04b — Transición directa PAGADO → ENTREGADO en venta de mostrador (RETAIL)
+
+**DADO** una venta de mostrador sin bloque `envio`, creada por el canal `RETAIL`.
+
+**CUANDO** el sistema termina de persistir el pedido en `PAGADO` (ver ESP-01, regla 13).
+
+**ENTONCES** el sistema transiciona el pedido a `ENTREGADO` en la misma operación, registra el historial con actor `CLIENTE` y motivo `ENTREGA_INMEDIATA_EN_TIENDA`, con `fechaHora` igual a la hora de la venta (o `fechaVenta` si la venta fue reconciliada después por falta de conexión), sin que Despacho participe, y publica el evento `pedido entregado`.
 
 ---
 
