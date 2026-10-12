@@ -36,7 +36,7 @@ Nada — Seguridad no consume ninguna API de Ventas/Postventa. Es puramente un p
 |---|---|
 | `modulo-ventas` | `despachos:crear`, `despachos:cancelar` |
 
-**Retirados del acuerdo (no son necesarios):** `ventas:pedidos:leer`, `ventas:admin` (no son scopes reales, se resuelven por rol), `postventa:devoluciones:leer`, `postventa:reclamos:leer` (reemplazados por `/devoluciones/me` y `/reclamos/me`, sin scope), `tokens:introspeccion` para Ventas/Postventa (reemplazado por `usuarios:leer`), scope adicional para el simulador de pasarela (declinado, decisión nuestra), **`postventa:csat:escribir`** (corrección 2026-10-12, ver pendientes — este también debería haberse resuelto por rol `CLIENTE`, no scope, por la verificación de titularidad del acuerdo H-04 con Marketplace), **`usuarios:leer:documento`** (resuelto 2026-10-12, ver pendientes — la emisión de comprobantes es de Retail, no de Ventas, ver `ACUERDO_G4_RETAIL.md` R6).
+**Retirados del acuerdo (no son necesarios):** `ventas:pedidos:leer`, `ventas:admin` (no son scopes reales, se resuelven por rol), `postventa:devoluciones:leer`, `postventa:reclamos:leer` (reemplazados por `/devoluciones/me` y `/reclamos/me`, sin scope), `tokens:introspeccion` para Ventas/Postventa (reemplazado por `usuarios:leer`), scope adicional para el simulador de pasarela (declinado, decisión nuestra), **`postventa:csat:escribir`** (corrección 2026-10-12, **confirmado retirado por Seguridad** — issue #44, `modulo-marketplace`/`modulo-chatbot`/`modulo-retail`, sin reemplazo), **`usuarios:leer:documento`** (resuelto 2026-10-12, ver pendientes — la emisión de comprobantes es de Retail, no de Ventas, ver `ACUERDO_G4_RETAIL.md` R6).
 
 ## Decisiones confirmadas
 
@@ -52,6 +52,7 @@ Nada — Seguridad no consume ninguna API de Ventas/Postventa. Es puramente un p
 | — | 2026-10-11 | `modulo-ventas` también necesita `despachos:crear` y `despachos:cancelar` — ya publicados por Despacho en su `api-contract.md` §3.4 con Ventas como consumidor autorizado; no necesita `seguimientos:leer` (lo consultan los canales directo con Despacho). | Esta tabla; `integraciones/CONSULTA_G2_DESPACHO.md` |
 | — | 2026-10-11 | Credenciales reales (`client_id` + `client_secret`) de todos los clientes: Hito 4. Mientras tanto, mock con `modulo-ventas` / `secreto-de-prueba` (kit §6). | Kit de integración de Seguridad |
 | — | 2026-10-11 | Seguridad avisa directamente a Marketplace, Chatbot, Retail y Despacho sobre sus nuevos scopes, por su propio canal de issues con cada uno. | Issue #42 |
+| — | 2026-10-12 | **Retiro confirmado de `postventa:csat:escribir`** de `modulo-marketplace`, `modulo-chatbot` y `modulo-retail`, sin reemplazo — `POST /api/v2/csat` se autoriza con token de usuario, rol `CLIENTE` y validación de titularidad, igual que `/pedidos/me`. No afecta el recorrido de Hito 3 (login real → validación JWT → `/pedidos/me`). | Issue #44, enlazada a #42 |
 
 ## Límites del acuerdo (aclarado por Seguridad, para no atribuirles algo que no es suyo)
 
@@ -63,8 +64,7 @@ Nada — Seguridad no consume ninguna API de Ventas/Postventa. Es puramente un p
 
 ## Pendiente de confirmar / resolver
 
-- **Retirar `postventa:csat:escribir` del acuerdo A10:** detectado el 2026-10-12 al responder una consulta de Chatbot (G3) — este scope no debería existir, `POST /api/v2/csat` necesita el token del propio cliente (verificación de titularidad del acuerdo H-04), no un token de servicio del canal. Ya se mandó la issue a Seguridad para que lo retiren de `modulo-marketplace`, `modulo-chatbot` y `modulo-retail` — falta su confirmación.
-- **Retirar `usuarios:leer:documento` de `modulo-ventas`:** resuelto 2026-10-12 — Retail confirmó que la emisión de comprobantes/boletas es responsabilidad exclusiva suya, no de Ventas (ver `ACUERDO_G4_RETAIL.md`, R6). Falta avisarle a Seguridad en el issue #42 (misma issue de arriba, o una nueva con etiqueta `integracion`) para que lo retiren del catálogo.
+- **Retirar `usuarios:leer:documento` de `modulo-ventas`:** resuelto 2026-10-12 — Retail confirmó que la emisión de comprobantes/boletas es responsabilidad exclusiva suya, no de Ventas (ver `ACUERDO_G4_RETAIL.md`, R6). Falta avisarle a Seguridad — va como comentario en la **issue #42** (no #44): ahí mismo quedó la promesa explícita de confirmar este punto en cuanto Retail respondiera.
 
 ## Historial
 
@@ -75,5 +75,6 @@ Nada — Seguridad no consume ninguna API de Ventas/Postventa. Es puramente un p
 - 2026-10-11: Se detecta el mismo problema de `clienteId` por query string en `api-postventas.md` (devoluciones y reclamos); se agregan `/devoluciones/me` y `/reclamos/me`, y se avisa a Seguridad para retirar los scopes de lectura correspondientes.
 - 2026-10-11: Se confirma que `modulo-ventas` también necesita `despachos:crear`/`despachos:cancelar`.
 - 2026-10-11: Seguridad confirma la asignación A10 final completa y aclara los límites de su rol en el acuerdo. Queda cerrado salvo `usuarios:leer:documento` (pendiente de Retail).
-- 2026-10-12: Al responder una consulta de Chatbot (G3) sobre CSAT, se detecta que `postventa:csat:escribir` tampoco debería ser un scope — mismo caso que `devoluciones:leer`/`reclamos:leer`. Se corrige `api-postventas.md` y se manda la issue a Seguridad.
-- 2026-10-12: Al cerrar el acuerdo con Retail (G4), se confirma que la emisión de comprobantes es responsabilidad de Retail, no de Ventas — `usuarios:leer:documento` para `modulo-ventas` queda retirado. Falta avisarle a Seguridad.
+- 2026-10-12: Al responder una consulta de Chatbot (G3) sobre CSAT, se detecta que `postventa:csat:escribir` tampoco debería ser un scope — mismo caso que `devoluciones:leer`/`reclamos:leer`. Se corrige `api-postventas.md` y se manda la issue #44 a Seguridad.
+- 2026-10-12: Seguridad confirma el retiro de `postventa:csat:escribir` en la issue #44, sin cambios al recorrido de Hito 3.
+- 2026-10-12: Al cerrar el acuerdo con Retail (G4), se confirma que la emisión de comprobantes es responsabilidad de Retail, no de Ventas — `usuarios:leer:documento` para `modulo-ventas` queda retirado. Se agrega como comentario en la issue #42, donde quedó la promesa original de confirmarlo.

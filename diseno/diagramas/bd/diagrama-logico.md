@@ -46,6 +46,7 @@ erDiagram
         uuid id_cliente "referencia sin FK, = claim sub del JWT"
         uuid id_vendedor "referencia sin FK, = claim sub del JWT"
         bigint id_direccion_entrega "referencia sin FK"
+        varchar(40) tienda_id "solo RETAIL"
     }
     DETALLE_PEDIDO {
         bigint id PK
@@ -62,10 +63,13 @@ erDiagram
         bigint id PK
         bigint id_pedido FK "NN"
         varchar(30) metodo "NN"
-        varchar(100) referencia
+        varchar(100) referencia "también referenciaOperacion del POS en RETAIL"
         decimal(12-2) monto "NN"
         varchar(20) estado "NN"
         timestamp fecha_proceso
+        decimal(12-2) monto_efectivo "solo RETAIL con metodo MIXTO"
+        decimal(12-2) monto_tarjeta "solo RETAIL con metodo MIXTO"
+        timestamp fecha_venta "solo RETAIL, venta sin conexión hasta 72h atrás"
     }
     HISTORIAL_ESTADO {
         bigint id PK
