@@ -37,10 +37,17 @@ Registrados con Seguridad como acuerdo A10 (2026-10-10, ver `integraciones/ACUER
 - Consultar el propio historial (`GET /pedidos/me`): el token debe tener `roles` con `CLIENTE`; se filtra por `sub`.
 - Operación de Backoffice/Gestor: el token debe tener `roles` con `ADMIN_VENTAS` (catálogo cerrado de Seguridad — "Gestor" es solo el nombre que usamos en specs/interfaz, no un rol real del sistema).
 
-## Scopes que M1/M2 consumen de Seguridad
+## Scopes que M1/M2 consumen de otros módulos
 
+De Seguridad:
 - **`usuarios:leer`** (`GET /usuarios/{clienteId}`, devuelve `estado` de la cuenta): concedido a `modulo-ventas` y `modulo-postventa`, para verificar que el cliente siga activo antes de una operación sensible (anular, reembolsar). Reemplaza a `tokens:introspeccion`, que no aplica aquí porque M1/M2 nunca reciben el token del propio usuario (salvo `/pedidos/me`).
 - **`usuarios:leer:documento`**: **provisional**, solo para `modulo-ventas`. Depende de si la emisión de comprobantes/boletas termina siendo responsabilidad de Ventas o de Retail — ver `integraciones/CONSULTA_G4_RETAIL.md`.
+
+De Despacho (`aud: api-despacho`, definidos por Despacho — ver su `api-contract.md` §3.4):
+- **`despachos:crear`**: concedido a `modulo-ventas`, para solicitar la creación de un despacho cuando el pedido está pagado y preparado.
+- **`despachos:cancelar`**: concedido a `modulo-ventas`, para cancelar un despacho por anulación del pedido.
+
+Acuerdo registrado como A10 con Seguridad (2026-10-11) — ver `integraciones/ACUERDO_G7_SEGURIDAD.md`.
 # Endpoints de M1
 ## F1: Ciclo de Vida del Pedido (Responsable: Michael)
 ### 1.1 Crear Pedido
