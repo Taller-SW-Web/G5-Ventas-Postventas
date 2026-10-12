@@ -62,7 +62,8 @@ Si necesitas tocar cualquiera de estos puntos, pregunta antes de asumir que el C
 | Reglas de negocio y criterios de aceptación por RF | `specs/especificaciones/funcionales/` (ESP-01 a ESP-16) |
 | Requisitos no funcionales | `specs/especificaciones/no-funcionales/` (RNF-01 a RNF-08) |
 | Stack y convenciones de frontend | [specs/stack-frontend.md](specs/stack-frontend.md) |
-| Estructura y guía de implementación del backend | [guias-backend/estructura-backend.md](guias-backend/estructura-backend.md), [guias-backend/guia-backend.md](guias-backend/guia-backend.md) |
+| Estructura y guía de implementación del backend | [guias/backend/estructura-backend.md](guias/backend/estructura-backend.md), [guias/backend/guia-backend.md](guias/backend/guia-backend.md) |
+| Estructura y guía de implementación del frontend | [guias/frontend/estructura-frontend.md](guias/frontend/estructura-frontend.md), [guias/frontend/guia-frontend.md](guias/frontend/guia-frontend.md) |
 | Flujo de ramas, commits y PRs | [CONTRIBUTING.md](CONTRIBUTING.md) |
 
 Los documentos bajo `arquitectura/` (C4 niveles 1, 2 y 3) siguen siendo **propuestas en discusión** en lo que respecta a proveedores de despliegue (Vercel, Render, Supabase). Su contenido funcional (F1 y F2 en M1; F3 a F6 en M2; Mantine UI) está alineado con la sección 2.
