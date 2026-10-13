@@ -170,6 +170,8 @@ Paquetes: cada microservicio usa un paquete raíz corto, sin `pe/unmsm/...`:
 
 Cada funcionalidad es un subpaquete: `ventas.pedido`, `ventas.anulacion`, `postventa.reembolso`, etc.
 
+**Regla desde F3 (2026-10-12):** `compartido/` (de M1 y de M2) no se modifica sin autorización del líder. Si alguien necesita un cambio ahí, se lo pide antes.
+
 ### 3.2. DTOs
 
 - Un `record` por request y por response, en el subpaquete `dto/` de cada funcionalidad.
@@ -195,6 +197,7 @@ En `compartido/` de M1 y de M2 (ya hechos) están estas excepciones y su manejo:
 | `SolicitudInvalidaException(codigo, mensaje)` | 400 | Dato inválido o regla de formato |
 | `RecursoNoEncontradoException(codigo, mensaje)` | 404 | No existe |
 | `ConflictoException(codigo, mensaje)` | 409 | Estado no permite la operación, duplicado, sin stock |
+| `DependenciaNoDisponibleException(codigo, mensaje)` | 503 | **Obligatoria** cuando otro sistema no responde (M1, Productos, Despacho, almacenamiento, pasarela). La operación no se da por hecha y se puede reintentar — nunca `500` ni una excepción propia para este caso. Ya está en `postventa/compartido/` (agregada en F3, 2026-10-12) |
 
 Cada excepción extiende `RuntimeException` y guarda su `codigo`, que el `GlobalExceptionHandler` copia en la respuesta. Además está `NoImplementadoException` (501, `NO_IMPLEMENTADO`) para los endpoints que todavía no se programan. **Ya están en `ventas/compartido/` y `postventa/compartido/`**: no hay que copiarlas.
 
@@ -209,11 +212,13 @@ En `GlobalExceptionHandler`, además:
 | `MethodArgumentTypeMismatchException` (parámetro con tipo equivocado) | 400 | `FORMATO_INVALIDO` |
 | `NoResourceFoundException` (ruta que no existe) | 404 | `RUTA_NO_ENCONTRADA` |
 | `HttpRequestMethodNotSupportedException` | 405 | `METODO_NO_PERMITIDO` |
+| `MissingServletRequestParameterException` / `MissingServletRequestPartException` | 400 | `PARAMETRO_FALTANTE` |
+| `MaxUploadSizeExceededException` | 400 | `ARCHIVO_INVALIDO` |
 | Cualquier otra | 500 | `ERROR_INTERNO`, sin el mensaje interno |
 
 Códigos de error usados en esta guía (se pueden agregar otros, siempre en MAYÚSCULAS_CON_GUION):
 
-`PEDIDO_NO_ENCONTRADO`, `CODIGO_INVALIDO`, `MOTIVO_REQUERIDO`, `TRANSICION_NO_PERMITIDA`, `DOCUMENTO_INVALIDO`, `ITEM_SIN_DISPONIBILIDAD`, `MOTIVO_INVALIDO`, `PEDIDO_NO_ANULABLE`, `PEDIDO_NO_ENTREGADO`, `PLAZO_VENCIDO`, `EVIDENCIA_REQUERIDA`, `SIN_STOCK`, `ORIGEN_NO_PERMITIDO`, `CLAVE_IDEMPOTENCIA_EN_CONFLICTO`, `SALDO_INSUFICIENTE`, `CALIFICACION_DUPLICADA`, `RECLAMO_NO_ENCONTRADO`, `RESPUESTA_VACIA`.
+`PEDIDO_NO_ENCONTRADO`, `CODIGO_INVALIDO`, `MOTIVO_REQUERIDO`, `TRANSICION_NO_PERMITIDA`, `DOCUMENTO_INVALIDO`, `ITEM_SIN_DISPONIBILIDAD`, `MOTIVO_INVALIDO`, `PEDIDO_NO_ANULABLE`, `PEDIDO_NO_ENTREGADO`, `PLAZO_VENCIDO`, `EVIDENCIA_REQUERIDA`, `SIN_STOCK`, `ORIGEN_NO_PERMITIDO`, `CLAVE_IDEMPOTENCIA_EN_CONFLICTO`, `SALDO_INSUFICIENTE`, `CALIFICACION_DUPLICADA`, `RECLAMO_NO_ENCONTRADO`, `RESPUESTA_VACIA`, `ARCHIVO_REQUERIDO`, `ARCHIVO_INVALIDO`, `EVIDENCIA_INVALIDA`, `ITEM_INVALIDO`, `DEVOLUCION_EN_CURSO`, `DEVOLUCION_NO_ENCONTRADA`, `FUNDAMENTO_REQUERIDO`, `RESOLUCION_INVALIDA`, `DEVOLUCION_NO_RESOLUBLE`, `PEDIDO_INCONSISTENTE`, `PAGINACION_INVALIDA`, `PARAMETRO_FALTANTE`, `VENTAS_NO_DISPONIBLE`, `PRODUCTOS_NO_DISPONIBLE`, `ALMACEN_NO_DISPONIBLE` (estos últimos 15, de F3, ya en `catalogo-errores.md`).
 
 ### 3.4. Fechas
 
@@ -263,10 +268,18 @@ Mientras otro sistema no exista, cada cliente responde datos de prueba. En el `a
 Cómo funciona cada cliente:
 
 - Cada cliente es un `@Component` que recibe la URL base del otro sistema y el valor de `integracion.simulado`.
-- Si está en modo simulado, devuelve datos de prueba fijos. Por ejemplo, `VentasClient.consultarPedido` devuelve un pedido `ENTREGADO` hace 2 días, de `CLI-1`, canal `MARKETPLACE`, por 129.90 PEN.
+- Si está en modo simulado, devuelve datos de prueba fijos.
 - Si no, llama al otro sistema por HTTP con `RestClient`.
 
 Cada cliente devuelve un `record` propio (por ejemplo `PedidoResumen`), no un `JsonNode`. El record vive en `integracion/` del servicio que lo usa.
+
+**En M2 (`postventa/integracion/`) ya existen estos tres — usar esos, no crear otros:**
+
+- `VentasClient.consultarPedido(pedidoId)`: devuelve `PedidoResumen` (estado, `clienteId`, ítems con precio y `fechaEntrega`). Lo usan F3 y F5. En modo simulado: `PED-AAAA-00404` no existe, `PED-AAAA-00409` está `DESPACHADO`, `PED-AAAA-00030` se entregó hace 30 días; cualquier otro código está `ENTREGADO` hace 2 días.
+- `ProductosClient`: disponibilidad para un cambio y reintegro de stock. En modo simulado, `PROD-999` no tiene stock.
+- `DespachoClient`: logística de un cambio de producto.
+
+**Pendiente, cuando Seguridad registre `ventas:pedidos:consultar`** (ver `integraciones/ACUERDO_G7_SEGURIDAD.md`): `VentasClient` hoy reenvía el token de quien lo llama al pedir 1.3 a M1 — cuando el scope exista, debe usar el token de servicio propio de M2 en vez de reenviar el de quien llama.
 
 ### 3.8. Git (flujo simple)
 
@@ -334,6 +347,7 @@ Al cruzar contratos, especificaciones y base salieron estos huecos. Las decision
 | H8 | Las rutas reales de Productos (F), Despacho (E) y Seguridad (G) no están acordadas | Todos | Con Productos (G6) y Seguridad (G7) ya hay acuerdo formal (`integraciones/ACUERDO_G6_PRODUCTOS.md`, `ACUERDO_G7_SEGURIDAD.md`). Con Despacho (G2) sigue pendiente. La pasarela la hacemos nosotros (9.3) |
 | H9 | Falta un actor para cuando Productos rechaza la reserva de stock o el consumo de cupón (no es `CLIENTE`, `GESTOR`, pasarela ni Despacho) | F1 | Aprobado en equipo (2026-10-12): nuevo actor `SISTEMA_PRODUCTOS` y motivos `STOCK_NO_DISPONIBLE`/`CUPON_RECHAZADO`. Ver 5.2 y 6.1 |
 | H10 | El pedido `RETAIL` necesita campos que la tabla original no tenía (`tiendaId`, desglose de pago mixto, fecha de venta retroactiva) | F1 | Acuerdo con Retail (G4, 2026-10-12): columnas `pedido.tienda_id` y `pago.monto_efectivo`/`monto_tarjeta`/`fecha_venta`. Ver 4.1 y 5.3 |
+| H11 | `postventa.devolucion` no tenía hora de registro, fecha de resolución ni la referencia a la operación derivada (reembolso o despacho de un cambio) — pero `ESP-07` 8.3 y `ESP-08` 8.3 ya prometen devolver esos campos | F3 | Columnas `fecha_registro`, `fecha_resolucion`, `referencia_operacion`. Ver 4.1 |
 
 ### 4.1. Cambios en la base (ya aplicados en Supabase)
 
@@ -346,6 +360,7 @@ Cada responsable actualiza sus entidades para que coincidan con estas columnas y
 | H9 | `ventas.pedido.reserva_id` | Columna `varchar(100)`, null mientras la reserva está pendiente o en `RETAIL` | Michael (**ya aplicado** — `Pedido.java` ya la usa) |
 | H10 | `ventas.pedido.tienda_id` | Columna `varchar(40)`, null salvo `RETAIL` | Michael (**corregido 2026-10-12** — `Pedido.java` y `CrearPedidoService` ya la usan, dejó de guardarse dentro de `direccion`) |
 | H10 | `ventas.pago.monto_efectivo`, `monto_tarjeta`, `fecha_venta` | Columnas nuevas para `RETAIL` con `metodoPago: MIXTO` o venta sin conexión | Michael (**corregido 2026-10-12** — `Pago.java` y `CrearPedidoService` ya las guardan) — **falta confirmar con Michael si ya aplicó el `ALTER TABLE` sobre la Supabase real**, no solo en la entidad |
+| H11 | `postventa.devolucion.fecha_registro`, `fecha_resolucion`, `referencia_operacion` | Columnas nuevas (ver script en 7.6) | Joseph — **pendiente de aplicar en Supabase**, el `ALTER TABLE` ya está listo en `diagrama-fisico.md`/`ventas_postventa_schema.sql` |
 | H2 | `postventa.devolucion` | Columnas `descripcion` e `id_cliente` | Joseph |
 | H2 | `postventa.devolucion_item` | Tabla nueva: `id_devolucion`, `id_producto`, `cantidad` (> 0) | Joseph |
 | H3 | `postventa.reembolso` | Columna `id_pedido` | Luis Alejandro |
@@ -662,7 +677,9 @@ En el controller, la ruta `/anulaciones/pendientes` debe declararse antes que `/
 
 ## 7. M2 — F3 Devoluciones y cambios (Joseph)
 
-Especificaciones: ESP-07, ESP-08. Contrato: `api-postventas.md` 2.1 a 2.5. Usa los cambios de H2 (4.1).
+Especificaciones: ESP-07, ESP-08. Contrato: `api-postventas.md` 2.1 a 2.5 (v1.5.0). Usa los cambios de H2 y H11 (4.1).
+
+**Ya construido** (F3 completo, en `main` del backend, con pruebas en verde desde el 2026-10-12). Esta sección describe el estado real del código, no una propuesta.
 
 ### 7.1. Valores
 
@@ -696,6 +713,7 @@ No se guarda en la base todavía: la evidencia se asocia cuando se registra la d
 
 - Consultar: si tiene resolución de reembolso, incluir el bloque `reembolso` leyendo `postventa.reembolso` por `tipo_origen = DEVOLUCION` e `id_origen = devolucion.id` (mismo servicio, a través de `ReembolsoService`, no del repositorio de F4).
 - Listar: filtros `clienteId`, `estado`, `tipo`, paginado.
+- **Efecto secundario (ESP-08 §7.1):** cuando el Gestor consulta un expediente `SOLICITADA`, pasa a `EN_EVALUACION` en la misma llamada — no hay un endpoint aparte para "abrir a revisión".
 
 ### 7.5. 2.5 Resolver
 
@@ -708,14 +726,26 @@ No se guarda en la base todavía: la evidencia se asocia cuando se registra la d
 - Solo se resuelve si está `SOLICITADA` o `EN_EVALUACION`; si no, 409.
 - Una devolución no puede terminar con cambio y reembolso a la vez.
 - Sumar `devoluciones_aprobadas` en `agregado_metricas` (sección 10.4) al aprobar.
+- **`decision` acepta además `tipoResolucion` opcional** (`CAMBIO` o `REEMBOLSO`, contrato v1.5.0) — permite derivar un `CAMBIO` sin stock a `REEMBOLSO` sin tener que inventarlo del lado del cliente.
+- **El autorizador sale del `sub` del token del Gestor**, nunca de un campo del cuerpo — se retiró `autorizadorId` del request a partir de v1.5.0.
+- **Repetir la misma aprobación** sobre un expediente que quedó `APROBADA` (porque F4 o Despacho no confirmaron todavía) reintenta la coordinación sin duplicar nada — el expediente solo pasa a `COMPLETADA` cuando F4 o Despacho confirman.
 
 ### 7.6. Lista para terminar F3
 
-- [ ] Entidades actualizadas con H2 (`Devolucion`, `DevolucionItem`)
-- [ ] Subir evidencia con validación de tipo y tamaño
-- [ ] Registrar con todas las validaciones de 7.3
-- [ ] Consultar y listar
-- [ ] Resolver: rechazo, reembolso y cambio
+Al 2026-10-12, F3 está completo y en `main`:
+
+- [x] Entidades actualizadas con H2 (`Devolucion`, `DevolucionItem`)
+- [x] Subir evidencia con validación de tipo y tamaño
+- [x] Registrar con todas las validaciones de 7.3
+- [x] Consultar y listar
+- [x] Resolver: rechazo, reembolso y cambio
+
+Pendientes:
+
+- [ ] Usar las columnas de H11 (`fecha_registro`, `fecha_resolucion`, `referencia_operacion`) — falta aplicar el `ALTER TABLE` en Supabase
+- [ ] Reemplazar el reembolso simulado (`SolicitadorReembolsoSimulado`) por `ReembolsoService` de F4 cuando exista
+- [ ] Sumar `devoluciones_aprobadas` al dashboard cuando exista `ProyeccionesService`
+- [ ] Cuando Seguridad registre `ventas:pedidos:consultar`, `VentasClient` debe usar el token de servicio de M2 en vez de reenviar el token de quien llama (ver 3.7)
 - [ ] Criterios de aceptación de ESP-07 y ESP-08
 
 ---
@@ -777,7 +807,7 @@ Especificaciones: ESP-11, ESP-12. Contrato: 2.7 y 2.13.
 
 1. `puntuacion` de 1 a 5 (en la tabla se llama `puntaje`). Fuera de rango: 400.
 2. `canal` en `CanalVenta`. `comentario` opcional.
-3. El pedido debe estar `ENTREGADO`: `VentasClient.consultarPedido`. Si no: 409 `PEDIDO_NO_ENTREGADO`.
+3. El pedido debe estar `ENTREGADO`: `VentasClient.consultarPedido` — usar el que ya existe en `postventa/integracion/` (lo construyó F3, ver 3.7), no crear uno nuevo. Si no: 409 `PEDIDO_NO_ENTREGADO`.
 4. Ya existe una calificación para ese pedido (`calificacion.id_pedido` es único): 409 `CALIFICACION_DUPLICADA`.
 5. Guardar y sumar al agregado: `csat_suma += puntaje`, `csat_cantidad += 1` en la fila `(hoy, canal)`.
 6. 201.
@@ -1055,6 +1085,8 @@ El simulador de pasarela no valida tokens: es un sistema externo de prueba.
 | Manual | Postman o `.http` | Recorrido completo contra Supabase |
 
 No se usan pruebas que escriban en la base compartida dentro de `mvn package`.
+
+**Desde F3 (2026-10-12):** cada controller nuevo de M2 debe declarar sus services con `@MockitoBean` en `SeguridadPostventaTest`. Esa prueba ya no espera `404` — comprueba que la respuesta no sea `401` ni `403` (verifica autorización, no que el endpoint esté implementado).
 
 ### 13.2. Modelo a seguir
 
