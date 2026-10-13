@@ -47,8 +47,9 @@ La ejecución del reembolso corresponde a **F4 — Reembolsos y extornos**, medi
 | ------------------- | --------------------------------------------------------------------------------- |
 | **Gestor**          | Evalúa la solicitud y determina si corresponde aprobarla o rechazarla.            |
 | **M2 — Postventa**  | Gestiona el expediente, valida las reglas de resolución y mantiene su estado.     |
-| **Productos — F**   | Valida la disponibilidad de stock cuando se solicita un cambio, y reintegra al inventario la unidad devuelta cuando la resolución es `CAMBIO` o `REEMBOLSO` (acuerdo 2026-10-11, ver `integraciones/ACUERDO_G6_PRODUCTOS.md`). |
-| **Despacho — E**    | Coordina la logística necesaria para un cambio de producto.                       |
+| **Productos — F**   | Valida la disponibilidad de stock cuando se solicita un cambio (`GET /api/v1/inventario/disponibilidad`, no vinculante), y reintegra al inventario la(s) unidad(es) devuelta(s) — solo las físicamente recibidas y aptas, solo después de que M2 confirme la recepción física (acuerdo 2026-10-13, ver `integraciones/ACUERDO_G6_PRODUCTOS.md`). |
+| **Despacho — E**    | Coordina la logística inversa (recojo) necesaria para un cambio de producto, y el despacho del producto de reemplazo.                       |
+| **Gestor / almacén** | Confirma la recepción física de la unidad devuelta y su aptitud para reventa — paso obligatorio antes de solicitar el reintegro, distinto del dictamen comercial de la resolución (ver sección 9, reglas 14-16). |
 | **F4 — Reembolsos** | Procesa el reembolso cuando la resolución corresponde a una devolución de dinero. |
 
 > **Nota:** M2 coordina las operaciones mediante las interfaces definidas entre módulos y no modifica directamente los datos internos de otros módulos.
@@ -135,11 +136,11 @@ COMPLETADA      F4 — Reembolso
 <summary><strong>B. Se aprueba un cambio de producto</strong></summary>
 
 1. El Gestor selecciona `CAMBIO`.
-2. M2 consulta a Productos la disponibilidad del nuevo producto.
-3. Si existe stock, se registra la resolución como `APROBADA`. La aprobación del Gestor (basada en la evidencia de ESP-07) es, para efectos de este sistema, la confirmación de que la unidad devuelta fue recibida y aceptada — no existe un paso físico de recepción separado.
-4. M2 solicita a Productos el reintegro de la(s) unidad(es) devuelta(s) (`POST /api/v1/inventario/reintegros`, acuerdo con Productos, 2026-10-11 — ver `integraciones/ACUERDO_G6_PRODUCTOS.md`), admitiendo reintegros parciales por línea/cantidad.
-5. M2 coordina con Despacho la logística del cambio.
-6. Una vez confirmado el cambio, la solicitud pasa a `COMPLETADA`.
+2. M2 consulta a Productos la disponibilidad del nuevo producto (`GET /api/v1/inventario/disponibilidad`, respuesta informativa, no vinculante — acuerdo 2026-10-13, ver `integraciones/ACUERDO_G6_PRODUCTOS.md`).
+3. Si existe stock, se registra la resolución como `APROBADA`. Esto es **únicamente el dictamen comercial** del Gestor sobre la evidencia de `ESP-07` — por sí solo **no** autoriza el reintegro de inventario (ver regla 14).
+4. M2 coordina con Despacho la logística inversa (recojo de la unidad a cambiar) y el despacho del producto de reemplazo.
+5. Cuando la unidad devuelta llega físicamente al almacén, el Gestor (o quien reciba en almacén, mismo rol `ADMIN_VENTAS`) **confirma la recepción física**: registra la cantidad recibida y la cantidad apta para reventa por línea. Solo en ese momento M2 solicita a Productos el reintegro (`POST /api/v1/inventario/reintegros`), únicamente por las unidades aptas, admitiendo reintegros parciales por línea/cantidad (ver regla 15).
+6. Una vez confirmado el reintegro y despachado el producto de reemplazo, la solicitud pasa a `COMPLETADA`.
 
 </details>
 
@@ -159,12 +160,12 @@ COMPLETADA      F4 — Reembolso
 <summary><strong>D. Se aprueba un reembolso</strong></summary>
 
 1. El Gestor selecciona `REEMBOLSO`.
-2. M2 valida que la solicitud pueda generar un reembolso.
-3. M2 solicita a Productos el reintegro de la(s) unidad(es) devuelta(s) (`POST /api/v1/inventario/reintegros`, mismo criterio que en `CAMBIO`: la aprobación del Gestor confirma la recepción).
-4. M2 envía la solicitud correspondiente a F4.
-5. F4 procesa el reembolso según su propia especificación.
-6. Si F4 confirma el resultado exitoso, la solicitud puede pasar a `COMPLETADA`.
-6. M2 conserva la referencia de la operación de reembolso.
+2. M2 valida que la solicitud pueda generar un reembolso, y registra si la resolución **requiere devolución física** del producto o no (`requiereDevolucionFisica` — por defecto `true`; un reembolso puede no requerirla, ej. el cliente conserva un producto defectuoso que no vale la pena devolver, ver regla 16).
+3. M2 envía la solicitud correspondiente a F4 — el reembolso de dinero **no depende** de que exista o se confirme la recepción física; son procesos independientes.
+4. F4 procesa el reembolso según su propia especificación. Si F4 confirma el resultado exitoso, la solicitud puede pasar a `COMPLETADA` aunque el reintegro de inventario siga pendiente.
+5. Si `requiereDevolucionFisica` es `true`: cuando la unidad llega físicamente, el Gestor/almacén confirma la recepción (cantidad recibida y apta por línea). Solo entonces M2 solicita a Productos el reintegro (`POST /api/v1/inventario/reintegros`), únicamente por las unidades aptas, admitiendo reintegros parciales (ver regla 15).
+6. Si `requiereDevolucionFisica` es `false`, no se solicita confirmación de recepción ni reintegro — la solicitud puede quedar `COMPLETADA` sin movimiento de inventario.
+7. M2 conserva la referencia de la operación de reembolso y, si aplica, la del reintegro.
 
 </details>
 
@@ -202,6 +203,7 @@ COMPLETADA      F4 — Reembolso
 | `resolucion`       | Enumeración          |      Sí     | Tipo de resolución seleccionada.                 |
 | `motivoResolucion` | Texto                | Condicional | Justificación de la decisión cuando corresponda. |
 | `productoCambio`   | Identificador        | Condicional | Producto solicitado para el cambio.              |
+| `requiereDevolucionFisica` | Booleano | Condicional, solo `REEMBOLSO` | Si es `false`, no se espera ni se confirma recepción física de la unidad — por defecto `true` (ver regla 16). En `CAMBIO` siempre es `true`. |
 
 ### 8.2 Tipos de resolución
 
@@ -210,6 +212,20 @@ CAMBIO
 REEMBOLSO
 RECHAZO
 ```
+
+### 8.2b Confirmación de recepción física
+
+Paso posterior a la resolución `APROBADA` (`CAMBIO` o `REEMBOLSO` con `requiereDevolucionFisica: true`), antes de solicitar el reintegro a Productos:
+
+| Campo | Tipo | Obligatorio | Descripción |
+|---|---|---|---|
+| `devolucionId` | UUID / identificador | Sí | Identificador de la devolución. |
+| `lineas[].sku` | Texto | Sí | SKU de la línea recibida (el mismo que `items[].sku` del pedido original, ver `api-ventas.md` 1.3). |
+| `lineas[].cantidadRecibida` | Entero | Sí | Unidades físicamente recibidas en almacén. |
+| `lineas[].cantidadApta` | Entero | Sí | De las recibidas, cuántas son aptas para reventa (`cantidadApta` ≤ `cantidadRecibida`). |
+| `evidencia` | Archivo / referencia | No | Evidencia adicional de la recepción (ej. foto del producto ya en almacén). |
+
+Datos de salida: `devolucionId`, `recepcionConfirmada: true`, `fechaRecepcion`, `actor`, y por línea `sku`/`cantidadApta` — esto es lo que se traduce 1:1 en `lines[]` del `POST /api/v1/inventario/reintegros` (ver `integraciones/ACUERDO_G6_PRODUCTOS.md`). Solo se reintegra `cantidadApta`, nunca `cantidadRecibida` si hay unidades no aptas.
 
 ### 8.3 Datos de salida
 
@@ -270,6 +286,9 @@ La información de trazabilidad debe mantenerse de acuerdo con **RNF-03 — Traz
 11. Una solicitud aprobada pasa a `COMPLETADA` cuando la operación correspondiente ha sido confirmada.
 12. M2 no debe modificar directamente las tablas pertenecientes a otros módulos.
 13. Toda resolución debe conservar la información necesaria para su trazabilidad.
+14. **La aprobación comercial del Gestor (resolución `APROBADA`) nunca autoriza por sí sola el reintegro de inventario.** El reintegro solo se solicita después de confirmarse la recepción física de la unidad devuelta y su aptitud para reventa (sección 8.2b) — son dos pasos distintos, con su propio actor y registro.
+15. El reintegro a Productos solo incluye las unidades `cantidadApta`, nunca las no recibidas o no aptas. Una recepción parcial (ej. 1 de 3 unidades) reintegra solo esa unidad; una recepción posterior de las 2 restantes es una confirmación y un reintegro aparte, no una repetición de la primera (ver `integraciones/ACUERDO_G6_PRODUCTOS.md`, idempotencia).
+16. En `REEMBOLSO`, el reembolso de dinero (F4) no depende de la recepción física — son procesos independientes. Si `requiereDevolucionFisica` es `false`, la solicitud se completa sin esperar ninguna recepción ni solicitar reintegro.
 
 ---
 
@@ -350,13 +369,27 @@ La resolución puede requerir comunicación con otros módulos dependiendo de la
 ```text
 M2 — Postventa
       │
-      │ consulta disponibilidad
+      │ GET /api/v1/inventario/disponibilidad (scope inventario:disponibilidad:leer)
       ▼
 Productos — F
       │
-      │ stock disponible
+      │ respuesta informativa, no vinculante
       ▼
 M2
+```
+
+### Confirmación de recepción física y reintegro
+
+```text
+Gestor / almacén
+      │
+      │ confirma recepción (cantidadRecibida, cantidadApta por línea)
+      ▼
+M2 — Postventa
+      │
+      │ POST /api/v1/inventario/reintegros (solo cantidadApta)
+      ▼
+Productos — F
 ```
 
 ### Coordinación de cambio
@@ -465,6 +498,26 @@ Para un rechazo:
 **CUANDO** se consulta su información.
 
 **ENTONCES** deben estar disponibles el actor, fecha, resolución, motivo cuando corresponda y resultado de la operación.
+
+---
+
+### CA-07 — Sin reintegro antes de la recepción física
+
+**DADO** una solicitud `APROBADA` (`CAMBIO` o `REEMBOLSO` con `requiereDevolucionFisica: true`).
+
+**CUANDO** todavía no se registró la confirmación de recepción física (sección 8.2b).
+
+**ENTONCES** el sistema no solicita el reintegro a Productos ni modifica inventario, aunque la resolución ya esté `APROBADA`.
+
+---
+
+### CA-08 — Reintegro parcial por unidades aptas
+
+**DADO** una confirmación de recepción física con 3 unidades recibidas y solo 1 apta para reventa.
+
+**CUANDO** M2 solicita el reintegro a Productos.
+
+**ENTONCES** el reintegro incluye únicamente 1 unidad; las 2 no aptas no incrementan inventario.
 
 ---
 

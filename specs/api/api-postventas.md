@@ -283,9 +283,18 @@
     → reembolso). Sirve para resolver como `REEMBOLSO` un `CAMBIO` que
     quedó sin stock (ESP-08 CA-05, CA-09) — solo tiene efecto con
     `decision: APROBADA`.
+-   `requiereDevolucionFisica` (opcional, booleano, por defecto `true`, solo con
+    `tipoResolucion: REEMBOLSO`): si es `false`, el expediente se completa sin
+    esperar la confirmación de recepción física ni solicitar reintegro de
+    inventario (ej. el cliente conserva un producto defectuoso que no vale la
+    pena devolver). En `CAMBIO` siempre es `true` — ver ESP-08 regla 16.
 -   `autorizadorId` **no** va en el cuerpo: se toma del `sub` del token
     del Gestor, nunca de un campo enviado por el cliente — se retiró del
     ejemplo de request a partir de esta versión.
+-   **Importante (2026-10-13):** esta aprobación comercial **ya no autoriza por sí
+    sola** el reintegro de inventario cuando `tipoResolucion` es `CAMBIO` o
+    `REEMBOLSO` con `requiereDevolucionFisica: true` — ver 2.5b, `ESP-08` reglas
+    14-16 y `integraciones/ACUERDO_G6_PRODUCTOS.md`.
 -   **Respuestas:**
     -   **`200 OK`**:
 
@@ -310,6 +319,55 @@
     -   **`409 Conflict`** (`PEDIDO_INCONSISTENTE`): El pedido asociado ya no está en un estado compatible con la resolución.
     -   **`409 Conflict`** (`SIN_STOCK`): Aprobación con `tipo: CAMBIO` (o `tipoResolucion: CAMBIO`) sin stock disponible en Productos (F). El Gestor puede reintentar con `tipoResolucion: REEMBOLSO`, o rechazar.
     -   **`503 Service Unavailable`** (`PRODUCTOS_NO_DISPONIBLE`): Productos (F) no responde la validación de disponibilidad.
+
+#### 2.5b Confirmar Recepción Física (nuevo, 2026-10-13)
+
+-   **Endpoint:** `PATCH /api/v2/devoluciones/{devolucionId}/recepcion`
+-   **Descripción:** Registra que la unidad devuelta llegó físicamente al almacén y
+    si es apta para reventa — paso obligatorio antes de solicitar el reintegro de
+    inventario a Productos (G6), sin importar que el expediente ya esté `APROBADA`.
+    Separa el dictamen comercial del Gestor (2.5) de la confirmación física, que
+    puede hacer el mismo Gestor o quien reciba en almacén (mismo rol `ADMIN_VENTAS`).
+    No aplica si la resolución fue `REEMBOLSO` con `requiereDevolucionFisica: false`.
+-   **Headers:** `Authorization: Bearer <token_gestor>` (requiere rol `ADMIN_VENTAS`)
+-   **Request Body:**
+
+``` json
+{
+  "lineas": [
+    { "sku": "SKU-AUR-01", "cantidadRecibida": 1, "cantidadApta": 1 }
+  ],
+  "evidencia": "https://api.empresa.com/v2/uploads/recepciones/rec-0042-foto1.jpg"
+}
+```
+
+-   `lineas[].sku` debe corresponder a una línea del pedido original (`items[].sku`
+    de `GET /api/v1/pedidos/{pedidoId}`, ver `api-ventas.md` 1.3) — nunca se infiere
+    de `productoId`.
+-   `cantidadApta` ≤ `cantidadRecibida`; solo `cantidadApta` se reintegra.
+-   `evidencia` es opcional.
+-   **Respuestas:**
+    -   **`200 OK`**:
+
+``` json
+{
+  "devolucionId": "DEV-2026-0042",
+  "recepcionConfirmada": true,
+  "fechaRecepcion": "2026-09-24T10:00:00Z",
+  "actor": "3f9a2b7e-6c1d-4e2a-9b3f-7a1d2c4e5f6a",
+  "lineas": [
+    { "sku": "SKU-AUR-01", "cantidadApta": 1 }
+  ],
+  "reintegroSolicitado": true
+}
+```
+
+-   **Respuestas de error:**
+    -   **`400 Bad Request`** (`CANTIDAD_INVALIDA`): `cantidadApta` mayor que `cantidadRecibida`, o SKU no pertenece al pedido original.
+    -   **`404 Not Found`** (`DEVOLUCION_NO_ENCONTRADA`): Expediente no encontrado.
+    -   **`409 Conflict`** (`RESOLUCION_NO_APROBADA`): El expediente no está `APROBADA` (`CAMBIO` o `REEMBOLSO`), o no requiere devolución física.
+    -   **`409 Conflict`** (`RECEPCION_YA_CONFIRMADA`): Ya existe una confirmación de recepción para ese `devolucionId` y esas líneas — evita duplicar el reintegro (idempotencia, ver `integraciones/ACUERDO_G6_PRODUCTOS.md`).
+    -   **`503 Service Unavailable`** (`PRODUCTOS_NO_DISPONIBLE`): Productos (F) no responde la solicitud de reintegro.
 
 ### F4: Reembolsos y Extornos (Responsable: Luis Alejandro)
 

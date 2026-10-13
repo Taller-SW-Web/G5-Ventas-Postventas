@@ -724,15 +724,31 @@ No se guarda en la base todavía: la evidencia se asocia cuando se registra la d
 | `decision` | Qué se hace |
 |---|---|
 | `RECHAZADA` | `fundamento` obligatorio (400 si falta). `estado = RECHAZADA`, `resolucion = RECHAZO`, `fundamento_rechazo`, `id_autorizador` |
-| `APROBADA` con `tipo = DEVOLUCION_DINERO` | `estado = APROBADA`, `resolucion = REEMBOLSO`. Llamar a `ReembolsoService.procesar(...)` con origen `DEVOLUCION`, clave `DEVOLUCION-{id}`. Si queda `EXITOSO`: `estado = COMPLETADA` |
-| `APROBADA` con `tipo = CAMBIO` | `ProductosClient.consultarDisponibilidad`. Sin stock: 409 `SIN_STOCK` (el Gestor puede volver a resolver como reembolso o rechazo). Con stock: `resolucion = CAMBIO`, `DespachoClient.programarLogisticaCambio`. Cuando Despacho confirme: `COMPLETADA` |
+| `APROBADA` con `tipo = DEVOLUCION_DINERO` | `estado = APROBADA`, `resolucion = REEMBOLSO`. Llamar a `ReembolsoService.procesar(...)` con origen `DEVOLUCION`, clave `DEVOLUCION-{id}`. Si queda `EXITOSO`: `estado = COMPLETADA` — **esto no depende de la recepción física, ver 7.5b** |
+| `APROBADA` con `tipo = CAMBIO` | `ProductosClient.consultarDisponibilidad`. Sin stock: 409 `SIN_STOCK` (el Gestor puede volver a resolver como reembolso o rechazo). Con stock: `resolucion = CAMBIO`, `DespachoClient.programarLogisticaCambio`. El reintegro de inventario **ya no se dispara aquí** — ver 7.5b. Cuando Despacho confirme la entrega del reemplazo: `COMPLETADA` |
 
 - Solo se resuelve si está `SOLICITADA` o `EN_EVALUACION`; si no, 409.
 - Una devolución no puede terminar con cambio y reembolso a la vez.
 - Sumar `devoluciones_aprobadas` en `agregado_metricas` (sección 10.4) al aprobar.
 - **`decision` acepta además `tipoResolucion` opcional** (`CAMBIO` o `REEMBOLSO`, contrato v1.5.0) — permite derivar un `CAMBIO` sin stock a `REEMBOLSO` sin tener que inventarlo del lado del cliente.
+- **`requiereDevolucionFisica` opcional** (booleano, por defecto `true`, solo con `REEMBOLSO`) — si es `false`, no se espera confirmación de recepción ni reintegro (ver 7.5b).
 - **El autorizador sale del `sub` del token del Gestor**, nunca de un campo del cuerpo — se retiró `autorizadorId` del request a partir de v1.5.0.
 - **Repetir la misma aprobación** sobre un expediente que quedó `APROBADA` (porque F4 o Despacho no confirmaron todavía) reintenta la coordinación sin duplicar nada — el expediente solo pasa a `COMPLETADA` cuando F4 o Despacho confirman.
+
+### 7.5b. 2.5b Confirmar recepción física (nuevo, 2026-10-13 — todavía sin construir)
+
+**Cambio de diseño importante, hecho al responder el issue G6 #51 (P-02):** la aprobación del Gestor en 2.5 (`APROBADA`) **ya no dispara el reintegro de inventario**. G6 prohíbe incrementar stock solo por una aprobación comercial — hay que confirmar antes que la unidad llegó físicamente y es apta para reventa. Esto es un endpoint nuevo, `PATCH /api/v2/devoluciones/{devolucionId}/recepcion` (`api-postventas.md` 2.5b), que todavía no existe en el código.
+
+1. Precondición: `devolucion.estado = APROBADA` con `resolucion` en `CAMBIO` o `REEMBOLSO`, y si es `REEMBOLSO`, `requiereDevolucionFisica != false`. Si no: 409 `RESOLUCION_NO_APROBADA`.
+2. Body: `lineas[].sku` (debe existir en `devolucion_item`), `lineas[].cantidadRecibida`, `lineas[].cantidadApta` (≤ recibida), `evidencia` opcional.
+3. Si ya existe una confirmación previa para esas líneas: 409 `RECEPCION_YA_CONFIRMADA` (idempotencia, no duplicar el reintegro).
+4. `ProductosClient.reintegrar(...)` (`POST /api/v1/inventario/reintegros`, `reason: DEVOLUCION_ACEPTADA`) — **solo** con `cantidadApta`, nunca `cantidadRecibida` si hay unidades no aptas.
+5. Guardar el registro de recepción (fecha, actor, líneas, evidencia) — tabla nueva o columnas nuevas en `devolucion`/`devolucion_item`, a definir en el modelo de datos.
+6. No cambia `devolucion.estado` — sigue `APROBADA` hasta que el reintegro se confirme y (en `CAMBIO`) Despacho entregue el reemplazo; ahí pasa a `COMPLETADA`.
+
+**Importante para `REEMBOLSO`:** el llamado a `ReembolsoService` en 2.5 (paso de arriba) ya no espera a este endpoint — el dinero se devuelve igual, haya llegado o no el producto. Este paso 2.5b solo afecta inventario, nunca el reembolso.
+
+Ver `ESP-08` 8.2b y reglas 14-16, y `integraciones/ACUERDO_G6_PRODUCTOS.md` para el payload exacto de `/inventario/reintegros`.
 
 ### 7.6. Lista para terminar F3
 
@@ -751,8 +767,10 @@ Pendientes:
 - [ ] Reemplazar el reembolso simulado (`SolicitadorReembolsoSimulado`) por `ReembolsoService` de F4 cuando exista
 - [ ] Sumar `devoluciones_aprobadas` al dashboard cuando exista `ProyeccionesService`
 - [ ] Cuando Seguridad registre `ventas:pedidos:consultar`, `VentasClient` debe usar el token de servicio de M2 en vez de reenviar el token de quien llama (ver 3.7)
-- [ ] Conectar Productos (ruta de disponibilidad, por acordar) y Despacho (sin acuerdo todavía)
-- [ ] Criterios de aceptación de ESP-07 y ESP-08
+- [ ] Conectar Productos: `GET /api/v1/inventario/disponibilidad` (scope `inventario:disponibilidad:leer`, pendiente de que G6 autorice a M2) y `POST /api/v1/inventario/reintegros` (scope `inventario:reintegrar`, ya aceptado por G6, pendiente de que Seguridad lo registre) — ver `integraciones/ACUERDO_G6_PRODUCTOS.md`
+- [ ] Conectar Despacho para el recojo/entrega de un `CAMBIO` (sin acuerdo todavía con G2 para este caso específico, distinto del webhook de F1/F2)
+- [ ] **Construir 2.5b (`PATCH /devoluciones/{id}/recepcion`), nuevo** — bloquea conectar el reintegro real de Productos, ver 7.5b
+- [ ] Criterios de aceptación de ESP-07 y ESP-08 (incluye CA-07/CA-08, nuevos)
 
 ---
 
