@@ -72,14 +72,28 @@ Códigos que ya aparecen como valor literal de `codigo` en los contratos. Los de
 
 | Endpoint | HTTP | Condición | Código de negocio |
 |---|---|---|---|
-| `POST /api/v2/devoluciones/evidencias/upload` | `400` | Formato no admitido o tamaño mayor a 5 MB. | — |
+| `POST /api/v2/devoluciones/evidencias/upload` | `400` | No se envió el archivo. | `ARCHIVO_REQUERIDO` |
+| `POST /api/v2/devoluciones/evidencias/upload` | `400` | Formato no admitido, tamaño mayor a 5 MB, o contenido que no corresponde al formato declarado. | `ARCHIVO_INVALIDO` |
+| `POST /api/v2/devoluciones/evidencias/upload` | `503` | Supabase Storage no responde. | `ALMACEN_NO_DISPONIBLE` |
 | `POST /api/v2/devoluciones` | `400` | Evidencias visuales faltantes (motivo que exige evidencia). | `EVIDENCIA_REQUERIDA` |
 | `POST /api/v2/devoluciones` | `400` | Plazo excedido (> 7 días naturales desde la entrega). | `PLAZO_VENCIDO` |
+| `POST /api/v2/devoluciones` | `400` | Alguna `url` de `evidencias` no salió de 2.1. | `EVIDENCIA_INVALIDA` |
+| `POST /api/v2/devoluciones` | `400` | Ítem fuera del pedido, o más unidades de las compradas. | `ITEM_INVALIDO` |
+| `POST /api/v2/devoluciones` | `403` | El pedido pertenece a otro cliente. | `ACCESO_DENEGADO` |
+| `POST /api/v2/devoluciones` | `404` | El pedido indicado no existe. | `PEDIDO_NO_ENCONTRADO` |
 | `POST /api/v2/devoluciones` | `409` | El pedido no se encuentra en estado `ENTREGADO`. | `PEDIDO_NO_ENTREGADO` |
-| `GET /api/v2/devoluciones/{devolucionId}` | `404` | El expediente solicitado no existe. | — |
-| `PATCH /api/v2/devoluciones/{devolucionId}/resolucion` | `400` | Rechazo sin fundamento explicativo. | — |
-| `PATCH /api/v2/devoluciones/{devolucionId}/resolucion` | `404` | Expediente no encontrado. | — |
+| `POST /api/v2/devoluciones` | `409` | Ya existe una devolución no rechazada sobre esas unidades. | `DEVOLUCION_EN_CURSO` |
+| `POST /api/v2/devoluciones` | `503` | M1 no responde la consulta del pedido (1.3). | `VENTAS_NO_DISPONIBLE` |
+| `GET /api/v2/devoluciones` (2.4) | `400` | Falta `clienteId`. | `PARAMETRO_FALTANTE` |
+| `GET /api/v2/devoluciones` / `/me` (2.4, 2.4b) | `400` | Paginación fuera de rango o no numérica. | `PAGINACION_INVALIDA` |
+| `GET /api/v2/devoluciones/{devolucionId}` | `404` | El expediente solicitado no existe. | `DEVOLUCION_NO_ENCONTRADA` |
+| `PATCH /api/v2/devoluciones/{devolucionId}/resolucion` | `400` | Rechazo sin fundamento explicativo. | `FUNDAMENTO_REQUERIDO` |
+| `PATCH /api/v2/devoluciones/{devolucionId}/resolucion` | `400` | `tipoResolucion` incompatible con el expediente. | `RESOLUCION_INVALIDA` |
+| `PATCH /api/v2/devoluciones/{devolucionId}/resolucion` | `404` | Expediente no encontrado. | `DEVOLUCION_NO_ENCONTRADA` |
+| `PATCH /api/v2/devoluciones/{devolucionId}/resolucion` | `409` | Ya resuelto, o resuelto al mismo tiempo por otro Gestor. | `DEVOLUCION_NO_RESOLUBLE` |
+| `PATCH /api/v2/devoluciones/{devolucionId}/resolucion` | `409` | El pedido asociado ya no es compatible con la resolución. | `PEDIDO_INCONSISTENTE` |
 | `PATCH /api/v2/devoluciones/{devolucionId}/resolucion` | `409` | Cambio aprobado sin stock disponible en Productos (F). | `SIN_STOCK` |
+| `PATCH /api/v2/devoluciones/{devolucionId}/resolucion` | `503` | Productos (F) no responde la validación de disponibilidad. | `PRODUCTOS_NO_DISPONIBLE` |
 | `POST /api/v2/reembolsos` | `400` | Monto fuera de rango o estructura inválida. | — |
 | `POST /api/v2/reembolsos` | `403` | Solicitud con origen no permitido (distinto de `ANULACION` o `DEVOLUCION`). | `ORIGEN_NO_PERMITIDO` |
 | `POST /api/v2/reembolsos` | `409` | La `X-Idempotency-Key` ya existe con datos distintos. | `CLAVE_IDEMPOTENCIA_EN_CONFLICTO` |
@@ -99,8 +113,8 @@ Códigos que ya aparecen como valor literal de `codigo` en los contratos. Los de
 
 ## 6. Pendientes
 
-- La mayoría de condiciones de error (tabla 4 y 5) no tienen un `codigo` de negocio propio en los contratos actuales — solo la descripción en texto asociada al código HTTP. Asignar códigos como `ERR_...` para cada una es una decisión de equipo que no corresponde inventar en este documento; mientras no se defina, el campo `codigo` de la respuesta puede repetir la condición en mayúsculas o quedar genérico.
-- Asignar `codigo` a las condiciones de M2 (tabla 5) y a 1.3–1.9 de M1 que todavía muestran `—`.
+- Varias condiciones de error de M1 (tabla 4, 1.3 y 1.7) todavía no tienen un `codigo` de negocio propio en el contrato — solo la descripción en texto asociada al código HTTP. Asignarlos es una decisión de quien construya esos endpoints (F1, F2), no corresponde inventarlos en este documento.
+- F3 (tabla 5) ya tiene todos sus códigos asignados (2026-10-12, contrato v1.5.0) — faltan F4 a F6.
 
 ---
 

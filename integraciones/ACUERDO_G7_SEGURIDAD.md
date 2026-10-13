@@ -22,6 +22,7 @@ Nada — Seguridad no consume ninguna API de Ventas/Postventa. Es puramente un p
 | `modulo-despacho` | `ventas:pedidos:estado` |
 | `simulador-pasarela` | `ventas:pagos:webhook` |
 | `modulo-ventas` | `postventa:reembolsos:procesar` |
+| `modulo-postventa` | `ventas:pedidos:consultar` — **propuesto 2026-10-12, pendiente de que Seguridad lo registre** (ver pendientes) |
 
 **De `api-seguridad` (las consumimos nosotros):**
 
@@ -65,6 +66,7 @@ Nada — Seguridad no consume ninguna API de Ventas/Postventa. Es puramente un p
 ## Pendiente de confirmar / resolver
 
 - **Retirar `usuarios:leer:documento` de `modulo-ventas`:** resuelto 2026-10-12 — Retail confirmó que la emisión de comprobantes/boletas es responsabilidad exclusiva suya, no de Ventas (ver `ACUERDO_G4_RETAIL.md`, R6). Falta avisarle a Seguridad — va como comentario en la **issue #42** (no #44): ahí mismo quedó la promesa explícita de confirmar este punto en cuanto Retail respondiera.
+- **Nuevo scope `ventas:pedidos:consultar` para `modulo-postventa`:** detectado el 2026-10-12 al cerrar F3 — M2 necesita llamar a `GET /api/v1/pedidos/{id}` (1.3) para validar que el pedido esté `ENTREGADO` (F3 y F5), pero ese endpoint hoy solo acepta rol `CLIENTE` o `ADMIN_VENTAS`, ningún scope de servicio. No es lo mismo que el retirado `ventas:pedidos:leer` (ese era para que un canal leyera pedidos de cualquier cliente; este es module-a-módulo, M2 consultando un pedido puntual que ya conoce por su `pedidoId`). Falta mandar la issue a Seguridad (nueva, etiqueta `integracion`).
 
 ## Historial
 
