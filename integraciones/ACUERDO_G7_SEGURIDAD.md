@@ -37,6 +37,13 @@ Nada — Seguridad no consume ninguna API de Ventas/Postventa. Es puramente un p
 |---|---|
 | `modulo-ventas` | `despachos:crear`, `despachos:cancelar` |
 
+**De `api-productos` (las define Productos/G6, Seguridad solo registra):**
+
+| Cliente | Scopes concedidos |
+|---|---|
+| `modulo-ventas` | `inventario:reservar`, `inventario:consumir`, `inventario:liberar` — **propuestos 2026-10-13, pendientes de que Seguridad los registre** (ver pendientes); ya acordados con Productos, ver `integraciones/ACUERDO_G6_PRODUCTOS.md` |
+| `modulo-postventa` | `inventario:reintegrar` — **propuesto 2026-10-13, pendiente de que Seguridad lo registre** (ver pendientes); ya aceptado por Productos como invocador directo (issue G6 #51, P-01) |
+
 **Retirados del acuerdo (no son necesarios):** `ventas:pedidos:leer`, `ventas:admin` (no son scopes reales, se resuelven por rol), `postventa:devoluciones:leer`, `postventa:reclamos:leer` (reemplazados por `/devoluciones/me` y `/reclamos/me`, sin scope), `tokens:introspeccion` para Ventas/Postventa (reemplazado por `usuarios:leer`), scope adicional para el simulador de pasarela (declinado, decisión nuestra), **`postventa:csat:escribir`** (corrección 2026-10-12, **confirmado retirado por Seguridad** — issue #44, `modulo-marketplace`/`modulo-chatbot`/`modulo-retail`, sin reemplazo), **`usuarios:leer:documento`** (resuelto 2026-10-12, ver pendientes — la emisión de comprobantes es de Retail, no de Ventas, ver `ACUERDO_G4_RETAIL.md` R6).
 
 ## Decisiones confirmadas
@@ -66,7 +73,8 @@ Nada — Seguridad no consume ninguna API de Ventas/Postventa. Es puramente un p
 ## Pendiente de confirmar / resolver
 
 - **Retirar `usuarios:leer:documento` de `modulo-ventas`:** resuelto 2026-10-12 — Retail confirmó que la emisión de comprobantes/boletas es responsabilidad exclusiva suya, no de Ventas (ver `ACUERDO_G4_RETAIL.md`, R6). Falta avisarle a Seguridad — va como comentario en la **issue #42** (no #44): ahí mismo quedó la promesa explícita de confirmar este punto en cuanto Retail respondiera.
-- **Nuevo scope `ventas:pedidos:consultar` para `modulo-postventa`:** detectado el 2026-10-12 al cerrar F3 — M2 necesita llamar a `GET /api/v1/pedidos/{id}` (1.3) para validar que el pedido esté `ENTREGADO` (F3 y F5), pero ese endpoint hoy solo acepta rol `CLIENTE` o `ADMIN_VENTAS`, ningún scope de servicio. No es lo mismo que el retirado `ventas:pedidos:leer` (ese era para que un canal leyera pedidos de cualquier cliente; este es module-a-módulo, M2 consultando un pedido puntual que ya conoce por su `pedidoId`). Falta mandar la issue a Seguridad (nueva, etiqueta `integracion`).
+- **Nuevo scope `ventas:pedidos:consultar` para `modulo-postventa`:** detectado el 2026-10-12 al cerrar F3 — M2 necesita llamar a `GET /api/v1/pedidos/{id}` (1.3) para validar que el pedido esté `ENTREGADO` (F3 y F5), pero ese endpoint hoy solo acepta rol `CLIENTE` o `ADMIN_VENTAS`, ningún scope de servicio. No es lo mismo que el retirado `ventas:pedidos:leer` (ese era para que un canal leyera pedidos de cualquier cliente; este es module-a-módulo, M2 consultando un pedido puntual que ya conoce por su `pedidoId`). **Issue enviado** (originalmente título "Nuevo scope de servicio: ventas:pedidos:consultar para modulo-postventa", renombrado 2026-10-13 al sumar los scopes de `inventario:*` de abajo), sin responder todavía.
+- **Scopes de `inventario:*` para `modulo-ventas` y `modulo-postventa`:** detectados el 2026-10-13 al cerrar la integración de stock con Productos (F1 y F3) — nunca se había registrado el scope real con Seguridad, solo acordado el endpoint con Productos. **Agregado como comentario al mismo issue de arriba** (ver `integraciones/ACUERDO_G6_PRODUCTOS.md`), sin responder todavía.
 
 ## Historial
 
@@ -80,3 +88,4 @@ Nada — Seguridad no consume ninguna API de Ventas/Postventa. Es puramente un p
 - 2026-10-12: Al responder una consulta de Chatbot (G3) sobre CSAT, se detecta que `postventa:csat:escribir` tampoco debería ser un scope — mismo caso que `devoluciones:leer`/`reclamos:leer`. Se corrige `api-postventas.md` y se manda la issue #44 a Seguridad.
 - 2026-10-12: Seguridad confirma el retiro de `postventa:csat:escribir` en la issue #44, sin cambios al recorrido de Hito 3.
 - 2026-10-12: Al cerrar el acuerdo con Retail (G4), se confirma que la emisión de comprobantes es responsabilidad de Retail, no de Ventas — `usuarios:leer:documento` para `modulo-ventas` queda retirado. Se agrega como comentario en la issue #42, donde quedó la promesa original de confirmarlo.
+- 2026-10-13: Se envía la issue para `ventas:pedidos:consultar` (`modulo-postventa`). Un día después, sin respuesta todavía, se le suman como comentario (y se renombra el título) los scopes de `inventario:*` para `modulo-ventas` (`reservar`/`consumir`/`liberar`) e `inventario:reintegrar` para `modulo-postventa`, detectados al cerrar la integración de stock con Productos (G6). Los tres quedan pendientes de respuesta.
