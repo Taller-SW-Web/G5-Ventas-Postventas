@@ -101,6 +101,16 @@ El sistema DEBE registrar de forma visible cualquier falla de un servicio extern
 - **CUANDO** ocurre la falla.
 - **ENTONCES** el sistema registra la inconsistencia de forma visible para el Gestor, con evidencia suficiente para reintento manual o automático — nunca la oculta como si todo hubiese salido bien.
 
+### RF-04. Rechazo de la cancelación de despacho por condición de carrera (`409 Conflict`)
+
+Cuando Despacho (E) responde `409 Conflict` a `POST /api/v1/despachos/pedidos/{idPedido}/cancelacion` porque el paquete ya pasó a `EN_CAMINO` entre que el Gestor aprobó la anulación y que Ventas llamó a Despacho, el sistema NO debe tratarlo como la falla técnica de CA-05 (no es un timeout ni un 5xx, es un rechazo de negocio legítimo) — comportamiento confirmado por G2, 2026-10-12.
+
+#### CA-06. `409 Conflict` al cancelar un despacho ya en curso
+
+- **DADO** un pedido cuya anulación fue aprobada por el Gestor, con una solicitud de cancelación de despacho en curso hacia Despacho (E).
+- **CUANDO** Despacho responde `409 Conflict` porque el despacho ya está `EN_CAMINO`.
+- **ENTONCES** el sistema NO reintenta esa misma llamada de cancelación, marca la solicitud de anulación como improcedente (no `RECHAZADA` por el Gestor, sino no aplicable por estar ya en reparto) y notifica al cliente que su pedido ya está en camino. Si luego llega `DESPACHO_ENTREGADO`, el cliente es dirigido al flujo de devolución (F3). Si en cambio el cliente rechaza el paquete en puerta y Despacho lo marca `DESPACHO_FALLIDO`, el sistema sí vuelve a invocar la cancelación (el pedido ya está anulado de nuestro lado) — Despacho responde `202 Accepted`, registra `pedidoAnulado=true`, bloquea cualquier reprogramación en almacén y cierra el despacho directamente como `DEVUELTO_A_ORIGEN`.
+
 ## 6. Frontend
 
 | Elemento | Responsabilidad |
@@ -135,12 +145,13 @@ El sistema DEBE registrar de forma visible cualquier falla de un servicio extern
 | CA-01 y CA-02 | Anular un pedido con despacho programado, y un pedido `CREADO` por `PAGO_NO_COMPLETADO`. | Integración | Stock repuesto en ambos casos; despacho cancelado solo cuando existía. |
 | CA-03 y CA-04 | Anular un pedido `PAGADO` (incluyendo reintento) y un pedido `CREADO` sin pago. | Integración | Una sola solicitud de reembolso en el primer caso; ninguna en el segundo. |
 | CA-05 | Simular una falla de Despacho (E) durante la coordinación. | Integración | Inconsistencia registrada y visible para el Gestor. |
+| CA-06 | Simular un `409 Conflict` de Despacho (E) al cancelar un despacho ya `EN_CAMINO`. | Integración | No hay reintento; la anulación queda marcada como improcedente (no como falla técnica); cliente notificado. |
 
 ## 11. Criterio de completitud
 
 ESP-06 se considera completo cuando:
 
-- Los criterios `CA-01` a `CA-05` están implementados y cuentan con pruebas automatizadas exitosas.
+- Los criterios `CA-01` a `CA-06` están implementados y cuentan con pruebas automatizadas exitosas.
 - Ningún pedido anulado sin pago confirmado genera solicitud de reembolso hacia F4.
 - Los reintentos no duplican reembolsos, reposiciones de stock ni cancelaciones de despacho.
 - Las fallas parciales de stock/despacho quedan siempre visibles, nunca ocultas.

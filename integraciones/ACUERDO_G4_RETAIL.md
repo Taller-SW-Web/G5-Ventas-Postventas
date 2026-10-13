@@ -23,7 +23,7 @@ Nada directamente — Retail es quien consume nuestra API (`POST /api/v1/pedidos
 | R7 | **Una venta por llamada**, con `Idempotency-Key` (igual que el resto de la API). Ventas sin conexión se guardan localmente y se envían una por una al reconectar, con la misma clave — no se duplican. | `ESP-01` regla 11 (acuerdo H-02, ya vigente para todos los canales) |
 | R8 | **`fechaVenta`** (opcional, solo ventas sin conexión): UTC, ISO-8601, fecha y hora completas, máximo 72 h de antigüedad. Se usa como `fechaHora` del historial `PAGADO → ENTREGADO`; no reemplaza el `fechaHora` del historial `null → PAGADO`, que siempre refleja el momento real de la llamada. | `ESP-01` regla 13, tabla de datos de entrada |
 | R9 | **El stock es el inventario central de Productos (F), no uno propio de Retail.** El POS lo descuenta directo al registrar cada venta y Retail concilia las ventas offline con Productos — M1 **no** reserva ni confirma stock para pedidos `RETAIL`. | `ESP-01` paso 5; `F1-Ciclo de vida del pedido.md`, tabla de dependencias |
-| R10 | `LISTO_PARA_RECOJO` no es un valor de `pedido.estado` — es un sub-estado de Despacho (confirmación pendiente de G2, ver `CONSULTA_G2_DESPACHO.md`). Retail corrige el ejemplo en su documento. | Consulta, pregunta 8 |
+| R10 | `LISTO_PARA_RECOJO` no es un valor de `pedido.estado` — es un sub-estado de Despacho (confirmación todavía pendiente de G2 — no se incluyó en `integraciones/ACUERDO_G2_DESPACHO.md`, es un hilo aparte, falta mandar la pregunta formalmente). Retail corrige el ejemplo en su documento. | Consulta, pregunta 8 |
 
 ## Pendiente de confirmar / resolver
 

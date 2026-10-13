@@ -344,7 +344,7 @@ Al cruzar contratos, especificaciones y base salieron estos huecos. Las decision
 | H5 | `reclamo` no guarda fecha de registro, fecha de atención, quién atendió ni cliente | F6 | Agregar columnas |
 | H6 | El dashboard pide anulados, entregados, devoluciones, reembolsos, CSAT y reclamos pendientes, y no hay tabla para esas métricas | F6 | Nueva tabla `agregado_metricas` por día y canal |
 | H7 | El formato de los ids de G (`CLI-8841`) y F (`PROD-101`) no está confirmado | F1, F3 | ~~Usar el número final (3.5) y confirmarlo con G y F~~ — **superado:** `id_cliente`/`id_vendedor`/`id_solicitante`/`id_autorizador` son `uuid` (= claim `sub` del JWT de Seguridad), no texto con número final. Ver `AGENTS.md` sección 2, punto 10 |
-| H8 | Las rutas reales de Productos (F), Despacho (E) y Seguridad (G) no están acordadas | Todos | Con Productos (G6) y Seguridad (G7) ya hay acuerdo formal (`integraciones/ACUERDO_G6_PRODUCTOS.md`, `ACUERDO_G7_SEGURIDAD.md`). Con Despacho (G2) sigue pendiente. La pasarela la hacemos nosotros (9.3) |
+| H8 | Las rutas reales de Productos (F), Despacho (E) y Seguridad (G) no están acordadas | Todos | **Superado:** con Productos (G6), Despacho (G2) y Seguridad (G7) ya hay acuerdo formal (`integraciones/ACUERDO_G6_PRODUCTOS.md`, `ACUERDO_G2_DESPACHO.md`, `ACUERDO_G7_SEGURIDAD.md`). La pasarela la hacemos nosotros (9.3) |
 | H9 | Falta un actor para cuando Productos rechaza la reserva de stock o el consumo de cupón (no es `CLIENTE`, `GESTOR`, pasarela ni Despacho) | F1 | Aprobado en equipo (2026-10-12): nuevo actor `SISTEMA_PRODUCTOS` y motivos `STOCK_NO_DISPONIBLE`/`CUPON_RECHAZADO`. Ver 5.2 y 6.1 |
 | H10 | El pedido `RETAIL` necesita campos que la tabla original no tenía (`tiendaId`, desglose de pago mixto, fecha de venta retroactiva) | F1 | Acuerdo con Retail (G4, 2026-10-12): columnas `pedido.tienda_id` y `pago.monto_efectivo`/`monto_tarjeta`/`fecha_venta`. Ver 4.1 y 5.3 |
 | H11 | `postventa.devolucion` no tenía hora de registro, fecha de resolución ni la referencia a la operación derivada (reembolso o despacho de un cambio) — pero `ESP-07` 8.3 y `ESP-08` 8.3 ya prometen devolver esos campos | F3 | Columnas `fecha_registro`, `fecha_resolucion`, `referencia_operacion`. Ver 4.1 |
@@ -399,8 +399,7 @@ Especificaciones: ESP-01, ESP-02, ESP-03, ESP-04. Contrato: `api-ventas.md` 1.1 
 | 1.3 | `GET /api/v1/pedidos/{pedidoId}` | rol `CLIENTE` (dueño del pedido) o `ADMIN_VENTAS` — **no es scope** | 200 | `PedidoService.consultar` |
 | 1.4 | `GET /api/v1/pedidos` (uso administrativo, filtra por `clienteId`) | rol `ADMIN_VENTAS` — **no es scope** | 200 | `PedidoService.listar` |
 | 1.4b | `GET /api/v1/pedidos/me` (acuerdo H-03) | rol `CLIENTE`, identidad por `sub` del JWT, sin `clienteId` en la URL — **no es scope** | 200 | `PedidoService.listarMios` |
-| 1.5 | `PATCH /api/v1/pedidos/{pedidoId}/estado` | scope `ventas:pedidos:estado` (token de servicio de Despacho) | 200 | `LogisticaService.cambiarEstado` |
-| 1.6 | `POST /api/v1/pedidos/{pedidoId}/eventos-logistica` | scope `ventas:pedidos:estado` | 200 | `LogisticaService.procesarIncidencia` |
+| 1.5 | `POST /api/v1/integraciones/despachos/eventos` (reemplaza el viejo 1.5/1.6, ver 5.6/5.7) | scope `ventas:pedidos:estado` (token de servicio de Despacho, reusado — decisión nuestra, 2026-10-13) | 200 | `LogisticaService.procesarEvento` |
 
 `ventas:pedidos:leer` y `ventas:admin` **no son scopes reales** — Seguridad no los registra porque dependen de identidad de persona, no de módulo. Se resuelven con el claim `roles` del token de usuario (ver sección 12 y `api-ventas.md`, catálogo de scopes).
 
@@ -509,19 +508,24 @@ Mapeo adicional para `RETAIL` — **corregido 2026-10-12** (ver H10, 4.1): `envi
 - **Listar**: filtros `clienteId`, `estado`, `desde`, `hasta`, `pagina` (default 0), `tamano` (default 10). Usar `Pageable` y una consulta con `Specification` o `@Query`. Respuesta con `contenido`, `pagina`, `totalPaginas`, `totalElementos`.
 - `ultimaActualizacion` es la `fecha_hora` del último historial.
 
-### 5.6. 1.5 Cambiar estado (Despacho)
+### 5.6 y 5.7. **Cambiaron de diseño (2026-10-12) — no construir lo de abajo tal cual**
 
-1. Validar `nuevoEstado` y `actor` (enums).
-2. Si la transición es a `ANULADO`: 409; las anulaciones entran por F2 o por 1.6, nunca por este endpoint.
-3. `maquinaEstados.cambiar(pedido, nuevoEstado, actor, motivo)`.
-4. 200. Si no está en la matriz: 409 `TRANSICION_NO_PERMITIDA`.
+Despacho (G2) confirmó que no van a llamar a `PATCH /pedidos/{id}/estado` ni a `POST /eventos-logistica` — adoptan su propio webhook genérico. El diseño real ahora es **un solo endpoint** `POST /api/v1/integraciones/despachos/eventos` (ver `api-ventas.md` 1.5, ya actualizado) que recibe los 7 tipos de evento de Despacho y aplica el mapeo de la tabla de ahí. La idempotencia es por `idEvento` (no por `guiaRemision + evento`, ese campo ya no existe). `DESPACHO_DEVUELTO_A_ORIGEN` hace lo mismo que hacía el viejo 1.6 (`DESPACHADO → ANULADO`, reembolso a M2 con origen `ANULACION`), solo que ahora es un caso dentro del mismo endpoint, no uno aparte.
 
-### 5.7. 1.6 Eventos de logística (entrega fallida)
+**Scope: cerrado.** Se reusa `ventas:pedidos:estado` (ya concedido a `modulo-despacho`); no se pide el `despachos:eventos:recibir` que propuso G2 — decisión nuestra, 2026-10-13, ver `integraciones/ACUERDO_G2_DESPACHO.md`.
 
-1. Solo se acepta `evento = ENTREGA_FALLIDA_DEFINITIVA`. Otro valor: 400.
-2. Idempotencia: `id_evento = guiaRemision + ":" + evento` en `ventas.evento_recibido` con origen `SISTEMA_LOGISTICA`. Si ya existe: 200 con el resultado actual.
-3. Llamar a `AnulacionService.anularPorEntregaFallida(pedido, motivo)` (F2). Hace `DESPACHADO → ANULADO` con actor `SISTEMA_LOGISTICA` y pide el reembolso a M2 con origen `ANULACION`.
-4. Responder 200 con `pedidoId`, `estadoPedido`, `reembolso` y `mensaje`.
+**Pendiente antes de programarlo** (ya no depende de G2, ver `api-ventas.md` 1.5 y `integraciones/ACUERDO_G2_DESPACHO.md`):
+- Agregar `pedido.fecha_estimada_entrega` al modelo de datos (confirmado necesario, falta la migración) para que `DESPACHO_REPROGRAMADO` la actualice con `datos.nuevaFechaProgramada`.
+- Definir la señal interna que marca "paquete sellado y listo" para disparar `POST /api/v1/despachos` (no apenas `EN_PREPARACION`) — diseño de F1/frontend, pendiente.
+- F2: manejar el `409 Conflict` de Despacho al cancelar un despacho ya `EN_CAMINO` como rechazo de negocio (no reintentar, marcar la anulación como improcedente), no como la falla técnica de ESP-06 CA-05 — ver ESP-06 CA-06 (nuevo).
+
+<details>
+<summary>Diseño anterior (ya no vigente, se deja solo como referencia de lo que cambió)</summary>
+
+- 1.5 validaba `nuevoEstado`/`actor` y llamaba a `maquinaEstados.cambiar(...)` directo.
+- 1.6 solo aceptaba `evento = ENTREGA_FALLIDA_DEFINITIVA`, idempotencia por `guiaRemision + ":" + evento`, y llamaba a `AnulacionService.anularPorEntregaFallida(pedido, motivo)`.
+
+</details>
 
 ### 5.8. Envío de eventos (`EnvioEventosScheduler`)
 
@@ -543,7 +547,7 @@ Al 2026-10-12, revisando el repo directamente:
 - [x] 1.2 notificación de pago, idempotente
 - [x] 1.4b (`/pedidos/me`, acuerdo H-03) — `PedidoService.listarMios`
 - [ ] 1.3 y 1.4 consultar y listar — hoy son stubs (`NoImplementadoException`, 501)
-- [ ] 1.5 y 1.6 — hoy son stubs (`NoImplementadoException`, 501); el controller ya tiene las rutas mapeadas
+- [ ] 1.5 (nuevo diseño, webhook único) — todavía sin construir, mejor así porque el diseño cambió (ver 5.6/5.7); **las rutas viejas `PATCH .../estado` y `POST .../eventos-logistica` que hoy están mapeadas como stubs en el controller hay que borrarlas, no implementarlas**
 - [ ] Consumo y restauración de cupón por RabbitMQ (`promotions.coupon.consumption.requested`) — no hay nada programado todavía, incluyendo el motivo `CUPON_RECHAZADO` (ver 6.1)
 - [ ] `EnvioEventosScheduler` y `PostventaClient.enviarEvento`
 - [ ] Criterios de aceptación de ESP-01 a ESP-04 probados
@@ -662,7 +666,7 @@ En el controller, la ruta `/anulaciones/pendientes` debe declararse antes que `/
 |---|---|---|
 | `anularPorEntregaFallida(Pedido, String detalle)` | El service de 1.6 (hoy es un stub en `PedidoController`, no existe todavía — ver 5.9) | `DESPACHADO → ANULADO` con `SISTEMA_LOGISTICA`, repone stock y pide reembolso |
 
-**Ojo:** 1.5 y 1.6 todavía no están implementados (son stubs 501, ver 5.9), así que `anularPorEntregaFallida` tampoco se puede probar de punta a punta todavía.
+**Ojo:** el webhook de Despacho (1.5, nuevo diseño) todavía no está implementado (ver 5.9), así que `anularPorEntregaFallida` tampoco se puede probar de punta a punta todavía.
 
 ### 6.6. Lista para terminar F2
 
@@ -1038,8 +1042,7 @@ Catálogo real (acuerdo A10, `integraciones/ACUERDO_G7_SEGURIDAD.md`, `api-venta
 | `POST /api/v1/pedidos` | scope `ventas:pedidos:crear` |
 | `POST /api/v1/pedidos/*/pagos/notificacion` | scope `ventas:pagos:webhook` |
 | `POST /api/v1/pedidos/*/anulaciones` | scope `ventas:pedidos:anular` o rol `ADMIN_VENTAS` |
-| `PATCH /api/v1/pedidos/*/estado` | scope `ventas:pedidos:estado` |
-| `POST /api/v1/pedidos/*/eventos-logistica` | scope `ventas:pedidos:estado` |
+| `POST /api/v1/integraciones/despachos/eventos` | scope `ventas:pedidos:estado` (reusado, decisión nuestra — ver 5.6/5.7) |
 | `GET /api/v1/pedidos/me` | rol `CLIENTE` |
 | `GET /api/v1/pedidos/anulaciones/**` | rol `ADMIN_VENTAS` |
 | `PATCH /api/v1/pedidos/*/anulaciones/*` | rol `ADMIN_VENTAS` |

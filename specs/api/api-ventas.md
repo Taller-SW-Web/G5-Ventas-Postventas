@@ -35,7 +35,7 @@ Según el acuerdo A10 con Seguridad (G7) hay dos tipos de token:
 |---|---|---|
 | `ventas:pedidos:crear` | `POST /api/v1/pedidos` (1.1) | Marketplace, Chatbot y Retail |
 | `ventas:pedidos:anular` | `POST /api/v1/pedidos/{id}/anulaciones` (1.7) | Marketplace, Chatbot y Retail |
-| `ventas:pedidos:estado` | `PATCH /api/v1/pedidos/{id}/estado`, `POST /api/v1/pedidos/{id}/eventos-logistica` (1.5, 1.6) | Despacho (E) |
+| `ventas:pedidos:estado` | `POST /api/v1/integraciones/despachos/eventos` (1.5 — reemplaza el `PATCH .../estado` y `POST .../eventos-logistica` anteriores) | Despacho (E) — reusamos este scope ya concedido a `modulo-despacho`, decisión nuestra (2026-10-13); no se pide el `despachos:eventos:recibir` que propuso G2, ver `integraciones/ACUERDO_G2_DESPACHO.md` |
 | `ventas:pagos:webhook` | `POST /api/v1/pedidos/{id}/pagos/notificacion` (1.2) | Simulador de pasarela y Chatbot |
 | `ventas:pedidos:consultar` | `GET /api/v1/pedidos/{id}` (1.3), uso exclusivo módulo-a-módulo | `modulo-postventa` (F3 valida `ENTREGADO`; F5 valida `ENTREGADO` para CSAT) — **propuesto 2026-10-12, pendiente de que Seguridad lo registre**, ver `integraciones/ACUERDO_G7_SEGURIDAD.md` |
 
@@ -384,45 +384,54 @@ Este endpoint usa `page` y `pageSize` desde 1 (excepción acordada con Marketpla
 ```
 - **`401 Unauthorized`**: Token ausente o inválido.
 - **`403 Forbidden`**: El token no tiene el rol `CLIENTE` (por ejemplo, un token de servicio).
-### 1.5 Transición de Estado del Pedido
-- **Endpoint:** `PATCH /api/v1/pedidos/{pedidoId}/estado`
-Descripción: Valida la máquina de estados e inserta el evento en el historial. Invocado por Despacho / Logística (E).
-- **Headers:** `Authorization: Bearer <token_admin_o_servicio>`
-### Request Body
-{
-  "nuevoEstado": "`DESPACHADO`",
-  "actor": "SISTEMA_LOGISTICA",
-  "motivo": "Guía de remisión GR-00892 asignada a transporte"
-}
-### Respuestas
-200 OK: Transición exitosa.
-- **`409 Conflict`**: Transición no permitida por la máquina de estados.
-### 1.6 Notificación de Incidencias desde Despacho / Logística (Módulo E)
-- **Endpoint:** `POST /api/v1/pedidos/{pedidoId}/eventos-logistica`
-Descripción: Despacho (E) notifica entrega fallida definitiva o rechazo en puerta. M1 ejecuta la anulación mediante F2 (motivo: `ENTREGA_FALLIDA_DEFINITIVA`) y deriva la instrucción de reembolso a M2 bajo el origen autorizado `ANULACION`.
-- **Headers:** `Authorization: Bearer <token_servicio_despacho>`
-### Request Body
-{
-  "evento": "`ENTREGA_FALLIDA_DEFINITIVA`",
-  "guiaRemision": "GR-00892",
-  "motivo": "Dirección inexistente tras 3 visitas; devuelto a almacén central",
-  "requiereReembolso": true
-}
-### Respuestas
-#### `200 OK`
+### 1.5 Webhook de Eventos de Despacho (acuerdo con G2, 2026-10-12)
+
+- **Endpoint:** `POST /api/v1/integraciones/despachos/eventos`
+- **Descripción:** **Reemplaza por completo** el antiguo `PATCH /pedidos/{id}/estado` y `POST /pedidos/{id}/eventos-logistica` — Despacho adopta su propio modelo de webhook genérico en vez de que nosotros les dictemos nuestros valores de estado. Un solo endpoint recibe todos los eventos del ciclo logístico.
+- **Headers:** `Authorization: Bearer <token_servicio_despacho>` (scope `ventas:pedidos:estado`, reusado — ver nota de abajo), cabecera `Idempotency-Key` (UUID v4, misma convención H-02, confirmada por G2).
+- **Request Body (genérico, formato de Despacho):**
+
 ```json
 {
-  "pedidoId": "PED-2026-00981",
-  "estadoPedido": "`ANULADO`",
-  "reembolso": {
-    "solicitudId": "REEM-90815",
-    "estado": "EN_PROCESO",
-    "monto": 129.90,
-    "moneda": "PEN"
-  },
-  "mensaje": "Pedido anulado e instrucción de reembolso generada hacia M2 con origen `ANULACION`"
+  "idEvento": "evt-desp-001",
+  "idPedido": "PED-2026-00981",
+  "idDespacho": "DESP-00412",
+  "tipo": "DESPACHO_EN_CAMINO",
+  "estadoAnterior": "ASIGNADO",
+  "estadoNuevo": "EN_CAMINO",
+  "ocurridoEn": "2026-10-12T18:30:00Z",
+  "datos": {}
 }
 ```
+
+**Mapeo hacia la máquina de estados de Ventas (ESP-03):**
+
+| `tipo` | Efecto en `pedido.estado` | Actor / motivo |
+|---|---|---|
+| `DESPACHO_ASIGNADO` | Ninguno — sigue `EN_PREPARACION` (capacidad y repartidor reservados, el pedido todavía no salió) | — |
+| `DESPACHO_EN_CAMINO` | `EN_PREPARACION → DESPACHADO` | `SISTEMA_LOGISTICA` |
+| `DESPACHO_ENTREGADO` | `DESPACHADO → ENTREGADO` | `SISTEMA_LOGISTICA` |
+| `DESPACHO_FALLIDO` | Ninguno — intento no definitivo (máx. 2, política de Despacho); queda solo registrado para auditoría | — |
+| `DESPACHO_DEVUELTO_A_ORIGEN` | `DESPACHADO → ANULADO` | `SISTEMA_LOGISTICA`, motivo `ENTREGA_FALLIDA_DEFINITIVA` — informa que el ciclo logístico terminó sin entrega; origina la solicitud de reembolso a M2 (ver ESP-06) |
+| `DESPACHO_REPROGRAMADO` | Ninguno en el estado del pedido — actualiza `pedido.fecha_estimada_entrega` con `datos.nuevaFechaProgramada` (columna nueva, confirmada necesaria por G2 el 2026-10-12; pendiente de agregar al modelo de datos) | — |
+| `DESPACHO_CANCELADO` | Ninguno — es el acuse de que una cancelación que nosotros solicitamos ya se aplicó en Despacho; idempotente, no reabre nada si ya estaba `ANULADO` | — |
+
+Ya **no se envía `guiaRemision`** (Despacho no emite ni gestiona guías de remisión) — el campo `datos.motivoCierre` de `DESPACHO_DEVUELTO_A_ORIGEN` (por ejemplo `MAXIMO_INTENTOS_ALCANZADO`, `ANULACION_SOLICITADA_POR_VENTAS`, `PAQUETE_DANADO`) es suficiente para la auditoría de la anulación y el reembolso — confirmado por G2.
+
+- **Respuestas:**
+    - **`200 OK`**: Evento procesado (o ya procesado antes, mismo `idEvento` — idempotente).
+    - **`409 Conflict`**: Transición no permitida por la máquina de estados.
+
+**Scope del token (decisión nuestra, 2026-10-13):** reusamos `ventas:pedidos:estado`, ya concedido a `modulo-despacho`, en vez del `despachos:eventos:recibir` nuevo que propuso G2 — es semánticamente correcto, ya está concedido y evita pedirle otro registro a Seguridad. Ver `integraciones/ACUERDO_G2_DESPACHO.md`.
+
+**Pendientes de implementación (nuestros, ya no hay nada por preguntarle a Despacho — ver `integraciones/ACUERDO_G2_DESPACHO.md`):**
+1. **Señal interna que marca "paquete físicamente preparado y sellado"** para disparar `POST /api/v1/despachos`: Despacho confirmó el criterio (no alcanza con `EN_PREPARACION`), pero qué acción de nuestro lado representa ese momento (¿botón del Gestor en el centro de despacho?, ¿checklist?) sigue sin definirse — no depende de G2, es diseño de F1/frontend.
+2. **Columna `pedido.fecha_estimada_entrega`** para `DESPACHO_REPROGRAMADO` — agregar al modelo de datos (`diagrama-fisico.md`, `diagrama-logico.md`, `ventas_postventa_schema.sql`) y aplicar en Supabase.
+3. **Manejo de `409 Conflict` al cancelar despacho por condición de carrera** (`EN_CAMINO` ya en curso cuando Ventas pide cancelar): G2 confirmó que no debemos reintentar y que la anulación debe marcarse como improcedente comercialmente, no como una falla técnica — ver ESP-06 CA-06 (nuevo, distinto del CA-05 existente que cubre timeout/5xx).
+
+### 1.6 — retirado (fusionado en 1.5)
+
+La notificación de incidencias logísticas ahora es un caso más del webhook genérico de 1.5 (`DESPACHO_DEVUELTO_A_ORIGEN`), no un endpoint aparte.
 # F2: Anulación de Pedidos (Responsable: Luis Arroyo)
 ### 1.7 Solicitar Anulación
 - **Endpoint:** `POST /api/v1/pedidos/{pedidoId}/anulaciones`
