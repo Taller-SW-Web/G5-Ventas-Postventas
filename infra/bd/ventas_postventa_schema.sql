@@ -12,10 +12,9 @@
 -- — el pedido RETAIL nace PAGADO y transiciona a ENTREGADO en la misma
 -- operación, sin envío. Este archivo ya las refleja; falta la migración real.
 --
--- PENDIENTE DE APLICAR EN SUPABASE: postventa.devolucion.fecha_registro,
--- fecha_resolucion y referencia_operacion (F3, 2026-10-12) cierran el hueco
--- entre lo que ESP-07 8.3 y ESP-08 8.3 ya prometen devolver y lo que la tabla
--- física podía persistir. Este archivo ya las refleja; falta la migración real.
+-- Aplicado en Supabase el 2026-10-12 (H11, F3): postventa.devolucion.fecha_registro,
+-- fecha_resolucion y referencia_operacion cierran el hueco entre lo que ESP-07 8.3
+-- y ESP-08 8.3 ya prometen devolver y lo que la tabla física podía persistir.
 --
 -- Esquema ventas    = M1 (Ventas)
 -- Esquema postventa = M2 (Postventa)

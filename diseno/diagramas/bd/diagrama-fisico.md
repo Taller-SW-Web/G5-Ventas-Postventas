@@ -4,7 +4,7 @@ Implementación del [modelo lógico](diagrama-logico.md) en PostgreSQL 17 sobre 
 
 > **Pendiente de aplicar en Supabase:** `pedido.tienda_id` y `pago.monto_efectivo`/`monto_tarjeta`/`fecha_venta` son columnas del acuerdo con Retail (G4, 2026-10-12 — ver `integraciones/ACUERDO_G4_RETAIL.md`): el pedido `RETAIL` nace `PAGADO` y transiciona a `ENTREGADO` en la misma operación, sin envío. Este documento y el script ya las reflejan; falta la migración real. **Ya aplicado en código (`Pedido.java`/`Pago.java`), falta confirmar si ya se aplicó sobre la Supabase real.**
 >
-> **Pendiente de aplicar en Supabase:** `devolucion.fecha_registro`, `fecha_resolucion` y `referencia_operacion` (F3, 2026-10-12) — cierran el hueco entre lo que `ESP-07` (8.3) y `ESP-08` (8.3) ya prometen devolver (`fechaCreacion`, `fechaResolucion`, `referenciaOperacion`) y lo que la tabla física podía persistir hasta ahora. Este documento y el script ya las reflejan; falta aplicar el `ALTER TABLE` real y que la entidad Java de F3 las use.
+> **Aplicado en Supabase el 2026-10-12** y en uso por la entidad `Devolucion` de F3: `devolucion.fecha_registro`, `fecha_resolucion` y `referencia_operacion` cierran el hueco entre lo que `ESP-07` (8.3) y `ESP-08` (8.3) ya prometen devolver (`fechaCreacion`, `fechaResolucion`, `referenciaOperacion`) y lo que la tabla física podía persistir hasta ahora.
 
 ## 1. Diagrama
 

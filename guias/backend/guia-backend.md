@@ -360,7 +360,7 @@ Cada responsable actualiza sus entidades para que coincidan con estas columnas y
 | H9 | `ventas.pedido.reserva_id` | Columna `varchar(100)`, null mientras la reserva está pendiente o en `RETAIL` | Michael (**ya aplicado** — `Pedido.java` ya la usa) |
 | H10 | `ventas.pedido.tienda_id` | Columna `varchar(40)`, null salvo `RETAIL` | Michael (**corregido 2026-10-12** — `Pedido.java` y `CrearPedidoService` ya la usan, dejó de guardarse dentro de `direccion`) |
 | H10 | `ventas.pago.monto_efectivo`, `monto_tarjeta`, `fecha_venta` | Columnas nuevas para `RETAIL` con `metodoPago: MIXTO` o venta sin conexión | Michael (**corregido 2026-10-12** — `Pago.java` y `CrearPedidoService` ya las guardan) — **falta confirmar con Michael si ya aplicó el `ALTER TABLE` sobre la Supabase real**, no solo en la entidad |
-| H11 | `postventa.devolucion.fecha_registro`, `fecha_resolucion`, `referencia_operacion` | Columnas nuevas (ver script en 7.6) | Joseph — **pendiente de aplicar en Supabase**, el `ALTER TABLE` ya está listo en `diagrama-fisico.md`/`ventas_postventa_schema.sql` |
+| H11 | `postventa.devolucion.fecha_registro`, `fecha_resolucion`, `referencia_operacion` | Columnas nuevas (ver script en 7.6) | Joseph — **aplicado en Supabase el 2026-10-12**, `Devolucion.java` ya las usa |
 | H2 | `postventa.devolucion` | Columnas `descripcion` e `id_cliente` | Joseph |
 | H2 | `postventa.devolucion_item` | Tabla nueva: `id_devolucion`, `id_producto`, `cantidad` (> 0) | Joseph |
 | H3 | `postventa.reembolso` | Columna `id_pedido` | Luis Alejandro |
@@ -739,13 +739,15 @@ Al 2026-10-12, F3 está completo y en `main`:
 - [x] Registrar con todas las validaciones de 7.3
 - [x] Consultar y listar
 - [x] Resolver: rechazo, reembolso y cambio
+- [x] Usar las columnas de H11 (`fecha_registro`, `fecha_resolucion`, `referencia_operacion`)
+- [x] Verificado contra Supabase real: el servicio arranca y los endpoints 2.1 a 2.5 funcionan (2026-10-12)
 
 Pendientes:
 
-- [ ] Usar las columnas de H11 (`fecha_registro`, `fecha_resolucion`, `referencia_operacion`) — falta aplicar el `ALTER TABLE` en Supabase
 - [ ] Reemplazar el reembolso simulado (`SolicitadorReembolsoSimulado`) por `ReembolsoService` de F4 cuando exista
 - [ ] Sumar `devoluciones_aprobadas` al dashboard cuando exista `ProyeccionesService`
 - [ ] Cuando Seguridad registre `ventas:pedidos:consultar`, `VentasClient` debe usar el token de servicio de M2 en vez de reenviar el token de quien llama (ver 3.7)
+- [ ] Conectar Productos (ruta de disponibilidad, por acordar) y Despacho (sin acuerdo todavía)
 - [ ] Criterios de aceptación de ESP-07 y ESP-08
 
 ---
