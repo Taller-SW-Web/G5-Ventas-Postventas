@@ -1,16 +1,20 @@
 -- =====================================================================
 -- Módulo D — Ventas y Postventa
 -- Traducción a PostgreSQL del "Diagrama ER - VentasPostventas.drawio"
--- Actualizado el 10/10/2026 para reflejar exactamente lo que hay en Supabase
--- (migraciones crear_esquemas_ventas_postventa, decisiones_estados_canal_eventos
--- y huecos_h2_h3_h5_h6_postventa).
+-- Actualizado el 12/10/2026 para reflejar exactamente lo que hay en Supabase
+-- (migraciones crear_esquemas_ventas_postventa, decisiones_estados_canal_eventos,
+-- huecos_h2_h3_h5_h6_postventa, ids_usuario_a_uuid, pedido_idempotency_key
+-- y pedido_reserva_productos).
 --
--- PENDIENTE DE APLICAR EN SUPABASE: las columnas id_cliente, id_vendedor,
--- id_solicitante y id_autorizador (ventas.pedido, ventas.anulacion,
--- postventa.devolucion, postventa.reclamo, postventa.reembolso,
--- postventa.agregado_ventas) se corrigieron de bigint a uuid, según
--- confirmó el módulo de Seguridad (sub del JWT es uuid). Este archivo ya
--- refleja el tipo correcto; falta la migración real sobre Supabase.
+-- PENDIENTE DE APLICAR EN SUPABASE: ventas.pedido.tienda_id y
+-- ventas.pago.monto_efectivo/monto_tarjeta/fecha_venta son columnas del
+-- acuerdo con Retail (G4, 2026-10-12, ver integraciones/ACUERDO_G4_RETAIL.md)
+-- — el pedido RETAIL nace PAGADO y transiciona a ENTREGADO en la misma
+-- operación, sin envío. Este archivo ya las refleja; falta la migración real.
+--
+-- Aplicado en Supabase el 2026-10-12 (H11, F3): postventa.devolucion.fecha_registro,
+-- fecha_resolucion y referencia_operacion cierran el hueco entre lo que ESP-07 8.3
+-- y ESP-08 8.3 ya prometen devolver y lo que la tabla física podía persistir.
 --
 -- Esquema ventas    = M1 (Ventas)
 -- Esquema postventa = M2 (Postventa)
@@ -49,10 +53,13 @@ create table ventas.pedido (
     distrito              varchar(80),
     direccion             varchar(255),
     codigo_cupon          varchar(40),
+    idempotency_key       varchar(128)  unique,   -- cabecera Idempotency-Key de 1.1 (acuerdo H-02)
+    reserva_id            varchar(100),           -- reservaId de Productos (G6); null pendiente o RETAIL
     creado_en             timestamptz   not null default now(),
-    id_cliente            uuid,   -- referencia externa: módulo G (Seguridad y Usuarios), = claim sub del JWT
-    id_vendedor           uuid,   -- referencia externa: módulo G (Seguridad y Usuarios), = claim sub del JWT
+    id_cliente            uuid,     -- referencia externa: módulo G (Seguridad y Usuarios)
+    id_vendedor           uuid,     -- referencia externa: módulo G (Seguridad y Usuarios)
     id_direccion_entrega  bigint,   -- referencia externa: módulo E (Despacho y Entrega)
+    tienda_id             varchar(40),   -- solo RETAIL: código de tienda (ej. TIENDA-MIRAFLORES), reemplaza a envío
     constraint ck_pedido_canal check (canal in ('MARKETPLACE','CHATBOT','RETAIL')),
     constraint ck_pedido_estado check (estado in
         ('CREADO','PAGADO','EN_PREPARACION','DESPACHADO','ENTREGADO','ANULADO')),
@@ -60,8 +67,8 @@ create table ventas.pedido (
         subtotal >= 0 and descuento >= 0 and total >= 0 and costo_envio >= 0)
 );
 
-comment on column ventas.pedido.id_cliente           is 'Referencia externa - módulo G (sin FK física), = claim sub del JWT';
-comment on column ventas.pedido.id_vendedor          is 'Referencia externa - módulo G (sin FK física), = claim sub del JWT';
+comment on column ventas.pedido.id_cliente           is 'Referencia externa - módulo G (sin FK física). UUID del claim sub';
+comment on column ventas.pedido.id_vendedor          is 'Referencia externa - módulo G (sin FK física). UUID del claim sub';
 comment on column ventas.pedido.id_direccion_entrega is 'Referencia externa - módulo E (sin FK física)';
 
 create table ventas.detalle_pedido (
@@ -81,15 +88,20 @@ create table ventas.detalle_pedido (
 comment on column ventas.detalle_pedido.id_producto is 'Referencia externa - módulo F (sin FK física)';
 
 create table ventas.pago (
-    id             bigint generated always as identity primary key,
-    id_pedido      bigint        not null references ventas.pedido(id) on delete cascade,
-    metodo         varchar(30)   not null,
-    referencia     varchar(100),
-    monto          numeric(12,2) not null,
-    estado         varchar(20)   not null,
-    fecha_proceso  timestamptz,
+    id              bigint generated always as identity primary key,
+    id_pedido       bigint        not null references ventas.pedido(id) on delete cascade,
+    metodo          varchar(30)   not null,
+    referencia      varchar(100),   -- también usado como referenciaOperacion del POS en RETAIL
+    monto           numeric(12,2) not null,
+    estado          varchar(20)   not null,
+    fecha_proceso   timestamptz,
+    monto_efectivo  numeric(12,2),   -- solo RETAIL con metodo MIXTO
+    monto_tarjeta   numeric(12,2),   -- solo RETAIL con metodo MIXTO
+    fecha_venta     timestamptz,     -- solo RETAIL: fecha real de una venta sin conexión, hasta 72h atrás
     constraint ck_pago_monto  check (monto >= 0),
-    constraint ck_pago_estado check (estado in ('PENDIENTE','CONFIRMADO','RECHAZADO'))
+    constraint ck_pago_estado check (estado in ('PENDIENTE','CONFIRMADO','RECHAZADO')),
+    constraint ck_pago_montos_mixto check (monto_efectivo is null or monto_efectivo >= 0),
+    constraint ck_pago_montos_mixto2 check (monto_tarjeta is null or monto_tarjeta >= 0)
 );
 
 create table ventas.historial_estado (
@@ -101,7 +113,7 @@ create table ventas.historial_estado (
     motivo           varchar(60),
     fecha_hora       timestamptz  not null default now(),
     constraint ck_historial_actor check (actor in
-        ('CLIENTE','GESTOR','CANAL_CHATBOT','PASARELA_PAGOS','SISTEMA_LOGISTICA'))
+        ('CLIENTE','GESTOR','CANAL_CHATBOT','PASARELA_PAGOS','SISTEMA_LOGISTICA','SISTEMA_PRODUCTOS'))
 );
 
 comment on column ventas.historial_estado.motivo is 'Incluye valores como PAGO_NO_COMPLETADO';
@@ -110,8 +122,8 @@ create table ventas.anulacion (
     id              bigint generated always as identity primary key,
     id_pedido       bigint       not null unique references ventas.pedido(id) on delete cascade,
     motivo          varchar(255) not null,
-    id_solicitante  uuid,  -- referencia externa: módulo G, = claim sub del JWT
-    id_autorizador  uuid,  -- referencia externa: módulo G, = claim sub del JWT
+    id_solicitante  uuid,
+    id_autorizador  uuid,
     estado          varchar(20)  not null,
     fecha           date         not null default current_date,
     constraint ck_anulacion_estado check (estado in ('PENDIENTE_AUTORIZACION','EJECUTADA','RECHAZADA'))
@@ -135,7 +147,7 @@ create table ventas.evento_recibido (
     id_evento    varchar(100) primary key,  -- transaccionId de la pasarela o guiaRemision:evento
     origen       varchar(30)  not null,
     recibido_en  timestamptz  not null default now(),
-    constraint ck_evento_recibido_origen check (origen in ('PASARELA_PAGOS','SISTEMA_LOGISTICA'))
+    constraint ck_evento_recibido_origen check (origen in ('PASARELA_PAGOS','SISTEMA_LOGISTICA','SISTEMA_PRODUCTOS'))
 );
 
 -- Índices para las claves foráneas de M1
@@ -149,20 +161,26 @@ create index ix_outbox_pendientes          on ventas.outbox_evento(creado_en) wh
 -- =====================================================================
 
 create table postventa.devolucion (
-    id                  bigint generated always as identity primary key,
-    id_pedido           bigint       not null,  -- referencia API: el pedido vive en M1
-    tipo                varchar(20)  not null,
-    motivo              varchar(255) not null,
-    estado              varchar(20)  not null,
-    resolucion          varchar(30),
-    id_autorizador      uuid,        -- referencia externa: módulo G, = claim sub del JWT
-    fundamento_rechazo  text,
-    fecha               date         not null default current_date,
-    descripcion         text,
-    id_cliente          uuid,        -- referencia externa: módulo G, = claim sub del JWT
+    id                     bigint generated always as identity primary key,
+    id_pedido              bigint       not null,  -- referencia API: el pedido vive en M1
+    tipo                   varchar(20)  not null,
+    motivo                 varchar(255) not null,
+    estado                 varchar(20)  not null,
+    resolucion             varchar(30),
+    id_autorizador         uuid,
+    fundamento_rechazo     text,
+    fecha                  date         not null default current_date,
+    descripcion            text,
+    id_cliente             uuid,        -- referencia externa: módulo G
+    fecha_registro         timestamptz  not null default now(),   -- ESP-07 8.3, fechaCreacion
+    fecha_resolucion       timestamptz,                           -- ESP-08 8.3, fechaResolucion
+    referencia_operacion   varchar(100),                          -- ESP-08 8.3, referenciaOperacion
     constraint ck_devolucion_estado check (estado in
         ('SOLICITADA','EN_EVALUACION','APROBADA','RECHAZADA','COMPLETADA'))
 );
+
+comment on column postventa.devolucion.referencia_operacion is
+    'reembolsoId de F4 o referencia de Despacho, según la resolución';
 
 comment on column postventa.devolucion.id_pedido is 'Referencia API - el pedido vive en M1, sin FK física';
 
@@ -198,7 +216,7 @@ create table postventa.reclamo (
     fecha_limite_respuesta      date         not null,
     respuesta_visible_cliente   text,
     canal                       varchar(20)  not null,
-    id_cliente                  uuid,        -- referencia externa: módulo G, = claim sub del JWT
+    id_cliente                  uuid,        -- referencia externa: módulo G
     fecha_registro              timestamptz  not null default now(),
     fecha_atencion              timestamptz,
     atendido_por                varchar(50),
@@ -218,7 +236,7 @@ create table postventa.reembolso (
     moneda           char(3)       not null default 'PEN',
     id_transaccion   varchar(100),
     estado           varchar(20)   not null default 'PENDIENTE',
-    id_autorizador   uuid,          -- referencia externa: módulo G, = claim sub del JWT
+    id_autorizador   uuid,
     fecha            date          not null default current_date,
     id_pedido        bigint,       -- referencia API: el pedido vive en M1 (control de saldo)
     constraint ck_reembolso_tipo_origen check (tipo_origen in ('ANULACION','DEVOLUCION')),
@@ -258,7 +276,7 @@ comment on column postventa.calificacion.id_pedido is 'Referencia API - el pedid
 create table postventa.agregado_ventas (
     periodo          varchar(7)    not null,  -- formato AAAA-MM
     canal            varchar(30)   not null,
-    id_vendedor      uuid          not null,  -- referencia externa: módulo G, = claim sub del JWT
+    id_vendedor      uuid          not null,
     id_producto      bigint        not null,
     unidades         integer       not null default 0,
     monto            numeric(14,2) not null default 0,

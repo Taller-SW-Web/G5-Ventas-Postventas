@@ -42,10 +42,12 @@ erDiagram
         varchar(255) direccion
         varchar(40) codigo_cupon
         varchar(128) idempotency_key UK
+        varchar(100) reserva_id
         timestamp creado_en "NN"
-        uuid id_cliente "referencia sin FK, = claim sub del JWT"
-        uuid id_vendedor "referencia sin FK, = claim sub del JWT"
+        uuid id_cliente "referencia sin FK"
+        uuid id_vendedor "referencia sin FK"
         bigint id_direccion_entrega "referencia sin FK"
+        varchar(40) tienda_id "solo RETAIL"
     }
     DETALLE_PEDIDO {
         bigint id PK
@@ -62,10 +64,13 @@ erDiagram
         bigint id PK
         bigint id_pedido FK "NN"
         varchar(30) metodo "NN"
-        varchar(100) referencia
+        varchar(100) referencia "también referenciaOperacion del POS en RETAIL"
         decimal(12-2) monto "NN"
         varchar(20) estado "NN"
         timestamp fecha_proceso
+        decimal(12-2) monto_efectivo "solo RETAIL con metodo MIXTO"
+        decimal(12-2) monto_tarjeta "solo RETAIL con metodo MIXTO"
+        timestamp fecha_venta "solo RETAIL, venta sin conexión hasta 72h atrás"
     }
     HISTORIAL_ESTADO {
         bigint id PK
@@ -80,8 +85,8 @@ erDiagram
         bigint id PK
         bigint id_pedido FK,UK "NN"
         varchar(255) motivo "NN"
-        uuid id_solicitante "= claim sub del JWT"
-        uuid id_autorizador "= claim sub del JWT"
+        uuid id_solicitante
+        uuid id_autorizador
         varchar(20) estado "NN"
         date fecha "NN"
     }
@@ -111,15 +116,18 @@ erDiagram
     DEVOLUCION {
         bigint id PK
         bigint id_pedido "referencia sin FK, NN"
-        uuid id_cliente "referencia sin FK, = claim sub del JWT"
+        uuid id_cliente "referencia sin FK"
         varchar(20) tipo "NN"
         varchar(255) motivo "NN"
         text descripcion
         varchar(20) estado "NN"
         varchar(30) resolucion
-        uuid id_autorizador "= claim sub del JWT"
+        uuid id_autorizador
         text fundamento_rechazo
         date fecha "NN"
+        timestamp fecha_registro "NN, default now()"
+        timestamp fecha_resolucion
+        varchar(100) referencia_operacion "reembolsoId de F4 o referencia de Despacho, según resolución"
     }
     DEVOLUCION_ITEM {
         bigint id PK
@@ -144,7 +152,7 @@ erDiagram
         char(3) moneda "NN"
         varchar(100) id_transaccion
         varchar(20) estado "NN"
-        uuid id_autorizador "= claim sub del JWT"
+        uuid id_autorizador
         date fecha "NN"
     }
     REEMBOLSO_INTENTO {
@@ -160,7 +168,7 @@ erDiagram
         bigint id PK
         varchar(30) codigo UK "NN"
         bigint id_pedido "referencia sin FK"
-        uuid id_cliente "referencia sin FK, = claim sub del JWT"
+        uuid id_cliente "referencia sin FK"
         varchar(20) tipo "NN"
         varchar(60) motivo "NN"
         text detalle "NN"
@@ -188,7 +196,7 @@ erDiagram
     AGREGADO_VENTAS {
         varchar(7) periodo PK
         varchar(30) canal PK
-        uuid id_vendedor PK "= claim sub del JWT"
+        uuid id_vendedor PK
         bigint id_producto PK
         integer unidades "NN"
         decimal(14-2) monto "NN"
@@ -241,8 +249,7 @@ ventas (M1):
 pedido           ([id], codigo UK, canal, fecha, estado, moneda, subtotal, descuento, total,
                   nombre_contacto, tipo_documento, numero_documento, telefono, email,
                   modalidad_envio, costo_envio, destinatario, distrito, direccion, codigo_cupon,
-                  idempotency_key UK, creado_en, id_cliente ⇢ G, id_vendedor ⇢ G,
-                  id_direccion_entrega ⇢ E)
+                  idempotency_key UK, reserva_id ⇢ F, creado_en, id_cliente ⇢ G, id_vendedor ⇢ G, id_direccion_entrega ⇢ E)
 
 detalle_pedido   ([id], id_pedido → pedido.id, id_producto ⇢ F, sku, descripcion, cantidad,
                   precio_unitario, descuento, importe)
@@ -334,7 +341,8 @@ Sin clave foránea:
 
 M1:
 
-1. pedido.codigo es único.
+1. pedido.codigo es único. pedido.idempotency_key también (acuerdo H-02): una misma cabecera Idempotency-Key no crea dos pedidos; es null en pedidos anteriores al acuerdo.
+   pedido.reserva_id es el reservaId que asigna Productos (F) al confirmar la reserva de stock (acuerdo G6); es null mientras la reserva está pendiente y siempre en RETAIL.
 2. pedido.estado solo admite CREADO, PAGADO, EN_PREPARACION, DESPACHADO, ENTREGADO y ANULADO. Las transiciones las controla M1 (ESP-03).
 3. Un pedido tiene como máximo una anulación.
 4. detalle_pedido.cantidad es mayor que cero y los montos no pueden ser negativos.
@@ -377,7 +385,7 @@ M2:
 
 ## 7. Pendientes
 
-- El `.drawio` de este diagrama todavía no incluye `outbox_evento`, `evento_recibido`, `devolucion_item`, `reembolso_intento` ni `agregado_metricas` — pendiente de que quien lo mantiene lo actualice y reexporte las imágenes.
+- El `.drawio` de este diagrama todavía no incluye `outbox_evento`, `evento_recibido`, `devolucion_item`, `reembolso_intento` ni `agregado_metricas`, ni las columnas nuevas de `devolucion` y `reclamo` (sí tiene los `uuid` y `pedido.idempotency_key`) — pendiente de que quien lo mantiene lo actualice y reexporte las imágenes.
 
 ## 8. Otros modelos
 

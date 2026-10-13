@@ -2,7 +2,9 @@
 
 Implementación del [modelo lógico](diagrama-logico.md) en PostgreSQL 17 sobre Supabase (proyecto `nsfrwxrjidyckgfriyhv`). Incluye los tipos reales, valores por defecto, restricciones, índices y la configuración de seguridad. El script que crea todo es [ventas_postventa_schema.sql](../../../infra/bd/ventas_postventa_schema.sql), aplicado como la migración `crear_esquemas_ventas_postventa`.
 
-> **Pendiente de aplicar en Supabase:** las columnas que referencian un usuario de Seguridad (`id_cliente`, `id_vendedor`, `id_solicitante`, `id_autorizador`) pasaron de `bigint` a `uuid`, confirmado por el módulo de Seguridad (`sub` del JWT es `uuid`) — ver `integraciones/CONSULTA_G7_SEGURIDAD.md`. Este documento y el script ya reflejan el tipo correcto; falta la migración real.
+> **Pendiente de aplicar en Supabase:** `pedido.tienda_id` y `pago.monto_efectivo`/`monto_tarjeta`/`fecha_venta` son columnas del acuerdo con Retail (G4, 2026-10-12 — ver `integraciones/ACUERDO_G4_RETAIL.md`): el pedido `RETAIL` nace `PAGADO` y transiciona a `ENTREGADO` en la misma operación, sin envío. Este documento y el script ya las reflejan; falta la migración real. **Ya aplicado en código (`Pedido.java`/`Pago.java`), falta confirmar si ya se aplicó sobre la Supabase real.**
+>
+> **Aplicado en Supabase el 2026-10-12** y en uso por la entidad `Devolucion` de F3: `devolucion.fecha_registro`, `fecha_resolucion` y `referencia_operacion` cierran el hueco entre lo que `ESP-07` (8.3) y `ESP-08` (8.3) ya prometen devolver (`fechaCreacion`, `fechaResolucion`, `referenciaOperacion`) y lo que la tabla física podía persistir hasta ahora.
 
 ## 1. Diagrama
 
@@ -36,11 +38,13 @@ erDiagram
         varchar(80) distrito "null"
         varchar(255) direccion "null"
         varchar(40) codigo_cupon "null"
-        varchar(128) idempotency_key UK "null"
+        varchar(128) idempotency_key UK "null, cabecera Idempotency-Key de 1.1"
+        varchar(100) reserva_id "null, reservaId de Productos (G6)"
         timestamptz creado_en "not null, default now()"
-        uuid id_cliente "referencia sin FK, null, = claim sub del JWT"
-        uuid id_vendedor "referencia sin FK, null, = claim sub del JWT"
+        uuid id_cliente "referencia sin FK, null"
+        uuid id_vendedor "referencia sin FK, null"
         bigint id_direccion_entrega "referencia sin FK, null"
+        varchar(40) tienda_id "null, solo RETAIL"
     }
     DETALLE_PEDIDO {
         bigint id PK "identity, not null"
@@ -57,10 +61,13 @@ erDiagram
         bigint id PK "identity, not null"
         bigint id_pedido FK "not null"
         varchar(30) metodo "not null"
-        varchar(100) referencia "null"
+        varchar(100) referencia "null, también referenciaOperacion del POS en RETAIL"
         numeric(12-2) monto "not null"
         varchar(20) estado "not null"
         timestamptz fecha_proceso "null"
+        numeric(12-2) monto_efectivo "null, solo RETAIL con metodo MIXTO"
+        numeric(12-2) monto_tarjeta "null, solo RETAIL con metodo MIXTO"
+        timestamptz fecha_venta "null, solo RETAIL, venta sin conexión hasta 72h atrás"
     }
     HISTORIAL_ESTADO {
         bigint id PK "identity, not null"
@@ -75,8 +82,8 @@ erDiagram
         bigint id PK "identity, not null"
         bigint id_pedido FK,UK "not null"
         varchar(255) motivo "not null"
-        uuid id_solicitante "null, = claim sub del JWT"
-        uuid id_autorizador "null, = claim sub del JWT"
+        uuid id_solicitante "null"
+        uuid id_autorizador "null"
         varchar(20) estado "not null"
         date fecha "not null"
     }
@@ -106,15 +113,18 @@ erDiagram
     DEVOLUCION {
         bigint id PK "identity, not null"
         bigint id_pedido "referencia sin FK, not null"
-        uuid id_cliente "referencia sin FK, null, = claim sub del JWT"
+        uuid id_cliente "referencia sin FK, null"
         varchar(20) tipo "not null"
         varchar(255) motivo "not null"
         text descripcion "null"
         varchar(20) estado "not null"
         varchar(30) resolucion "null"
-        uuid id_autorizador "null, = claim sub del JWT"
+        uuid id_autorizador "null"
         text fundamento_rechazo "null"
         date fecha "not null"
+        timestamptz fecha_registro "not null, default now(), hora real de creación (ESP-07 8.3)"
+        timestamptz fecha_resolucion "null, hora de la decisión del Gestor (ESP-08 8.3)"
+        varchar(100) referencia_operacion "null, reembolsoId de F4 o referencia de Despacho según la resolución (ESP-08 8.3)"
     }
     DEVOLUCION_ITEM {
         bigint id PK "identity, not null"
@@ -139,7 +149,7 @@ erDiagram
         char(3) moneda "not null, default PEN"
         varchar(100) id_transaccion "null"
         varchar(20) estado "not null, default PENDIENTE"
-        uuid id_autorizador "null, = claim sub del JWT"
+        uuid id_autorizador "null"
         date fecha "not null"
     }
     REEMBOLSO_INTENTO {
@@ -155,7 +165,7 @@ erDiagram
         bigint id PK "identity, not null"
         varchar(30) codigo UK "not null"
         bigint id_pedido "referencia sin FK, null"
-        uuid id_cliente "referencia sin FK, null, = claim sub del JWT"
+        uuid id_cliente "referencia sin FK, null"
         varchar(20) tipo "not null"
         varchar(60) motivo "not null"
         text detalle "not null"
@@ -183,7 +193,7 @@ erDiagram
     AGREGADO_VENTAS {
         varchar(7) periodo PK "not null"
         varchar(30) canal PK "not null"
-        uuid id_vendedor PK "not null, = claim sub del JWT"
+        uuid id_vendedor PK "not null"
         bigint id_producto PK "not null"
         integer unidades "not null"
         numeric(14-2) monto "not null"
@@ -236,7 +246,7 @@ No hay claves foráneas entre los dos esquemas.
 | TEXT | text | Textos largos: detalle, comentario, fundamento_rechazo, respuesta |
 | DATE | date | Fechas sin hora |
 | TIMESTAMP | timestamptz | Fecha y hora con zona horaria |
-| UUID | uuid | Identificador de evento de dominio (outbox_evento.id_evento, postventa.evento_recibido.id_evento) |
+| UUID | uuid | Identificador de evento de dominio (outbox_evento.id_evento, postventa.evento_recibido.id_evento) y de usuario: claim `sub` de Seguridad (id_cliente, id_vendedor, id_solicitante, id_autorizador) |
 | JSONB | jsonb | outbox_evento.payload: el cuerpo del evento tal como se envía a M2 |
 
 ## 4. Valores por defecto
@@ -286,7 +296,7 @@ Valores únicos:
 | Nombre | Tabla | Columnas |
 |---|---|---|
 | pedido_codigo_key | ventas.pedido | codigo |
-| pedido_idempotency_key_key | ventas.pedido | idempotency_key |
+| pedido_idempotency_key_key | ventas.pedido | idempotency_key (admite null) |
 | anulacion_id_pedido_key | ventas.anulacion | id_pedido |
 | reclamo_codigo_key | postventa.reclamo | codigo |
 | reembolso_idempotency_key_key | postventa.reembolso | idempotency_key |
@@ -305,10 +315,10 @@ CHECK:
 | ck_detalle_montos | ventas.detalle_pedido | precio_unitario, descuento e importe ≥ 0 |
 | ck_pago_monto | ventas.pago | monto ≥ 0 |
 | ck_pago_estado | ventas.pago | estado IN (PENDIENTE, CONFIRMADO, RECHAZADO) |
-| ck_historial_actor | ventas.historial_estado | actor IN (CLIENTE, GESTOR, CANAL_CHATBOT, PASARELA_PAGOS, SISTEMA_LOGISTICA) |
+| ck_historial_actor | ventas.historial_estado | actor IN (CLIENTE, GESTOR, CANAL_CHATBOT, PASARELA_PAGOS, SISTEMA_LOGISTICA, SISTEMA_PRODUCTOS) |
 | ck_anulacion_estado | ventas.anulacion | estado IN (PENDIENTE_AUTORIZACION, EJECUTADA, RECHAZADA) |
 | ck_outbox_tipo | ventas.outbox_evento | tipo IN (pedido.pagado, pedido.anulado, pedido.entregado) |
-| ck_evento_recibido_origen | ventas.evento_recibido | origen IN (PASARELA_PAGOS, SISTEMA_LOGISTICA) |
+| ck_evento_recibido_origen | ventas.evento_recibido | origen IN (PASARELA_PAGOS, SISTEMA_LOGISTICA, SISTEMA_PRODUCTOS) |
 | ck_devolucion_estado | postventa.devolucion | estado IN (SOLICITADA, EN_EVALUACION, APROBADA, RECHAZADA, COMPLETADA) |
 | ck_devolucion_item_cantidad | postventa.devolucion_item | cantidad > 0 |
 | ck_reembolso_tipo_origen | postventa.reembolso | tipo_origen IN (ANULACION, DEVOLUCION) |
@@ -350,7 +360,7 @@ Los tres primeros sirven para buscar por pedido en M2 aunque esas columnas no se
 
 ## 8. Pendientes
 
-- El `.drawio` de este diagrama todavía no incluye `outbox_evento`, `evento_recibido` (ambos esquemas), `devolucion_item`, `reembolso_intento` ni `agregado_metricas`, ni sus índices y CHECK — pendiente de que quien lo mantiene lo actualice y reexporte las imágenes.
+- El `.drawio` de este diagrama todavía no incluye `outbox_evento`, `evento_recibido` (ambos esquemas), `devolucion_item`, `reembolso_intento` ni `agregado_metricas`, ni las columnas nuevas de `devolucion` y `reclamo`, ni sus índices y CHECK (sí tiene los `uuid` y `pedido.idempotency_key`) — pendiente de que quien lo mantiene lo actualice y reexporte las imágenes.
 
 ## 9. Otros modelos
 

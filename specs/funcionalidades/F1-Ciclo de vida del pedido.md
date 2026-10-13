@@ -40,6 +40,8 @@ Esta funcionalidad incluye:
             [ENTREGADO] ───────(Post-entrega: Deriva a F3 Devolución)
   ```
 
+  Retail (canal C) es la única excepción, tanto al punto de entrada como al recorrido completo: como el cobro ya ocurrió físicamente en el POS antes de la llamada y el cliente se lleva el producto en el momento, el pedido se persiste directo en `PAGADO` y transiciona a `ENTREGADO` en la misma operación — un atajo `PAGADO → ENTREGADO` que no pasa por `CREADO`, `EN_PREPARACION`, `DESPACHADO` ni por Despacho (ver CA-01c y CA-01d, confirmado 2026-10-12 con G4 — `integraciones/ACUERDO_G4_RETAIL.md`).
+
 - Registro de cada cambio de estado en un historial auditable (actor, motivo, fecha/hora en UTC).
 - Publicación de eventos de dominio (`pedido creado`, `pedido pagado`, `pedido anulado`, `pedido entregado`) para que otros módulos reaccionen sin acoplamiento síncrono.
 
@@ -61,9 +63,9 @@ Esta funcionalidad **no incluye**: carrito/checkout de los canales (responsabili
 | Dependencia | Responsabilidad |
 |---|---|
 | Seguridad y Usuarios (G) | Emitir el token JWT, validar rol y aportar datos de contacto del cliente. |
-| Productos y Ofertas (F) | Confirmar precio/disponibilidad al crear el pedido y recibir aviso de movimientos de stock al anular. |
-| Despacho y Entrega (E) | Recibir la solicitud de despacho cuando el pedido pasa a `EN_PREPARACION`/`DESPACHADO`, y notificar por evento/endpoint cuando el pedido fue `ENTREGADO` o falló la entrega. F1 **nunca** asigna repartidor, ruta ni zona — solo consume el evento. |
-| Pasarela de Pagos (Externa) | Emitir la notificación de cobro exitoso (`CREADO → PAGADO`) o fallo, vía `1.2`. Quién la invoca depende del canal: para Marketplace, M1 invoca al simulador compartido inmediatamente tras crear el pedido; para Chatbot, su propio backend notifica `1.2` directamente con su propia simulación de pago (ver `AGENTS.md` sección 2, punto 8). |
+| Productos y Ofertas (F) | Confirmar precio/disponibilidad al crear el pedido y recibir aviso de movimientos de stock al anular. **Excepto Retail:** el POS descuenta el stock central directo con Productos al momento de la venta; M1 no reserva ni confirma nada para este canal (confirmado 2026-10-12 con G4). |
+| Despacho y Entrega (E) | Recibir `POST /api/v1/despachos` cuando el pedido está físicamente preparado y sellado (**no** apenas pasa a `EN_PREPARACION` — falta decidir qué señal de nuestro lado dispara esa llamada, ver `AGENTS.md` sección 4), y notificar los cambios por el webhook genérico de `api-ventas.md` 1.5 (`DESPACHO_EN_CAMINO` → `DESPACHADO`, `DESPACHO_ENTREGADO` → `ENTREGADO`, `DESPACHO_DEVUELTO_A_ORIGEN` → `ANULADO`). F1 **nunca** asigna repartidor, ruta ni zona — solo consume el evento. **Excepto Retail:** Despacho no participa en absoluto; F1 transiciona a `ENTREGADO` en la misma operación de creación (confirmado 2026-10-12 con G4). |
+| Pasarela de Pagos (Externa) | Emitir la notificación de cobro exitoso (`CREADO → PAGADO`) o fallo, vía `1.2`. Quién la invoca depende del canal: para Marketplace, M1 invoca al simulador compartido inmediatamente tras crear el pedido; para Chatbot, su propio backend notifica `1.2` directamente con su propia simulación de pago; para Retail, no aplica — el cobro ya ocurrió en el POS antes de la creación, el pedido nace `PAGADO` y nunca se invoca `1.2` (ver `AGENTS.md` sección 2, punto 8). |
 | Canales A/B/C | Crear y consultar pedidos; solicitar anulación directa de pedidos `CREADO` por abandono o timeout de pago. |
 | F2 — Anulación de pedidos | Orquestar y solicitar a F1 la transición a `ANULADO` en estados pagados o en preparación. |
 | F3 — Devoluciones y cambios | Consulta a F1 que el pedido esté `ENTREGADO` antes de aceptar una solicitud de devolución/cambio. |
@@ -96,6 +98,18 @@ El sistema DEBE permitir crear un pedido a partir de una solicitud de un canal, 
 - **ENTONCES** M1 invoca internamente al simulador de pasarela compartido para iniciar el cobro simulado — el canal que creó el pedido no participa en esta llamada ni la recibe; el resultado llega después mediante la notificación de la pasarela (ver CA-07).
 
 > Un canal cuyo producto exige su propia experiencia de pago (ej. Chatbot, con su propio `PaymentSimulator`) no dispara este paso: su propio backend notifica `1.2` directamente, con su propia credencial de servicio, sin pasar por el simulador compartido.
+
+#### CA-01c. Pedido Retail nace directo en PAGADO (cobro ya ocurrido en el POS)
+
+- **DADO** una venta de mostrador donde el cliente ya pagó físicamente en el POS de la tienda.
+- **CUANDO** Retail envía `POST /pedidos` con `canal.tipo: RETAIL`, los datos declarados del cobro en el bloque `pago` (`metodoPago`, `referenciaOperacion`, y `montoEfectivo`/`montoTarjeta` si es mixto) y `envio.tiendaId` en vez de dirección.
+- **ENTONCES** el sistema persiste el pedido directo en estado `PAGADO` (no `CREADO`), registra el primer historial como `null → PAGADO` con actor del canal, no invoca al simulador de pasarela ni espera ninguna notificación de pago (`1.2`), y no reserva/confirma stock con Productos (F) — el POS ya lo descontó directo del inventario central.
+
+#### CA-01d. Pedido Retail transiciona a ENTREGADO en la misma operación (confirmado 2026-10-12 con G4)
+
+- **DADO** un pedido Retail recién persistido en `PAGADO` por CA-01c.
+- **CUANDO** el sistema termina la operación de creación.
+- **ENTONCES** transiciona el pedido a `ENTREGADO` en la misma operación (ver ESP-03, regla 8 y CA-04b), registra el segundo historial `PAGADO → ENTREGADO` con actor `CLIENTE` y motivo `ENTREGA_INMEDIATA_EN_TIENDA` — con `fechaHora` igual a la hora de la venta, o a `fechaVenta` si fue reconciliada después por falta de conexión —, sin que Despacho participe, y publica el evento `pedido entregado`. Desde este momento corre el plazo de 7 días de F3 (devoluciones) y se activa la encuesta CSAT de F5.
 
 #### CA-02. Rechazo por datos incompletos
 
@@ -139,13 +153,13 @@ El sistema DEBE aplicar únicamente las transiciones dibujadas en la máquina de
 
 - **DADO** un pedido en estado `CREADO`.
 - **CUANDO** se recibe la notificación de pago exitoso desde la pasarela o webhook de pagos.
-- **ENTONCES** el sistema transiciona el pedido a `PAGADO`, registra el historial con actor `PASARELA_PAGOS` y publica el evento `pedido pagado`.
+- **ENTONCES** el sistema transiciona el pedido a `PAGADO`, registra el historial con actor `PASARELA_PAGOS`, confirma el consumo de la reserva de stock con Productos (`POST /api/v1/inventario/{reservaId}/confirmar`, acuerdo 2026-10-11 — ver `integraciones/ACUERDO_G6_PRODUCTOS.md`) y publica el evento `pedido pagado`.
 
 #### CA-07b. Transición directa a ANULADO (pago rechazado por la pasarela)
 
 - **DADO** un pedido en estado `CREADO`.
 - **CUANDO** se recibe la notificación de pago rechazado desde la pasarela (`resultado: RECHAZADO`).
-- **ENTONCES** el sistema transiciona el pedido de forma directa a `ANULADO` con motivo `PAGO_NO_COMPLETADO`, sin requerir autorización del Gestor, registra el historial con actor `PASARELA_PAGOS` y repone el stock en Productos (F) — igual que en CA-12, pero disparado por la pasarela en vez del canal. No genera ninguna orden de reembolso hacia F4, porque nunca hubo pago confirmado. *(La liberación del cupón ante Productos y Ofertas (F) no tiene integración documentada en este repo — queda fuera de alcance hasta que exista ese acuerdo intermodular.)*
+- **ENTONCES** el sistema transiciona el pedido de forma directa a `ANULADO` con motivo `PAGO_NO_COMPLETADO`, sin requerir autorización del Gestor, registra el historial con actor `PASARELA_PAGOS`, libera la reserva de stock en Productos (`POST /api/v1/inventario/{reservaId}/liberar`) y, si se había aplicado cupón, publica `promotions.coupon.restoration.requested` para que Productos lo restaure (acuerdo con Productos, 2026-10-11 — ver `integraciones/ACUERDO_G6_PRODUCTOS.md`) — igual que en CA-12, pero disparado por la pasarela en vez del canal. No genera ninguna orden de reembolso hacia F4, porque nunca hubo pago confirmado.
 
 #### CA-08. Transición inválida (salto de estado)
 
@@ -169,7 +183,7 @@ El sistema DEBE aplicar únicamente las transiciones dibujadas en la máquina de
 
 - **DADO** un pedido en estado `CREADO`.
 - **CUANDO** el Canal (Chatbot / Web) envía la solicitud de anulación con motivo tipificado `PAGO_NO_COMPLETADO` tras agotarse el tiempo límite de espera (timeout) o producirse el rechazo definitivo del cobro.
-- **ENTONCES** el sistema transiciona el pedido de forma directa a `ANULADO` sin requerir autorización ni intervención del rol Gestor, registra el historial con actor `CANAL_CHATBOT` y motivo `PAGO_NO_COMPLETADO`, libera el stock en Productos (F) y no genera ninguna orden de reembolso hacia F4.
+- **ENTONCES** el sistema transiciona el pedido de forma directa a `ANULADO` sin requerir autorización ni intervención del rol Gestor, registra el historial con actor `CANAL_CHATBOT` y motivo `PAGO_NO_COMPLETADO`, libera la reserva de stock en Productos (`POST /api/v1/inventario/{reservaId}/liberar`) y, si se había aplicado cupón, publica `promotions.coupon.restoration.requested` para que Productos lo restaure, y no genera ninguna orden de reembolso hacia F4.
 
 ### RF-04. Historial y trazabilidad
 
@@ -228,6 +242,7 @@ Las rutas, cuerpos, respuestas y códigos específicos se centralizan en `specs/
 | Criterios | Verificación automatizada | Nivel | Evidencia esperada |
 |---|---|---|---|
 | CA-01 a CA-03 | Crear pedidos válidos con payload completo (`contacto`, `envio`, `pago`), con datos incompletos y sin stock. | Unitaria e integración | Pedido `CREADO` con historial; `400`/`409` según corresponda. |
+| CA-01c y CA-01d | Crear un pedido con `canal.tipo: RETAIL` y datos de cobro del POS, incluyendo una venta reconciliada offline con `fechaVenta`. | Unitaria e integración | Pedido persistido directo en `PAGADO` y luego `ENTREGADO` en la misma operación; dos historiales (`null → PAGADO`, `PAGADO → ENTREGADO` con actor `CLIENTE`); sin llamada a `1.2`, a Despacho ni a reserva de stock. |
 | CA-04 a CA-06 | Consultar por id existente/inexistente y listar filtrando por cliente/estado. | Integración | `200` con detalle completo; `404` para inexistente; listado correctamente filtrado. |
 | CA-07 y CA-08 | Ejecutar una transición válida y una inválida (salto de estado). | Unitaria e integración | Transición aplicada con evento publicado; `409` sin cambios para la inválida. |
 | CA-09 y CA-10 | Simular el evento de entrega de Despacho, incluyendo un reintento del mismo evento. | Integración | Transición a `ENTREGADO` una sola vez, sin duplicar historial ni evento. |
@@ -238,7 +253,7 @@ Las rutas, cuerpos, respuestas y códigos específicos se centralizan en `specs/
 
 La funcionalidad se considera completa cuando:
 
-- Los criterios `CA-01` a `CA-12` están implementados y cuentan con pruebas automatizadas exitosas.
+- Los criterios `CA-01` a `CA-12` (incluyendo `CA-01b`, `CA-01c` y `CA-01d`) están implementados y cuentan con pruebas automatizadas exitosas.
 - El recorrido funcional completo (creación → pago → entrega) y las ramas alternas de anulación directa fueron verificadas de extremo a extremo.
 - Ninguna transición fuera de la máquina de estados es posible, ni siquiera con permisos de `ADMIN`.
 - El historial es consultable y completo para cualquier pedido.
