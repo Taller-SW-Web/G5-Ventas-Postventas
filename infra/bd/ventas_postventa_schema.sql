@@ -12,6 +12,11 @@
 -- — el pedido RETAIL nace PAGADO y transiciona a ENTREGADO en la misma
 -- operación, sin envío. Este archivo ya las refleja; falta la migración real.
 --
+-- PENDIENTE DE APLICAR EN SUPABASE: postventa.devolucion.fecha_registro,
+-- fecha_resolucion y referencia_operacion (F3, 2026-10-12) cierran el hueco
+-- entre lo que ESP-07 8.3 y ESP-08 8.3 ya prometen devolver y lo que la tabla
+-- física podía persistir. Este archivo ya las refleja; falta la migración real.
+--
 -- Esquema ventas    = M1 (Ventas)
 -- Esquema postventa = M2 (Postventa)
 -- Ninguna clave foránea cruza de un esquema al otro (Database-per-Service).
@@ -157,20 +162,26 @@ create index ix_outbox_pendientes          on ventas.outbox_evento(creado_en) wh
 -- =====================================================================
 
 create table postventa.devolucion (
-    id                  bigint generated always as identity primary key,
-    id_pedido           bigint       not null,  -- referencia API: el pedido vive en M1
-    tipo                varchar(20)  not null,
-    motivo              varchar(255) not null,
-    estado              varchar(20)  not null,
-    resolucion          varchar(30),
-    id_autorizador      uuid,
-    fundamento_rechazo  text,
-    fecha               date         not null default current_date,
-    descripcion         text,
-    id_cliente          uuid,        -- referencia externa: módulo G
+    id                     bigint generated always as identity primary key,
+    id_pedido              bigint       not null,  -- referencia API: el pedido vive en M1
+    tipo                   varchar(20)  not null,
+    motivo                 varchar(255) not null,
+    estado                 varchar(20)  not null,
+    resolucion             varchar(30),
+    id_autorizador         uuid,
+    fundamento_rechazo     text,
+    fecha                  date         not null default current_date,
+    descripcion            text,
+    id_cliente             uuid,        -- referencia externa: módulo G
+    fecha_registro         timestamptz  not null default now(),   -- ESP-07 8.3, fechaCreacion
+    fecha_resolucion       timestamptz,                           -- ESP-08 8.3, fechaResolucion
+    referencia_operacion   varchar(100),                          -- ESP-08 8.3, referenciaOperacion
     constraint ck_devolucion_estado check (estado in
         ('SOLICITADA','EN_EVALUACION','APROBADA','RECHAZADA','COMPLETADA'))
 );
+
+comment on column postventa.devolucion.referencia_operacion is
+    'reembolsoId de F4 o referencia de Despacho, según la resolución';
 
 comment on column postventa.devolucion.id_pedido is 'Referencia API - el pedido vive en M1, sin FK física';
 

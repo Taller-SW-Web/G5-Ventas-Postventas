@@ -2,7 +2,9 @@
 
 Implementación del [modelo lógico](diagrama-logico.md) en PostgreSQL 17 sobre Supabase (proyecto `nsfrwxrjidyckgfriyhv`). Incluye los tipos reales, valores por defecto, restricciones, índices y la configuración de seguridad. El script que crea todo es [ventas_postventa_schema.sql](../../../infra/bd/ventas_postventa_schema.sql), aplicado como la migración `crear_esquemas_ventas_postventa`.
 
-> **Pendiente de aplicar en Supabase:** `pedido.tienda_id` y `pago.monto_efectivo`/`monto_tarjeta`/`fecha_venta` son columnas del acuerdo con Retail (G4, 2026-10-12 — ver `integraciones/ACUERDO_G4_RETAIL.md`): el pedido `RETAIL` nace `PAGADO` y transiciona a `ENTREGADO` en la misma operación, sin envío. Este documento y el script ya las reflejan; falta la migración real.
+> **Pendiente de aplicar en Supabase:** `pedido.tienda_id` y `pago.monto_efectivo`/`monto_tarjeta`/`fecha_venta` son columnas del acuerdo con Retail (G4, 2026-10-12 — ver `integraciones/ACUERDO_G4_RETAIL.md`): el pedido `RETAIL` nace `PAGADO` y transiciona a `ENTREGADO` en la misma operación, sin envío. Este documento y el script ya las reflejan; falta la migración real. **Ya aplicado en código (`Pedido.java`/`Pago.java`), falta confirmar si ya se aplicó sobre la Supabase real.**
+>
+> **Pendiente de aplicar en Supabase:** `devolucion.fecha_registro`, `fecha_resolucion` y `referencia_operacion` (F3, 2026-10-12) — cierran el hueco entre lo que `ESP-07` (8.3) y `ESP-08` (8.3) ya prometen devolver (`fechaCreacion`, `fechaResolucion`, `referenciaOperacion`) y lo que la tabla física podía persistir hasta ahora. Este documento y el script ya las reflejan; falta aplicar el `ALTER TABLE` real y que la entidad Java de F3 las use.
 
 ## 1. Diagrama
 
@@ -120,6 +122,9 @@ erDiagram
         uuid id_autorizador "null"
         text fundamento_rechazo "null"
         date fecha "not null"
+        timestamptz fecha_registro "not null, default now(), hora real de creación (ESP-07 8.3)"
+        timestamptz fecha_resolucion "null, hora de la decisión del Gestor (ESP-08 8.3)"
+        varchar(100) referencia_operacion "null, reembolsoId de F4 o referencia de Despacho según la resolución (ESP-08 8.3)"
     }
     DEVOLUCION_ITEM {
         bigint id PK "identity, not null"

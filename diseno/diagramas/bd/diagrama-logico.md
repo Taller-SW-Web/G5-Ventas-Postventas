@@ -125,6 +125,9 @@ erDiagram
         uuid id_autorizador
         text fundamento_rechazo
         date fecha "NN"
+        timestamp fecha_registro "NN, default now()"
+        timestamp fecha_resolucion
+        varchar(100) referencia_operacion "reembolsoId de F4 o referencia de Despacho, según resolución"
     }
     DEVOLUCION_ITEM {
         bigint id PK
