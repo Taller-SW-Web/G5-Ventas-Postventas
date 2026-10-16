@@ -403,6 +403,7 @@ Especificaciones: ESP-01, ESP-02, ESP-03, ESP-04. Contrato: `api-ventas.md` 1.1 
 | 1.4 | `GET /api/v1/pedidos` (uso administrativo, filtra por `clienteId`) | rol `ADMIN_VENTAS` — **no es scope** | 200 | `PedidoService.listar` |
 | 1.4b | `GET /api/v1/pedidos/me` (acuerdo H-03) | rol `CLIENTE`, identidad por `sub` del JWT, sin `clienteId` en la URL — **no es scope** | 200 | `PedidoService.listarMios` |
 | 1.5 | `POST /api/v1/integraciones/despachos/eventos` (reemplaza el viejo 1.5/1.6, ver 5.6/5.7) | scope `ventas:pedidos:estado` (token de servicio de Despacho, reusado — decisión nuestra, 2026-10-13) | 200 | `LogisticaService.procesarEvento` |
+| 1.11 | `POST /api/v1/pedidos/reemplazos` (nuevo, 2026-10-16 — F3, acuerdo con Productos issue G6 #100, ver 5.10) | scope `ventas:pedidos:reemplazar` (token de servicio de `modulo-postventa`, pendiente de que Seguridad lo registre) | 201/200 | `ReemplazoService.crear` |
 
 `ventas:pedidos:leer` y `ventas:admin` **no son scopes reales** — Seguridad no los registra porque dependen de identidad de persona, no de módulo. Se resuelven con el claim `roles` del token de usuario (ver sección 12 y `api-ventas.md`, catálogo de scopes).
 
@@ -554,6 +555,22 @@ Al 2026-10-12, revisando el repo directamente:
 - [ ] Consumo y restauración de cupón por RabbitMQ (`promotions.coupon.consumption.requested`) — no hay nada programado todavía, incluyendo el motivo `CUPON_RECHAZADO` (ver 6.1)
 - [ ] `EnvioEventosScheduler` y `PostventaClient.enviarEvento`
 - [ ] Criterios de aceptación de ESP-01 a ESP-04 probados
+- [x] 1.11 orden de reemplazo (`ReemplazoService`) — construido 2026-10-16, ver 5.10
+
+### 5.10. 1.11 Orden de reemplazo (`ReemplazoService`, construido 2026-10-16)
+
+F3 lo invoca al aprobar un `CAMBIO` (ESP-08, flujo B). Resuelve lo que antes iba a ser una coordinación directa de M2 con Despacho — ahora M1 crea un pedido normal, sin cobro:
+
+1. Valida que `pedidoOrigenId` exista y esté `ENTREGADO` (si no: 404/409), y que su canal no sea `RETAIL` (409 `REEMPLAZO_NO_APLICA` — esos cambios se hacen en tienda).
+2. Cada `sku` del body debe pertenecer a una línea del pedido original, y la cantidad pedida no debe exceder la comprada (400 `ITEM_NO_PERTENECE_AL_PEDIDO` / `CANTIDAD_EXCEDE_COMPRADA`).
+3. Crea el `Pedido` con `tipo: REEMPLAZO`, `idPedidoOrigen`, `devolucionId`, copiando contacto/dirección del original; `total = 0` (sin fila de `Pago` — el cliente ya pagó el original).
+4. Llama a `ProductosClient.reservar(...)` — el mismo método de 1.1, mismo scope, nada nuevo que pedirle a Productos.
+5. **Idempotente por `devolucionId`:** un índice único (`ux_pedido_reemplazo_vigente`, solo `estado <> ANULADO`) impide dos reemplazos vigentes de la misma devolución. Si ya existe uno, responde `200` con ese mismo pedido en vez de crear otro; si la carrera la gana otra petición, captura el `DataIntegrityViolationException` y hace lo mismo.
+6. Si Productos confirma la reserva (modo simulado: al instante): `CREADO → EN_PREPARACION` (actor `SISTEMA_PRODUCTOS`, sin pasar por `PAGADO` — ver `MaquinaEstados`, transiciones exclusivas de `REEMPLAZO`). Sigue el flujo normal de F1 (Gestor marca "paquete sellado" → Despacho).
+7. Si Productos rechaza o vence la reserva: `→ ANULADO` (actor `SISTEMA_PRODUCTOS`, motivo `STOCK_NO_DISPONIBLE`) y M1 publica `pedido.anulado` con `datos.devolucionId` — `DevolucionService.reemplazoAnulado` en M2 reabre la devolución a `EN_EVALUACION`.
+8. Al entregarse, `pedido.entregado` con `datos.devolucionId` — `DevolucionService.reemplazoEntregado` en M2 cierra el lado logístico del cambio.
+
+Ver `api-ventas.md` 1.11, `ESP-03` 7.2 (nuevas transiciones) y `ESP-08` 8.1/flujo B/reglas 7, 17, 18.
 
 ---
 
@@ -728,7 +745,7 @@ No se guarda en la base todavía: la evidencia se asocia cuando se registra la d
 |---|---|
 | `RECHAZADA` | `fundamento` obligatorio (400 si falta). `estado = RECHAZADA`, `resolucion = RECHAZO`, `fundamento_rechazo`, `id_autorizador` |
 | `APROBADA` con `tipo = DEVOLUCION_DINERO` | `estado = APROBADA`, `resolucion = REEMBOLSO`. Llamar a `ReembolsoService.procesar(...)` con origen `DEVOLUCION`, clave `DEVOLUCION-{id}`. Si queda `EXITOSO`: `estado = COMPLETADA` — **esto no depende de la recepción física, ver 7.5b** |
-| `APROBADA` con `tipo = CAMBIO` | `ProductosClient.consultarDisponibilidad`. Sin stock: 409 `SIN_STOCK` (el Gestor puede volver a resolver como reembolso o rechazo). Con stock: `resolucion = CAMBIO`, `DespachoClient.programarLogisticaCambio`. El reintegro de inventario **ya no se dispara aquí** — ver 7.5b. Cuando Despacho confirme la entrega del reemplazo: `COMPLETADA` |
+| `APROBADA` con `tipo = CAMBIO` | `ProductosClient.hayDisponibilidad` (chequeo preliminar, informativo). Sin stock: 409 `SIN_STOCK` (el Gestor puede volver a resolver como reembolso o rechazo). Con stock: `resolucion = CAMBIO`, `VentasClient.solicitarReemplazo(...)` (`POST /api/v1/pedidos/reemplazos`, M1 1.11 — **ya no se llama a Despacho directo**, ver 5.10 y 7.5c). El reintegro de inventario **tampoco se dispara aquí** — ver 7.5b. `COMPLETADA` cuando M1 avisa `pedido.entregado` (y la recepción física, si aplica, ya está confirmada) |
 
 - Solo se resuelve si está `SOLICITADA` o `EN_EVALUACION`; si no, 409.
 - Una devolución no puede terminar con cambio y reembolso a la vez.
@@ -748,11 +765,19 @@ No se guarda en la base todavía: la evidencia se asocia cuando se registra la d
 4. Se guardan las filas en `devolucion_recepcion` como `PENDIENTE` *antes* de llamar a Productos (para poder reintentar si falla), y `HistorialDevolucion` registra el detalle.
 5. `ProductosClient.reintegrar(...)` (`POST /api/v1/inventario/reintegros`, `reason: DEVOLUCION_ACEPTADA`) — **solo** con `cantidadApta`. Si `cantidadApta` es 0 para todas las líneas, no se llama a Productos en absoluto. Si Productos no responde: 503 `PRODUCTOS_NO_DISPONIBLE`, las filas quedan `PENDIENTE` para el siguiente intento (punto 3). Si responde: filas a `COMPLETADO`.
 6. `location_id` sale de `integracion.productos-ubicacion-devoluciones` (env `PRODUCTOS_UBICACION_DEVOLUCIONES`) — **todavía vacío**, G6 no lo ha definido (P-04); en modo real sin ese valor, 503 en vez de inventar uno.
-7. No cambia `devolucion.estado` directamente — sigue `APROBADA` hasta que `DevolucionService.completarSiCorresponde(...)` confirme que ya no falta nada (reembolso exitoso en F4, o referencia de Despacho en `CAMBIO`); ahí pasa a `COMPLETADA`.
+7. No cambia `devolucion.estado` directamente — sigue `APROBADA` hasta que `DevolucionService.completarSiCorresponde(...)` confirme que ya no falta nada (reembolso exitoso en F4, o el reemplazo de M1 entregado en `CAMBIO`, ver 7.5c); ahí pasa a `COMPLETADA`.
 
 **Importante para `REEMBOLSO`:** el llamado a `ReembolsoService` en 2.5 (paso de arriba) no espera a este endpoint — el dinero se devuelve igual, haya llegado o no el producto. Este paso 2.5b solo afecta inventario, nunca el reembolso.
 
 Ver `ESP-08` 8.2b y reglas 14-16, y `integraciones/ACUERDO_G6_PRODUCTOS.md` para el payload exacto de `/inventario/reintegros`. Modelo de datos: `postventa.devolucion_recepcion`, `postventa.historial_devolucion` y `postventa.devolucion.requiere_devolucion_fisica` — ver `infra/bd/ventas_postventa_schema.sql` (**falta confirmar si ya se aplicó en Supabase**).
+
+### 7.5c. Avisos de M1 sobre el reemplazo (`DevolucionService.reemplazoAnulado`/`reemplazoEntregado`, construido 2026-10-16)
+
+M1 avisa por `POST /api/v2/eventos` (el mismo canal de siempre, `EnvioEventosScheduler` de M1 → `PostventaClient`) cuando la orden de reemplazo de un `CAMBIO` cambia de estado — ya no hay coordinación directa con Despacho de este lado:
+
+- **`pedido.anulado` con `datos.devolucionId`:** Productos rechazó o venció la reserva del reemplazo. `reemplazoAnulado` busca la devolución por ese código y la devuelve a `EN_EVALUACION` (`HistorialDevolucion` registra el motivo), **no** la deja `RECHAZADA` — el Gestor puede volver a resolverla y pedir otro reemplazo.
+- **`pedido.entregado` con `datos.devolucionId`:** el reemplazo llegó al cliente. `reemplazoEntregado` marca esa parte como confirmada; `completarSiCorresponde` cierra la devolución a `COMPLETADA` si la recepción física (7.5b) también está lista.
+- Un aviso de una devolución que no existe, o de un reemplazo que ya no es el vigente de esa devolución (viejo o repetido), se ignora — M1 no tiene que reintentarlo.
 
 ### 7.6. Lista para terminar F3
 
@@ -767,6 +792,7 @@ Al 2026-10-16, F3 está completo en `main`, incluida la recepción física:
 - [x] 2.5b Confirmar recepción física — `RecepcionService`, `devolucion_recepcion`, `historial_devolucion` (ver 7.5b)
 - [x] `ProductosClient.reintegrar` con el payload real de G6 (`operation_id`, `order_id`, `source_ref`, `reason`, `lines[]`) — sin inventar `location_id`
 - [x] Verificado contra Supabase real: el servicio arranca y los endpoints 2.1 a 2.5 funcionan (2026-10-12)
+- [x] `CAMBIO` ya no coordina directo con Despacho — pide la orden de reemplazo a M1 (1.11) y reacciona a `pedido.anulado`/`pedido.entregado` (ver 7.5c)
 
 Pendientes:
 
@@ -775,9 +801,9 @@ Pendientes:
 - [ ] Cuando Seguridad registre `ventas:pedidos:consultar`, `VentasClient` debe usar el token de servicio de M2 en vez de reenviar el token de quien llama (ver 3.7)
 - [ ] `ProductosClient.consultarDisponibilidad` para `CAMBIO` (`hayDisponibilidad` hoy lanza 503 en modo real) — construir contra `GET /api/v1/inventario/disponibilidad` cuando G6 autorice explícitamente a M2 y Seguridad registre `inventario:disponibilidad:leer`
 - [ ] Activar `ProductosClient.reintegrar` en modo real — el código ya está (7.5b), solo falta que Seguridad registre `inventario:reintegrar` para `modulo-postventa` y que G6 confirme el `location_id` (`PRODUCTOS_UBICACION_DEVOLUCIONES`) — ver `integraciones/ACUERDO_G6_PRODUCTOS.md`
-- [ ] Conectar Despacho para el recojo/entrega de un `CAMBIO` (sin acuerdo todavía con G2 para este caso específico, distinto del webhook de F1/F2)
-- [ ] Criterios de aceptación de ESP-07 y ESP-08 (incluye CA-07/CA-08, nuevos)
-- [ ] Confirmar en Supabase: H12 (`id_producto` a `varchar(64)`) y las tablas/columna nuevas de recepción física (`devolucion_recepcion`, `historial_devolucion`, `devolucion.requiere_devolucion_fisica`)
+- [ ] Criterios de aceptación de ESP-07 y ESP-08 (incluye CA-07/CA-08/CA-09 y reglas 17-18, nuevos)
+- [ ] Confirmar en Supabase: H12 (`id_producto` a `varchar(64)`), las tablas/columna nuevas de recepción física (`devolucion_recepcion`, `historial_devolucion`, `devolucion.requiere_devolucion_fisica`) y las de la orden de reemplazo en M1 (`pedido.tipo`, `id_pedido_origen`, `devolucion_id`, `ux_pedido_reemplazo_vigente`)
+- [ ] Que Seguridad registre `ventas:pedidos:reemplazar` para `modulo-postventa` (1.11) — ver `integraciones/ACUERDO_G7_SEGURIDAD.md`
 
 ---
 

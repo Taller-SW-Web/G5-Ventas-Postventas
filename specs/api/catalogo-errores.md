@@ -65,6 +65,12 @@ Códigos que ya aparecen como valor literal de `codigo` en los contratos. Los de
 | `PATCH /api/v1/pedidos/{pedidoId}/estado` | `409` | Transición no permitida por la máquina de estados. | `TRANSICION_NO_PERMITIDA` |
 | `POST /api/v1/pedidos/{pedidoId}/anulaciones` | `400` | Motivo ausente o no tipificado. | — |
 | `POST /api/v1/pedidos/{pedidoId}/anulaciones` | `409` | Pedido ya en `DESPACHADO` o `ENTREGADO` (derivar al microservicio M2). | — |
+| `POST /api/v1/pedidos/reemplazos` | `400` | Un `sku` no está en el pedido original. | `ITEM_NO_PERTENECE_AL_PEDIDO` |
+| `POST /api/v1/pedidos/reemplazos` | `400` | Se pide reponer más unidades de ese `sku` de las que se compraron. | `CANTIDAD_EXCEDE_COMPRADA` |
+| `POST /api/v1/pedidos/reemplazos` | `404` | `pedidoOrigenId` no existe. | `PEDIDO_NO_ENCONTRADO` |
+| `POST /api/v1/pedidos/reemplazos` | `409` | El pedido original no está `ENTREGADO`. | `PEDIDO_NO_ENTREGADO` |
+| `POST /api/v1/pedidos/reemplazos` | `409` | El pedido original es del canal `RETAIL` (esos cambios se hacen en tienda). | `REEMPLAZO_NO_APLICA` |
+| `POST /api/v1/pedidos/reemplazos` | `409` | La `devolucionId` ya tiene un reemplazo vigente de otro pedido origen. | `REEMPLAZO_YA_EXISTE` |
 
 ---
 

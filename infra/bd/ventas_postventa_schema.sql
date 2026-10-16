@@ -73,9 +73,13 @@ create table ventas.pedido (
     id_vendedor           uuid,     -- referencia externa: módulo G (Seguridad y Usuarios)
     id_direccion_entrega  bigint,   -- referencia externa: módulo E (Despacho y Entrega)
     tienda_id             varchar(40),   -- solo RETAIL: código de tienda (ej. TIENDA-MIRAFLORES), reemplaza a envío
+    tipo                  varchar(20)   not null default 'VENTA',  -- VENTA o REEMPLAZO (F3, api-ventas.md 1.11, acuerdo G6 #100)
+    id_pedido_origen      bigint references ventas.pedido(id),    -- solo REEMPLAZO: pedido original que se cambia
+    devolucion_id         varchar(30),                             -- solo REEMPLAZO: devolución de M2 (DEV-AAAA-NNNN)
     constraint ck_pedido_canal check (canal in ('MARKETPLACE','CHATBOT','RETAIL')),
     constraint ck_pedido_estado check (estado in
         ('CREADO','PAGADO','EN_PREPARACION','DESPACHADO','ENTREGADO','ANULADO')),
+    constraint ck_pedido_tipo check (tipo in ('VENTA','REEMPLAZO')),
     constraint ck_pedido_montos check (
         subtotal >= 0 and descuento >= 0 and total >= 0 and costo_envio >= 0)
 );
@@ -168,6 +172,8 @@ create index ix_detalle_pedido_id_pedido   on ventas.detalle_pedido(id_pedido);
 create index ix_pago_id_pedido             on ventas.pago(id_pedido);
 create index ix_historial_estado_id_pedido on ventas.historial_estado(id_pedido);
 create index ix_outbox_pendientes          on ventas.outbox_evento(creado_en) where enviado_en is null;
+-- Una devolución solo puede tener un reemplazo vigente (no ANULADO) a la vez (api-ventas.md 1.11, idempotencia).
+create unique index ux_pedido_reemplazo_vigente on ventas.pedido(devolucion_id) where estado <> 'ANULADO' and devolucion_id is not null;
 
 -- =====================================================================
 -- ESQUEMA M2 — POSTVENTA

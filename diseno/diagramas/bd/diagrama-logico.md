@@ -43,6 +43,9 @@ erDiagram
         varchar(40) codigo_cupon
         varchar(128) idempotency_key UK
         varchar(100) reserva_id
+        varchar(20) tipo "NN, default VENTA"
+        bigint id_pedido_origen "solo REEMPLAZO"
+        varchar(30) devolucion_id "solo REEMPLAZO"
         timestamp creado_en "NN"
         uuid id_cliente "referencia sin FK"
         uuid id_vendedor "referencia sin FK"

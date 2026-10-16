@@ -32,6 +32,7 @@ Confirmado con el equipo de Despacho. Última actualización: 2026-10-13.
 - Agregar `pedido.fecha_estimada_entrega` al modelo de datos (D3) y aplicar la migración en Supabase.
 - Implementar ESP-06 CA-06 (D8) en el orquestador de F2.
 - `LISTO_PARA_RECOJO` como sub-estado de Despacho (pregunta original de Retail, ver `ACUERDO_G4_RETAIL.md` R10) sigue sin confirmar — no es parte de esta consulta, es un hilo aparte con G2.
+- **Nota (2026-10-16, no requiere nada de G2):** el cambio de producto de F3 (`CAMBIO`) se resolvió con Productos (issue G6 #100) como una orden de reemplazo que M1 despacha por su flujo normal — Despacho recibe y procesa ese despacho exactamente igual que cualquier pedido, sin distinguir que es un reemplazo. No hace falta ningún acuerdo nuevo con G2 por esto.
 
 ## Historial
 

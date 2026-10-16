@@ -38,6 +38,7 @@ Según el acuerdo A10 con Seguridad (G7) hay dos tipos de token:
 | `ventas:pedidos:estado` | `POST /api/v1/integraciones/despachos/eventos` (1.5 — reemplaza el `PATCH .../estado` y `POST .../eventos-logistica` anteriores) | Despacho (E) — reusamos este scope ya concedido a `modulo-despacho`, decisión nuestra (2026-10-13); no se pide el `despachos:eventos:recibir` que propuso G2, ver `integraciones/ACUERDO_G2_DESPACHO.md` |
 | `ventas:pagos:webhook` | `POST /api/v1/pedidos/{id}/pagos/notificacion` (1.2) | Simulador de pasarela y Chatbot |
 | `ventas:pedidos:consultar` | `GET /api/v1/pedidos/{id}` (1.3), uso exclusivo módulo-a-módulo | `modulo-postventa` (F3 valida `ENTREGADO`; F5 valida `ENTREGADO` para CSAT) — **propuesto 2026-10-12, pendiente de que Seguridad lo registre**, ver `integraciones/ACUERDO_G7_SEGURIDAD.md` |
+| `ventas:pedidos:reemplazar` | `POST /api/v1/pedidos/reemplazos` (1.11) | `modulo-postventa` (F3, orden de reemplazo de un `CAMBIO`) — **propuesto 2026-10-16, pendiente de que Seguridad lo registre**, ver `integraciones/ACUERDO_G7_SEGURIDAD.md` |
 
 | Rol (token de usuario) | Endpoints |
 |---|---|
@@ -558,3 +559,48 @@ Si `decision` es `RECHAZADA`, `estadoPedido` vuelve a `EN_PREPARACION` y `estado
 - **Privacidad:** el payload no expone datos sensibles ni direcciones detalladas — solo identificadores de tracking y estados públicos.
 
 > Este webhook es independiente de los eventos internos de dominio que M1 publica hacia M2 (`pedido.pagado`, `pedido.anulado`, `pedido.entregado`, ver [catalogo-eventos.md](catalogo-eventos.md)). Tiene su propio nombre, formato y destino — no reutiliza el mecanismo de `outbox_evento`/M2 tal cual; el mecanismo de entrega hacia Marketplace todavía está por diseñarse.
+
+### 1.11 Solicitar Orden de Reemplazo (F3, acuerdo con Productos — issue G6 #100, 2026-10-16)
+
+- **Endpoint:** `POST /api/v1/pedidos/reemplazos`
+- **Descripción:** M2 lo invoca al aprobar un `CAMBIO` (ESP-08, flujo B). M1 crea un pedido nuevo **sin cobro** (`pedido.tipo: REEMPLAZO`), vinculado al pedido original y a la devolución, reserva el stock con el mismo mecanismo de 1.1 (`ProductosClient.reservar` — ningún scope ni acuerdo nuevo con Productos) y lo despacha por el flujo normal de F1 (el Gestor marca "paquete sellado" como cualquier pedido; Despacho no distingue un reemplazo de una venta). No aplica al canal `RETAIL` — esos cambios se hacen en tienda.
+- **Headers:** `Authorization: Bearer <token_servicio_postventa>` (scope `ventas:pedidos:reemplazar`, propuesto 2026-10-16, pendiente de que Seguridad lo registre)
+- **Idempotente por `devolucionId`:** mientras el reemplazo de esa devolución no esté `ANULADO`, una nueva llamada devuelve el mismo pedido (`200`) en vez de crear otro.
+- **Request Body:**
+
+```json
+{
+  "devolucionId": "DEV-2026-0042",
+  "pedidoOrigenId": "PED-2026-00981",
+  "items": [
+    { "sku": "SKU-AUR-01", "cantidad": 1 }
+  ]
+}
+```
+
+- **Respuestas:**
+    - **`201 Created`**: reemplazo creado.
+    - **`200 OK`**: esa devolución ya tenía un reemplazo vigente (idempotencia); se devuelve el mismo.
+
+```json
+{
+  "pedidoId": "PED-2026-01203",
+  "estado": "`CREADO`",
+  "devolucionId": "DEV-2026-0042",
+  "pedidoOrigenId": "PED-2026-00981",
+  "fechaCreacion": "2026-10-16T10:00:00Z"
+}
+```
+
+- **Errores:**
+    - **`400 Bad Request`** (`ITEM_NO_PERTENECE_AL_PEDIDO`): un `sku` no está en el pedido original.
+    - **`400 Bad Request`** (`CANTIDAD_EXCEDE_COMPRADA`): se pide reponer más unidades de las que se compraron de ese `sku`.
+    - **`404 Not Found`** (`PEDIDO_NO_ENCONTRADO`): `pedidoOrigenId` no existe.
+    - **`409 Conflict`** (`PEDIDO_NO_ENTREGADO`): el pedido original no está `ENTREGADO`.
+    - **`409 Conflict`** (`REEMPLAZO_NO_APLICA`): el pedido original es del canal `RETAIL`.
+    - **`409 Conflict`** (`REEMPLAZO_YA_EXISTE`): la `devolucionId` ya tiene un reemplazo vigente de **otro** pedido origen (inconsistencia real, no el caso idempotente de arriba).
+
+**Ciclo de vida del reemplazo** (ver `ESP-03` 7.2, nuevas transiciones exclusivas de `pedido.tipo: REEMPLAZO`):
+- Sin pago que esperar: si Productos confirma la reserva, `CREADO → EN_PREPARACION` (actor `SISTEMA_PRODUCTOS`), directo a preparación.
+- Si Productos rechaza o vence la reserva (en `CREADO` o, en un caso raro, ya en `EN_PREPARACION`): `→ ANULADO` (actor `SISTEMA_PRODUCTOS`, motivo `STOCK_NO_DISPONIBLE`). M1 publica `pedido.anulado` con `datos.devolucionId` — M2 reabre la devolución a `EN_EVALUACION` (no la cierra como fallida); al resolverla otra vez, se crea un reemplazo nuevo con una reserva nueva.
+- Al entregarse (mismo flujo de Despacho que cualquier pedido): M1 publica `pedido.entregado` con `datos.devolucionId` — M2 cierra el lado logístico del cambio (ver `ESP-08` 8.2b y regla 11).

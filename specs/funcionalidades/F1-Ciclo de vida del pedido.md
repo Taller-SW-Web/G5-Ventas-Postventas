@@ -68,7 +68,7 @@ Esta funcionalidad **no incluye**: carrito/checkout de los canales (responsabili
 | Pasarela de Pagos (Externa) | Emitir la notificación de cobro exitoso (`CREADO → PAGADO`) o fallo, vía `1.2`. Quién la invoca depende del canal: para Marketplace, M1 invoca al simulador compartido inmediatamente tras crear el pedido; para Chatbot, su propio backend notifica `1.2` directamente con su propia simulación de pago; para Retail, no aplica — el cobro ya ocurrió en el POS antes de la creación, el pedido nace `PAGADO` y nunca se invoca `1.2` (ver `AGENTS.md` sección 2, punto 8). |
 | Canales A/B/C | Crear y consultar pedidos; solicitar anulación directa de pedidos `CREADO` por abandono o timeout de pago. |
 | F2 — Anulación de pedidos | Orquestar y solicitar a F1 la transición a `ANULADO` en estados pagados o en preparación. |
-| F3 — Devoluciones y cambios | Consulta a F1 que el pedido esté `ENTREGADO` antes de aceptar una solicitud de devolución/cambio. |
+| F3 — Devoluciones y cambios | Consulta a F1 que el pedido esté `ENTREGADO` antes de aceptar una solicitud de devolución/cambio. Al aprobar un `CAMBIO`, le pide a F1 una **orden de reemplazo** (`POST /api/v1/pedidos/reemplazos`, 1.11, acuerdo con Productos issue G6 #100, 2026-10-16) — F1 crea un pedido nuevo sin cobro (`tipo: REEMPLAZO`), reserva el stock con el mismo mecanismo de 1.1 y lo despacha por su flujo normal; F3 ya no coordina directo con Despacho. F1 avisa el resultado con `pedido.anulado`/`pedido.entregado` (`datos.devolucionId`). |
 | F5 — Calificación de experiencia | Se activa a partir del evento `pedido entregado` que publica F1. |
 | F6 — Reclamos, dashboard y reportes | Consume los eventos de F1 (pagado, anulado, entregado) para actualizar sus agregados. |
 

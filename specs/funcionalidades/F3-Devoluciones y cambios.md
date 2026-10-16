@@ -36,9 +36,9 @@ Incluye:
 
 | Dependencia | Responsabilidad |
 |---|---|
-| F1 — Ciclo de vida del pedido (M1) | Confirma que el pedido está `ENTREGADO`; F3 solo lee este dato, nunca lo modifica directamente. |
-| Productos y Ofertas (F) | Confirma disponibilidad para un cambio y recibe aviso de reposición si aplica. |
-| Despacho y Entrega (E) | Coordina la logística inversa (recojo) y el nuevo despacho cuando la resolución es un cambio. |
+| F1 — Ciclo de vida del pedido (M1) | Confirma que el pedido está `ENTREGADO`; F3 solo lee este dato, nunca lo modifica directamente. En un cambio, **ejecuta el reemplazo**: M2 le pide una orden sin cobro (`api-ventas.md` 1.11, acuerdo con Productos issue G6 #100), M1 reserva el stock y lo despacha — F3 ya no coordina directo con Despacho. |
+| Productos y Ofertas (F) | Confirma disponibilidad preliminar para un cambio; la reserva real la pide M1, no F3, con el mismo mecanismo de 1.1. Recibe el reintegro si aplica. |
+| Despacho y Entrega (E) | Despacha el producto de reemplazo como cualquier pedido — ya no recibe una coordinación aparte de F3. |
 | F4 — Reembolsos y extornos | Recibe el origen de la solicitud cuando la resolución es devolución con dinero; F3 nunca ejecuta el extorno. |
 | Gestor | Evalúa el expediente y decide `APROBADA`/`RECHAZADA`. |
 
@@ -103,7 +103,7 @@ El sistema DEBE derivar correctamente una resolución aprobada hacia un cambio l
 
 - **DADO** una solicitud aprobada de tipo "cambio" con disponibilidad confirmada en Productos (F).
 - **CUANDO** se ejecuta la resolución.
-- **ENTONCES** el sistema coordina con Despacho (E) el nuevo envío y transiciona el expediente a `COMPLETADA` al finalizar.
+- **ENTONCES** el sistema pide a M1 la orden de reemplazo (`api-ventas.md` 1.11) — M1 reserva el stock y coordina el nuevo envío con Despacho — y transiciona el expediente a `COMPLETADA` cuando M1 confirma la entrega.
 
 #### CA-08. Derivación a devolución con reembolso
 
@@ -134,7 +134,7 @@ Superficie visible dentro del panel del Gestor (más un formulario simple accesi
 |---|---|
 | Validador de elegibilidad | Verifica entrega confirmada (vía F1), plazo, motivo y evidencia. |
 | Motor de estados del expediente | Gestiona `SOLICITADA → EN_EVALUACION → APROBADA/RECHAZADA → COMPLETADA`. |
-| Orquestador de derivación | Coordina con Productos (F) y Despacho (E) para un cambio, u origina la solicitud a F4 para un reembolso. |
+| Orquestador de derivación | Para un cambio, pide a M1 la orden de reemplazo (1.11, que a su vez coordina con Productos y Despacho); para un reembolso, origina la solicitud a F4. |
 | Cliente hacia F1 | Consulta el estado `ENTREGADO` del pedido — F3 nunca escribe directamente sobre las tablas de M1. |
 
 ## 8. Requisitos no funcionales
