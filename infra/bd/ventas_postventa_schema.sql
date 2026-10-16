@@ -16,6 +16,19 @@
 -- fecha_resolucion y referencia_operacion cierran el hueco entre lo que ESP-07 8.3
 -- y ESP-08 8.3 ya prometen devolver y lo que la tabla física podía persistir.
 --
+-- PENDIENTE DE APLICAR EN SUPABASE (H12, detectado 2026-10-16 revisando el código real):
+-- id_producto era bigint en ventas.detalle_pedido, postventa.devolucion_item y
+-- postventa.agregado_ventas, pero Productos (G6) identifica sus SKUs con texto
+-- (ej. "PROD-101"), nunca un número — DetallePedido.java y DevolucionItem.java ya
+-- usan String/varchar(64). Este archivo ya refleja varchar(64); falta la migración
+-- real (ALTER COLUMN) si la base todavía tiene bigint.
+--
+-- PENDIENTE DE APLICAR EN SUPABASE (F3, rediseño de recepción física, 2026-10-13/16,
+-- issue G6 #51 P-02 y ESP-08 8.2b): postventa.devolucion.requiere_devolucion_fisica,
+-- y las tablas nuevas postventa.devolucion_recepcion y postventa.historial_devolucion.
+-- Ya implementado en el código (RecepcionService, HistorialDevolucion); este archivo
+-- ya las refleja, falta confirmar que la migración real se aplicó en Supabase.
+--
 -- Esquema ventas    = M1 (Ventas)
 -- Esquema postventa = M2 (Postventa)
 -- Ninguna clave foránea cruza de un esquema al otro (Database-per-Service).
@@ -74,7 +87,7 @@ comment on column ventas.pedido.id_direccion_entrega is 'Referencia externa - m�
 create table ventas.detalle_pedido (
     id               bigint generated always as identity primary key,
     id_pedido        bigint        not null references ventas.pedido(id) on delete cascade,
-    id_producto      bigint,       -- referencia externa: módulo F (Productos y Ofertas)
+    id_producto      varchar(64),  -- referencia externa: módulo F (Productos y Ofertas) — texto, no bigint (H12)
     sku              varchar(50)   not null,
     descripcion      varchar(255),
     cantidad         integer       not null,
@@ -175,6 +188,7 @@ create table postventa.devolucion (
     fecha_registro         timestamptz  not null default now(),   -- ESP-07 8.3, fechaCreacion
     fecha_resolucion       timestamptz,                           -- ESP-08 8.3, fechaResolucion
     referencia_operacion   varchar(100),                          -- ESP-08 8.3, referenciaOperacion
+    requiere_devolucion_fisica boolean not null default true,     -- ESP-08 8.2b, regla 16
     constraint ck_devolucion_estado check (estado in
         ('SOLICITADA','EN_EVALUACION','APROBADA','RECHAZADA','COMPLETADA'))
 );
@@ -184,11 +198,14 @@ comment on column postventa.devolucion.referencia_operacion is
 
 comment on column postventa.devolucion.id_pedido is 'Referencia API - el pedido vive en M1, sin FK física';
 
+comment on column postventa.devolucion.requiere_devolucion_fisica is
+    'false solo en REEMBOLSO sin devolución física (ESP-08 regla 16); en CAMBIO siempre true';
+
 create table postventa.devolucion_item (
     id             bigint generated always as identity primary key,
-    id_devolucion  bigint  not null references postventa.devolucion(id) on delete cascade,
-    id_producto    bigint  not null,   -- referencia externa: módulo F
-    cantidad       integer not null,
+    id_devolucion  bigint       not null references postventa.devolucion(id) on delete cascade,
+    id_producto    varchar(64)  not null,   -- referencia externa: módulo F — texto, no bigint (H12)
+    cantidad       integer      not null,
     constraint ck_devolucion_item_cantidad check (cantidad > 0)
 );
 
@@ -199,6 +216,42 @@ create table postventa.evidencia_devolucion (
     tipo           varchar(30),
     fecha          date         not null default current_date
 );
+
+-- F3, 2.5b (ESP-08 8.2b, issue G6 #51 P-02 y P-05): una fila por línea de una confirmación de recepción física.
+-- Las líneas de una misma confirmación comparten operation_id, que es el del reintegro en Productos.
+create table postventa.devolucion_recepcion (
+    id                bigint generated always as identity primary key,
+    id_devolucion     bigint       not null references postventa.devolucion(id) on delete cascade,
+    operation_id      uuid         not null,
+    sku               varchar(50)  not null,
+    id_producto       varchar(64)  not null,  -- referencia externa: módulo F
+    cantidad_recibida integer      not null,
+    cantidad_apta     integer      not null,  -- solo esto se reintegra (ESP-08 regla 15)
+    reintegro_estado  varchar(20)  not null,
+    evidencia         varchar(500),
+    id_actor          varchar(60),            -- sub de quien recibió (Gestor o almacén, rol ADMIN_VENTAS)
+    fecha_hora        timestamptz  not null default now(),
+    constraint ck_devolucion_recepcion_cantidad check (cantidad_apta >= 0 and cantidad_apta <= cantidad_recibida),
+    constraint ck_devolucion_recepcion_estado check (reintegro_estado in ('PENDIENTE','COMPLETADO'))
+);
+
+create index ix_devolucion_recepcion_id_devolucion on postventa.devolucion_recepcion(id_devolucion);
+create index ix_devolucion_recepcion_operation_id  on postventa.devolucion_recepcion(operation_id);
+
+-- RNF-03: un registro por cada cambio de estado del expediente de devolución. Nunca se edita ni se borra.
+create table postventa.historial_devolucion (
+    id               bigint generated always as identity primary key,
+    id_devolucion    bigint      not null references postventa.devolucion(id) on delete cascade,
+    estado_anterior  varchar(20),            -- null en el registro inicial (SOLICITADA)
+    estado_nuevo     varchar(20) not null,
+    actor            varchar(20) not null,
+    id_actor         varchar(60),            -- sub del cliente/Gestor, o módulo del canal
+    detalle          text,
+    fecha_hora       timestamptz not null default now(),
+    constraint ck_historial_devolucion_actor check (actor in ('CLIENTE','CANAL','GESTOR','SISTEMA'))
+);
+
+create index ix_historial_devolucion_id_devolucion on postventa.historial_devolucion(id_devolucion);
 
 create table postventa.reclamo (
     id                          bigint generated always as identity primary key,
@@ -277,7 +330,7 @@ create table postventa.agregado_ventas (
     periodo          varchar(7)    not null,  -- formato AAAA-MM
     canal            varchar(30)   not null,
     id_vendedor      uuid          not null,
-    id_producto      bigint        not null,
+    id_producto      varchar(64)   not null,  -- texto, no bigint (H12)
     unidades         integer       not null default 0,
     monto            numeric(14,2) not null default 0,
     actualizado_en   timestamptz   not null default now(),
@@ -338,6 +391,8 @@ alter table postventa.reembolso            enable row level security;
 alter table postventa.calificacion         enable row level security;
 alter table postventa.agregado_ventas      enable row level security;
 alter table postventa.devolucion_item      enable row level security;
+alter table postventa.devolucion_recepcion enable row level security;
+alter table postventa.historial_devolucion enable row level security;
 alter table postventa.reembolso_intento    enable row level security;
 alter table postventa.agregado_metricas    enable row level security;
 alter table postventa.evento_recibido      enable row level security;

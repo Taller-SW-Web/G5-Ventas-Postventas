@@ -348,6 +348,7 @@ Al cruzar contratos, especificaciones y base salieron estos huecos. Las decision
 | H9 | Falta un actor para cuando Productos rechaza la reserva de stock o el consumo de cupón (no es `CLIENTE`, `GESTOR`, pasarela ni Despacho) | F1 | Aprobado en equipo (2026-10-12): nuevo actor `SISTEMA_PRODUCTOS` y motivos `STOCK_NO_DISPONIBLE`/`CUPON_RECHAZADO`. Ver 5.2 y 6.1 |
 | H10 | El pedido `RETAIL` necesita campos que la tabla original no tenía (`tiendaId`, desglose de pago mixto, fecha de venta retroactiva) | F1 | Acuerdo con Retail (G4, 2026-10-12): columnas `pedido.tienda_id` y `pago.monto_efectivo`/`monto_tarjeta`/`fecha_venta`. Ver 4.1 y 5.3 |
 | H11 | `postventa.devolucion` no tenía hora de registro, fecha de resolución ni la referencia a la operación derivada (reembolso o despacho de un cambio) — pero `ESP-07` 8.3 y `ESP-08` 8.3 ya prometen devolver esos campos | F3 | Columnas `fecha_registro`, `fecha_resolucion`, `referencia_operacion`. Ver 4.1 |
+| H12 | `id_producto` está declarado `bigint` en `ventas.detalle_pedido`, `postventa.devolucion_item` y `postventa.agregado_ventas`, pero Productos (G6) identifica sus SKUs con texto (ej. `"PROD-101"`), nunca un número — detectado 2026-10-16 revisando `DetallePedido.java`/`DevolucionItem.java`, que ya usan `String`/`varchar(64)` | F1, F3, F6 | Cambiar el tipo a `varchar(64)` en las 3 tablas. Ver 4.1 |
 
 ### 4.1. Cambios en la base (ya aplicados en Supabase)
 
@@ -361,6 +362,8 @@ Cada responsable actualiza sus entidades para que coincidan con estas columnas y
 | H10 | `ventas.pedido.tienda_id` | Columna `varchar(40)`, null salvo `RETAIL` | Michael (**corregido 2026-10-12** — `Pedido.java` y `CrearPedidoService` ya la usan, dejó de guardarse dentro de `direccion`) |
 | H10 | `ventas.pago.monto_efectivo`, `monto_tarjeta`, `fecha_venta` | Columnas nuevas para `RETAIL` con `metodoPago: MIXTO` o venta sin conexión | Michael (**corregido 2026-10-12** — `Pago.java` y `CrearPedidoService` ya las guardan) — **falta confirmar con Michael si ya aplicó el `ALTER TABLE` sobre la Supabase real**, no solo en la entidad |
 | H11 | `postventa.devolucion.fecha_registro`, `fecha_resolucion`, `referencia_operacion` | Columnas nuevas (ver script en 7.6) | Joseph — **aplicado en Supabase el 2026-10-12**, `Devolucion.java` ya las usa |
+| H12 | `ventas.detalle_pedido.id_producto`, `postventa.devolucion_item.id_producto`, `postventa.agregado_ventas.id_producto` | `varchar(64)` en vez de `bigint` | **Ya corregido en las entidades** (`DetallePedido.java`, `DevolucionItem.java`) — **falta confirmar si ya se aplicó el `ALTER TABLE` sobre la Supabase real** |
+| F3 (recepción física) | `postventa.devolucion.requiere_devolucion_fisica`, tablas nuevas `postventa.devolucion_recepcion` y `postventa.historial_devolucion` | Ver script actualizado en `infra/bd/ventas_postventa_schema.sql` | **Ya implementado en el código** (`RecepcionDevolucion.java`, `HistorialDevolucion.java`, `RecepcionService.java`) — **falta confirmar si ya se aplicó en Supabase** |
 | H2 | `postventa.devolucion` | Columnas `descripcion` e `id_cliente` | Joseph |
 | H2 | `postventa.devolucion_item` | Tabla nueva: `id_devolucion`, `id_producto`, `cantidad` (> 0) | Joseph |
 | H3 | `postventa.reembolso` | Columna `id_pedido` | Luis Alejandro |
@@ -735,24 +738,25 @@ No se guarda en la base todavía: la evidencia se asocia cuando se registra la d
 - **El autorizador sale del `sub` del token del Gestor**, nunca de un campo del cuerpo — se retiró `autorizadorId` del request a partir de v1.5.0.
 - **Repetir la misma aprobación** sobre un expediente que quedó `APROBADA` (porque F4 o Despacho no confirmaron todavía) reintenta la coordinación sin duplicar nada — el expediente solo pasa a `COMPLETADA` cuando F4 o Despacho confirman.
 
-### 7.5b. 2.5b Confirmar recepción física (nuevo, 2026-10-13 — todavía sin construir)
+### 7.5b. 2.5b Confirmar recepción física (nuevo, construido 2026-10-16)
 
-**Cambio de diseño importante, hecho al responder el issue G6 #51 (P-02):** la aprobación del Gestor en 2.5 (`APROBADA`) **ya no dispara el reintegro de inventario**. G6 prohíbe incrementar stock solo por una aprobación comercial — hay que confirmar antes que la unidad llegó físicamente y es apta para reventa. Esto es un endpoint nuevo, `PATCH /api/v2/devoluciones/{devolucionId}/recepcion` (`api-postventas.md` 2.5b), que todavía no existe en el código.
+**Cambio de diseño importante, hecho al responder el issue G6 #51 (P-02):** la aprobación del Gestor en 2.5 (`APROBADA`) **ya no dispara el reintegro de inventario**. G6 prohíbe incrementar stock solo por una aprobación comercial — hay que confirmar antes que la unidad llegó físicamente y es apta para reventa. Ya está construido: `PATCH /api/v2/devoluciones/{devolucionId}/recepcion` (`api-postventas.md` 2.5b), `RecepcionService`/`RecepcionDevolucion` (`postventa.devolucion`).
 
-1. Precondición: `devolucion.estado = APROBADA` con `resolucion` en `CAMBIO` o `REEMBOLSO`, y si es `REEMBOLSO`, `requiereDevolucionFisica != false`. Si no: 409 `RESOLUCION_NO_APROBADA`.
-2. Body: `lineas[].sku` (debe existir en `devolucion_item`), `lineas[].cantidadRecibida`, `lineas[].cantidadApta` (≤ recibida), `evidencia` opcional.
-3. Si ya existe una confirmación previa para esas líneas: 409 `RECEPCION_YA_CONFIRMADA` (idempotencia, no duplicar el reintegro).
-4. `ProductosClient.reintegrar(...)` (`POST /api/v1/inventario/reintegros`, `reason: DEVOLUCION_ACEPTADA`) — **solo** con `cantidadApta`, nunca `cantidadRecibida` si hay unidades no aptas.
-5. Guardar el registro de recepción (fecha, actor, líneas, evidencia) — tabla nueva o columnas nuevas en `devolucion`/`devolucion_item`, a definir en el modelo de datos.
-6. No cambia `devolucion.estado` — sigue `APROBADA` hasta que el reintegro se confirme y (en `CAMBIO`) Despacho entregue el reemplazo; ahí pasa a `COMPLETADA`.
+1. Precondición: `devolucion.estado = APROBADA`, `resolucion` en `CAMBIO` o `REEMBOLSO`, y `requiereDevolucionFisica = true`. Si no: 409 `RESOLUCION_NO_APROBADA`.
+2. Body: `lineas[].sku` (debe corresponder a una línea del pedido devuelto), `lineas[].cantidadRecibida`, `lineas[].cantidadApta` (≤ recibida, si no 400 `CANTIDAD_INVALIDA`), `evidencia` opcional.
+3. **Idempotencia real (G6 P-05):** si la confirmación repite exactamente las mismas cantidades que una operación que quedó `PENDIENTE` (Productos no respondió la vez anterior), se reintenta con el **mismo** `operation_id` — no se crea una fila nueva. Si ya se recibieron todas las unidades devueltas de ese SKU: 409 `RECEPCION_YA_CONFIRMADA`. Una recepción parcial distinta (llegan más unidades después) es una operación nueva, con su propio `operation_id`.
+4. Se guardan las filas en `devolucion_recepcion` como `PENDIENTE` *antes* de llamar a Productos (para poder reintentar si falla), y `HistorialDevolucion` registra el detalle.
+5. `ProductosClient.reintegrar(...)` (`POST /api/v1/inventario/reintegros`, `reason: DEVOLUCION_ACEPTADA`) — **solo** con `cantidadApta`. Si `cantidadApta` es 0 para todas las líneas, no se llama a Productos en absoluto. Si Productos no responde: 503 `PRODUCTOS_NO_DISPONIBLE`, las filas quedan `PENDIENTE` para el siguiente intento (punto 3). Si responde: filas a `COMPLETADO`.
+6. `location_id` sale de `integracion.productos-ubicacion-devoluciones` (env `PRODUCTOS_UBICACION_DEVOLUCIONES`) — **todavía vacío**, G6 no lo ha definido (P-04); en modo real sin ese valor, 503 en vez de inventar uno.
+7. No cambia `devolucion.estado` directamente — sigue `APROBADA` hasta que `DevolucionService.completarSiCorresponde(...)` confirme que ya no falta nada (reembolso exitoso en F4, o referencia de Despacho en `CAMBIO`); ahí pasa a `COMPLETADA`.
 
-**Importante para `REEMBOLSO`:** el llamado a `ReembolsoService` en 2.5 (paso de arriba) ya no espera a este endpoint — el dinero se devuelve igual, haya llegado o no el producto. Este paso 2.5b solo afecta inventario, nunca el reembolso.
+**Importante para `REEMBOLSO`:** el llamado a `ReembolsoService` en 2.5 (paso de arriba) no espera a este endpoint — el dinero se devuelve igual, haya llegado o no el producto. Este paso 2.5b solo afecta inventario, nunca el reembolso.
 
-Ver `ESP-08` 8.2b y reglas 14-16, y `integraciones/ACUERDO_G6_PRODUCTOS.md` para el payload exacto de `/inventario/reintegros`.
+Ver `ESP-08` 8.2b y reglas 14-16, y `integraciones/ACUERDO_G6_PRODUCTOS.md` para el payload exacto de `/inventario/reintegros`. Modelo de datos: `postventa.devolucion_recepcion`, `postventa.historial_devolucion` y `postventa.devolucion.requiere_devolucion_fisica` — ver `infra/bd/ventas_postventa_schema.sql` (**falta confirmar si ya se aplicó en Supabase**).
 
 ### 7.6. Lista para terminar F3
 
-Al 2026-10-12, F3 está completo y en `main`:
+Al 2026-10-16, F3 está completo en `main`, incluida la recepción física:
 
 - [x] Entidades actualizadas con H2 (`Devolucion`, `DevolucionItem`)
 - [x] Subir evidencia con validación de tipo y tamaño
@@ -760,6 +764,8 @@ Al 2026-10-12, F3 está completo y en `main`:
 - [x] Consultar y listar
 - [x] Resolver: rechazo, reembolso y cambio
 - [x] Usar las columnas de H11 (`fecha_registro`, `fecha_resolucion`, `referencia_operacion`)
+- [x] 2.5b Confirmar recepción física — `RecepcionService`, `devolucion_recepcion`, `historial_devolucion` (ver 7.5b)
+- [x] `ProductosClient.reintegrar` con el payload real de G6 (`operation_id`, `order_id`, `source_ref`, `reason`, `lines[]`) — sin inventar `location_id`
 - [x] Verificado contra Supabase real: el servicio arranca y los endpoints 2.1 a 2.5 funcionan (2026-10-12)
 
 Pendientes:
@@ -767,10 +773,11 @@ Pendientes:
 - [ ] Reemplazar el reembolso simulado (`SolicitadorReembolsoSimulado`) por `ReembolsoService` de F4 cuando exista
 - [ ] Sumar `devoluciones_aprobadas` al dashboard cuando exista `ProyeccionesService`
 - [ ] Cuando Seguridad registre `ventas:pedidos:consultar`, `VentasClient` debe usar el token de servicio de M2 en vez de reenviar el token de quien llama (ver 3.7)
-- [ ] Conectar Productos: `GET /api/v1/inventario/disponibilidad` (scope `inventario:disponibilidad:leer`, pendiente de que G6 autorice a M2) y `POST /api/v1/inventario/reintegros` (scope `inventario:reintegrar`, ya aceptado por G6, pendiente de que Seguridad lo registre) — ver `integraciones/ACUERDO_G6_PRODUCTOS.md`
+- [ ] `ProductosClient.consultarDisponibilidad` para `CAMBIO` (`hayDisponibilidad` hoy lanza 503 en modo real) — construir contra `GET /api/v1/inventario/disponibilidad` cuando G6 autorice explícitamente a M2 y Seguridad registre `inventario:disponibilidad:leer`
+- [ ] Activar `ProductosClient.reintegrar` en modo real — el código ya está (7.5b), solo falta que Seguridad registre `inventario:reintegrar` para `modulo-postventa` y que G6 confirme el `location_id` (`PRODUCTOS_UBICACION_DEVOLUCIONES`) — ver `integraciones/ACUERDO_G6_PRODUCTOS.md`
 - [ ] Conectar Despacho para el recojo/entrega de un `CAMBIO` (sin acuerdo todavía con G2 para este caso específico, distinto del webhook de F1/F2)
-- [ ] **Construir 2.5b (`PATCH /devoluciones/{id}/recepcion`), nuevo** — bloquea conectar el reintegro real de Productos, ver 7.5b
 - [ ] Criterios de aceptación de ESP-07 y ESP-08 (incluye CA-07/CA-08, nuevos)
+- [ ] Confirmar en Supabase: H12 (`id_producto` a `varchar(64)`) y las tablas/columna nuevas de recepción física (`devolucion_recepcion`, `historial_devolucion`, `devolucion.requiere_devolucion_fisica`)
 
 ---
 

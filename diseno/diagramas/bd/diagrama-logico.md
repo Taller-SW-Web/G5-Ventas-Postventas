@@ -52,7 +52,7 @@ erDiagram
     DETALLE_PEDIDO {
         bigint id PK
         bigint id_pedido FK "NN"
-        bigint id_producto "referencia sin FK"
+        varchar(64) id_producto "referencia sin FK — era bigint, corregido (ver H12)"
         varchar(50) sku "NN"
         varchar(255) descripcion
         integer cantidad "NN"
@@ -112,6 +112,8 @@ Esquema postventa (M2):
 erDiagram
     DEVOLUCION ||--o{ EVIDENCIA_DEVOLUCION : adjunta
     DEVOLUCION ||--|{ DEVOLUCION_ITEM : contiene
+    DEVOLUCION ||--o{ DEVOLUCION_RECEPCION : recibe
+    DEVOLUCION ||--o{ HISTORIAL_DEVOLUCION : audita
     REEMBOLSO ||--|{ REEMBOLSO_INTENTO : registra
     DEVOLUCION {
         bigint id PK
@@ -128,12 +130,36 @@ erDiagram
         timestamp fecha_registro "NN, default now()"
         timestamp fecha_resolucion
         varchar(100) referencia_operacion "reembolsoId de F4 o referencia de Despacho, según resolución"
+        boolean requiere_devolucion_fisica "NN, default true"
     }
     DEVOLUCION_ITEM {
         bigint id PK
         bigint id_devolucion FK "NN"
-        bigint id_producto "referencia sin FK, NN"
+        varchar(64) id_producto "referencia sin FK, NN — era bigint, corregido (ver H12)"
         integer cantidad "NN"
+    }
+    DEVOLUCION_RECEPCION {
+        bigint id PK
+        bigint id_devolucion FK "NN"
+        uuid operation_id "NN, idéntico al del reintegro en Productos"
+        varchar(50) sku "NN"
+        varchar(64) id_producto "NN"
+        integer cantidad_recibida "NN"
+        integer cantidad_apta "NN, solo esto se reintegra"
+        varchar(20) reintegro_estado "NN"
+        varchar(500) evidencia
+        varchar(60) id_actor
+        timestamp fecha_hora "NN"
+    }
+    HISTORIAL_DEVOLUCION {
+        bigint id PK
+        bigint id_devolucion FK "NN"
+        varchar(20) estado_anterior "null en el registro inicial"
+        varchar(20) estado_nuevo "NN"
+        varchar(20) actor "NN"
+        varchar(60) id_actor
+        text detalle
+        timestamp fecha_hora "NN"
     }
     EVIDENCIA_DEVOLUCION {
         bigint id PK
@@ -197,7 +223,7 @@ erDiagram
         varchar(7) periodo PK
         varchar(30) canal PK
         uuid id_vendedor PK
-        bigint id_producto PK
+        varchar(64) id_producto PK "era bigint, corregido (ver H12)"
         integer unidades "NN"
         decimal(14-2) monto "NN"
         timestamp actualizado_en "NN"

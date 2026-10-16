@@ -136,7 +136,7 @@ COMPLETADA      F4 — Reembolso
 <summary><strong>B. Se aprueba un cambio de producto</strong></summary>
 
 1. El Gestor selecciona `CAMBIO`.
-2. M2 consulta a Productos la disponibilidad del nuevo producto (`GET /api/v1/inventario/disponibilidad`, respuesta informativa, no vinculante — acuerdo 2026-10-13, ver `integraciones/ACUERDO_G6_PRODUCTOS.md`).
+2. M2 consulta a Productos la disponibilidad de una nueva unidad del **mismo producto devuelto** (`GET /api/v1/inventario/disponibilidad`, respuesta informativa, no vinculante — acuerdo 2026-10-13, ver `integraciones/ACUERDO_G6_PRODUCTOS.md`). Un `CAMBIO` nunca es por un producto distinto — ver regla 17.
 3. Si existe stock, se registra la resolución como `APROBADA`. Esto es **únicamente el dictamen comercial** del Gestor sobre la evidencia de `ESP-07` — por sí solo **no** autoriza el reintegro de inventario (ver regla 14).
 4. M2 coordina con Despacho la logística inversa (recojo de la unidad a cambiar) y el despacho del producto de reemplazo.
 5. Cuando la unidad devuelta llega físicamente al almacén, el Gestor (o quien reciba en almacén, mismo rol `ADMIN_VENTAS`) **confirma la recepción física**: registra la cantidad recibida y la cantidad apta para reventa por línea. Solo en ese momento M2 solicita a Productos el reintegro (`POST /api/v1/inventario/reintegros`), únicamente por las unidades aptas, admitiendo reintegros parciales por línea/cantidad (ver regla 15).
@@ -202,8 +202,9 @@ COMPLETADA      F4 — Reembolso
 | `devolucionId`     | UUID / identificador |      Sí     | Identificador de la devolución a resolver.       |
 | `resolucion`       | Enumeración          |      Sí     | Tipo de resolución seleccionada.                 |
 | `motivoResolucion` | Texto                | Condicional | Justificación de la decisión cuando corresponda. |
-| `productoCambio`   | Identificador        | Condicional | Producto solicitado para el cambio.              |
 | `requiereDevolucionFisica` | Booleano | Condicional, solo `REEMBOLSO` | Si es `false`, no se espera ni se confirma recepción física de la unidad — por defecto `true` (ver regla 16). En `CAMBIO` siempre es `true`. |
+
+~~`productoCambio` (producto solicitado para el cambio)~~ — **retirado 2026-10-16, decisión de PO:** un `CAMBIO` siempre reemplaza por una nueva unidad del mismo producto que el cliente devolvió (defecto, daño o producto incorrecto, ver catálogo cerrado de `MotivoDevolucion` en `ESP-07` 8.2) — nunca por un producto distinto (otra talla, color o modelo). El contrato real (`api-postventas.md` 2.5) nunca tuvo este campo, y así está implementado: `DevolucionService.resolver` verifica disponibilidad de `d.getItems()` (el producto devuelto), no de un producto elegido aparte. Ver regla 17.
 
 ### 8.2 Tipos de resolución
 
@@ -289,6 +290,7 @@ La información de trazabilidad debe mantenerse de acuerdo con **RNF-03 — Traz
 14. **La aprobación comercial del Gestor (resolución `APROBADA`) nunca autoriza por sí sola el reintegro de inventario.** El reintegro solo se solicita después de confirmarse la recepción física de la unidad devuelta y su aptitud para reventa (sección 8.2b) — son dos pasos distintos, con su propio actor y registro.
 15. El reintegro a Productos solo incluye las unidades `cantidadApta`, nunca las no recibidas o no aptas. Una recepción parcial (ej. 1 de 3 unidades) reintegra solo esa unidad; una recepción posterior de las 2 restantes es una confirmación y un reintegro aparte, no una repetición de la primera (ver `integraciones/ACUERDO_G6_PRODUCTOS.md`, idempotencia).
 16. En `REEMBOLSO`, el reembolso de dinero (F4) no depende de la recepción física — son procesos independientes. Si `requiereDevolucionFisica` es `false`, la solicitud se completa sin esperar ninguna recepción ni solicitar reintegro.
+17. **Un `CAMBIO` siempre es por una nueva unidad del mismo producto devuelto** — nunca por un producto distinto (otra talla, color o modelo). La disponibilidad se valida sobre ese mismo producto; no existe un campo para elegir uno diferente.
 
 ---
 

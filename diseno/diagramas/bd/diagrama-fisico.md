@@ -49,7 +49,7 @@ erDiagram
     DETALLE_PEDIDO {
         bigint id PK "identity, not null"
         bigint id_pedido FK "not null"
-        bigint id_producto "referencia sin FK, null"
+        varchar(64) id_producto "referencia sin FK, null — era bigint, corregido (ver H12)"
         varchar(50) sku "not null"
         varchar(255) descripcion "null"
         integer cantidad "not null"
@@ -109,6 +109,8 @@ Esquema postventa (M2):
 erDiagram
     DEVOLUCION ||--o{ EVIDENCIA_DEVOLUCION : adjunta
     DEVOLUCION ||--|{ DEVOLUCION_ITEM : contiene
+    DEVOLUCION ||--o{ DEVOLUCION_RECEPCION : recibe
+    DEVOLUCION ||--o{ HISTORIAL_DEVOLUCION : audita
     REEMBOLSO ||--|{ REEMBOLSO_INTENTO : registra
     DEVOLUCION {
         bigint id PK "identity, not null"
@@ -125,12 +127,36 @@ erDiagram
         timestamptz fecha_registro "not null, default now(), hora real de creación (ESP-07 8.3)"
         timestamptz fecha_resolucion "null, hora de la decisión del Gestor (ESP-08 8.3)"
         varchar(100) referencia_operacion "null, reembolsoId de F4 o referencia de Despacho según la resolución (ESP-08 8.3)"
+        boolean requiere_devolucion_fisica "not null, default true — false en REEMBOLSO cuando no hay devolución física (ESP-08 8.2b, regla 16)"
     }
     DEVOLUCION_ITEM {
         bigint id PK "identity, not null"
         bigint id_devolucion FK "not null"
-        bigint id_producto "referencia sin FK, not null"
+        varchar(64) id_producto "referencia sin FK, not null — era bigint, corregido (ver H12)"
         integer cantidad "not null"
+    }
+    DEVOLUCION_RECEPCION {
+        bigint id PK "identity, not null"
+        bigint id_devolucion FK "not null"
+        uuid operation_id "not null, el mismo para todas las líneas de una misma confirmación y para el reintegro en Productos (ESP-08 8.2b, G6 P-05)"
+        varchar(50) sku "not null"
+        varchar(64) id_producto "not null"
+        integer cantidad_recibida "not null"
+        integer cantidad_apta "not null, solo esto se reintegra (ESP-08 regla 15)"
+        varchar(20) reintegro_estado "not null, PENDIENTE o COMPLETADO"
+        varchar(500) evidencia "null"
+        varchar(60) id_actor "null, sub de quien recibió (Gestor o almacén, rol ADMIN_VENTAS)"
+        timestamptz fecha_hora "not null"
+    }
+    HISTORIAL_DEVOLUCION {
+        bigint id PK "identity, not null"
+        bigint id_devolucion FK "not null"
+        varchar(20) estado_anterior "null, null en el registro inicial (SOLICITADA)"
+        varchar(20) estado_nuevo "not null"
+        varchar(20) actor "not null, CHECK: CLIENTE, CANAL, GESTOR, SISTEMA"
+        varchar(60) id_actor "null, sub del cliente/Gestor o módulo del canal"
+        text detalle "null"
+        timestamptz fecha_hora "not null"
     }
     EVIDENCIA_DEVOLUCION {
         bigint id PK "identity, not null"
@@ -194,7 +220,7 @@ erDiagram
         varchar(7) periodo PK "not null"
         varchar(30) canal PK "not null"
         uuid id_vendedor PK "not null"
-        bigint id_producto PK "not null"
+        varchar(64) id_producto PK "not null — era bigint, corregido (ver H12)"
         integer unidades "not null"
         numeric(14-2) monto "not null"
         timestamptz actualizado_en "not null, default now()"
