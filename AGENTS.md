@@ -67,7 +67,7 @@ Si necesitas tocar cualquiera de estos puntos, pregunta antes de asumir que el C
 | Estructura y guía de implementación del frontend | [guias/frontend/estructura-frontend.md](guias/frontend/estructura-frontend.md), [guias/frontend/guia-frontend.md](guias/frontend/guia-frontend.md) |
 | Flujo de ramas, commits y PRs | [CONTRIBUTING.md](CONTRIBUTING.md) |
 
-Los documentos bajo `arquitectura/` (C4 niveles 1, 2 y 3) siguen siendo **propuestas en discusión** en lo que respecta a proveedores de despliegue (Vercel, Render, Supabase). Su contenido funcional (F1 y F2 en M1; F3 a F6 en M2; Mantine UI) está alineado con la sección 2.
+Los documentos bajo `arquitectura/` (C4 niveles 1, 2 y 3) ya no son propuesta — **confirmado 2026-10-16** al responder a Productos (G6): backend en **Render** (`api-gateway`, `servicio-ventas`/M1, `servicio-postventa`/M2, `simulador-pasarela`), frontend en **Vercel**, base de datos en **Supabase**. Solo `servicio-ventas` tiene su `Dockerfile` listo; `api-gateway`, `servicio-postventa` y `simulador-pasarela` todavía no están desplegados. Su contenido funcional (F1 y F2 en M1; F3 a F6 en M2; Mantine UI) está alineado con la sección 2.
 
 ---
 
@@ -75,7 +75,8 @@ Los documentos bajo `arquitectura/` (C4 niveles 1, 2 y 3) siguen siendo **propue
 
 No inventes valores ni contenido para estos puntos; si hace falta, pregunta o deja el gap explícito:
 
-- Dónde se despliega `simulador-pasarela` (Render u otro). En local corre como aplicación propia en el puerto 8083 (ver la guía del backend, sección 9.3).
+- ~~Dónde se despliega `simulador-pasarela`~~ — **resuelto 2026-10-16:** Render, igual que los otros 3 servicios de backend (ver sección 3). En local sigue corriendo como aplicación propia en el puerto 8083 (ver la guía del backend, sección 9.3). Falta terminar el despliegue real de los 4 servicios — solo `servicio-ventas` tiene `Dockerfile`.
+- **Conectividad con Productos (G6) para RabbitMQ y HTTP de Inventario — confirmado 2026-10-16:** sin VPN privada (Tailscale/WireGuard); mismo patrón que el resto del proyecto, HTTPS pública con JWT/scope. Falta que G6 confirme la URL pública de su servicio de Inventario.
 - Mecanismo técnico de entrega del webhook `pedidos.envio.estado_actualizado` hacia Marketplace (acuerdo H-05, ver `api-ventas.md` 1.10) — reintentos, backoff, cola de salida. El contrato ya está cerrado; falta el diseño de implementación, a cargo de quien construya F1.
 - `integraciones/` (acuerdos con otros módulos): con G1 (Marketplace), G2 (Despacho), G3 (Chatbot), G4 (Retail), G6 (Productos) y G7 (Seguridad) ya hay acuerdo formal — ver `integraciones/ACUERDO_G1_MARKETPLACE.md`, `ACUERDO_G2_DESPACHO.md`, `ACUERDO_G3_CHATBOT.md`, `ACUERDO_G4_RETAIL.md`, `ACUERDO_G6_PRODUCTOS.md` y `ACUERDO_G7_SEGURIDAD.md`.
 - Pendientes de implementación de F1/F2 con Despacho (G2) — ya no hay nada que preguntarles, son tareas internas (ver `integraciones/ACUERDO_G2_DESPACHO.md`):

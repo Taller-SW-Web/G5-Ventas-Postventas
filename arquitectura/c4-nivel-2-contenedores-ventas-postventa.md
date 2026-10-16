@@ -1,6 +1,6 @@
 # Arquitectura C4: Diagrama de Contenedores
 
-> **Estado:** Propuesta para discusión del equipo, alineada con [specs/overview.md](../specs/overview.md), [specs/stack-frontend.md](../specs/stack-frontend.md) y los contratos de API. Los proveedores de despliegue (Vercel, Render, Supabase) quedan sujetos a acuerdo del equipo.
+> **Estado:** Confirmado (2026-10-16, al coordinar con Productos/G6 el despliegue de la integración). Los proveedores de despliegue de este documento (Vercel para el frontend, Render para el backend, Supabase para la base de datos) ya no son propuesta — son la decisión real del equipo. Pendiente: solo `servicio-ventas` tiene su `Dockerfile` listo; `api-gateway`, `servicio-postventa` y `simulador-pasarela` todavía no están desplegados en Render.
 
 Este documento presenta el nivel 2 del modelo C4: una consola web para el Gestor, un API Gateway, dos microservicios con persistencia aislada y sus integraciones externas.
 
