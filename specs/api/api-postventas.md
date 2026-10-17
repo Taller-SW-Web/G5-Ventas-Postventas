@@ -469,30 +469,32 @@
   "monto": 129.90,
   "moneda": "PEN",
   "estado": "EXITOSO",
-  "fechaCreacion": "2026-09-23T00:15:00Z",
-  "idempotencyKey": "a4c89f55-1211-4fce-bc2a-605e55e396dc",
-  "motivo": "Entrega fallida definitiva en ruta; anulación tramitada por M1",
-  "solicitadoPor": "SISTEMA_M1",
-  "autorizador": null,
-  "canal": "CHATBOT",
-  "cliente": "Juan Pérez Rodríguez",
-  "metodoPago": "TARJETA_CREDITO",
   "transaccionPasarelaId": "TX-SIM-871239",
+  "fecha": "2026-09-23",
+  "autorizadorId": null,
+  "clienteId": "9c3b2e1a-4f3d-4a8e-9b2a-1e6f7a8b9c0d",
+  "clienteNombre": "Juan Pérez Rodríguez",
+  "canal": "CHATBOT",
+  "metodoPago": "TARJETA_CREDITO",
+  "total": true,
+  "claveIdempotencia": "a4c89f55-1211-4fce-bc2a-605e55e396dc",
   "intentos": [
-    { "numeroIntento": 1, "estado": "EXITOSO", "idTransaccion": "TX-SIM-871239", "resultado": null, "fechaHora": "2026-09-23T00:15:30Z" }
+    { "numero": 1, "estado": "EXITOSO", "transaccionPasarelaId": "TX-SIM-871239", "resultado": null, "fecha": "2026-09-23T00:15:30Z" }
   ]
 }
 ```
 
 -   **`404 Not Found`**: `reembolsoId` no existe.
 
-**Decisiones de PO (2026-10-16), resuelven las 4 preguntas que quedaron abiertas:**
+**Nota (2026-10-17): esta sección se corrigió para que coincida con `DetalleReembolsoResponse`/`ConsultaReembolsosService` ya construidos — manda el código, los nombres de campo y el punto 1 de abajo cambiaron frente a la primera versión de estas decisiones (2026-10-16).**
 
-1. **`autorizador`:** cuando `origen: DEVOLUCION`, es `devolucion.id_autorizador` de la devolución de origen (mismo esquema `postventa`, join directo). Cuando `origen: ANULACION`, queda `null` por ahora — la anulación vive en M1 y no existe todavía un endpoint para que M2 consulte su `id_autorizador`; no se construye solo para este campo. `solicitadoPor` (ya existe en el `POST` de 2.6) sirve como aproximación de quién originó el reembolso mientras tanto.
+**Decisiones de PO (2026-10-16, punto 1 corregido 2026-10-17), resuelven las 4 preguntas que quedaron abiertas:**
+
+1. **`autorizadorId`:** no se deriva con un join a `devolucion.id_autorizador` — sale directo de `reembolso.id_autorizador`, columna propia que `ReembolsoService.preparar` llena al crear el reembolso (2.6) parseando `solicitadoPor` del request como UUID (`null` si no se manda o no es un UUID válido). Es el mismo valor para `ANULACION` y `DEVOLUCION`: quien haga el `POST` (M1 para `ANULACION`, el Gestor para `DEVOLUCION`) debe mandar su identidad en `solicitadoPor` si quiere que quede autorizador; si no la manda, queda `null` igual que antes.
 2. **"Autorizar" es solo una confirmación visual del frontend, sin estado ni endpoint nuevo.** Un reembolso no es algo que el Gestor cree a mano desde la bandeja — es el efecto automático de una anulación (F2) o una devolución aprobada (F3). El respaldo de auditoría (RNF-03) ya existe: actor, motivo y fecha quedan registrados en la acción de origen (anulación/devolución), y en un reintento el actor sale del JWT del Gestor que lo ejecuta.
-3. **El reintento es el mismo mecanismo que ya especifica ESP-09 (guía 8.3): reenviar el `POST /api/v2/reembolsos` original con la misma `X-Idempotency-Key`** — no se construye un `POST /reembolsos/{id}/reintentar` aparte. Para que el frontend pueda armar ese reenvío sin tener los datos originales a mano, este detalle expone `idempotencyKey`, `origen`, `origenId`, `pedidoId`, `monto`, `moneda`, `motivo` y `solicitadoPor` — el botón "Reintentar" toma este JSON y lo manda tal cual a 2.6.
-4. **`canal` y `cliente` se resuelven consultando a M1** (`VentasClient.consultarPedido`, el mismo cliente que ya usa el resto de F3/F4) — no se agregan columnas nuevas a `reembolso`. Solo en el **detalle** (2.6c): una consulta por reembolso es aceptable, pero repetirla por cada fila de una página de 2.6b no — por eso **la bandeja (2.6b) no trae `canal` ni `cliente`**, y el detalle sí.
-5. **`metodoPago` sale de la misma consulta a M1** (`pago.metodoPago` del pedido) y se agrega al detalle junto a `canal`/`cliente` — mismo criterio del punto 4, no se duplica en `reembolso`. `transaccionPasarelaId` (la "referencia de pago") se muestra en el frontend como `—` cuando es `null` (reembolsos con origen `ANULACION` que nunca llegaron a cobrarse, o cualquier caso sin transacción de pasarela asociada); el backend sigue devolviendo `null` tal cual, el guion es puramente de presentación.
+3. **El reintento es el mismo mecanismo que ya especifica ESP-09 (guía 8.3): reenviar el `POST /api/v2/reembolsos` original con la misma `X-Idempotency-Key`** — no se construye un `POST /reembolsos/{id}/reintentar` aparte. Para ese reenvío el frontend usa `claveIdempotencia`, `origen`, `origenId`, `pedidoId`, `monto` y `moneda` de este detalle; `motivo` y `solicitadoPor` no están en la respuesta porque son opcionales en el `POST` (`ProcesarReembolsoRequest`) y no hacen falta para reconstruirlo.
+4. **`canal`, `clienteId`/`clienteNombre` y `metodoPago` se resuelven consultando a M1** (`VentasClient.consultarPedido`, el mismo cliente que ya usa el resto de F3/F4) — no se agregan columnas nuevas a `reembolso`. Solo en el **detalle** (2.6c): una consulta por reembolso es aceptable, pero repetirla por cada fila de una página de 2.6b no — por eso **la bandeja (2.6b) no trae estos campos**, y el detalle sí.
+5. **`total` (booleano, nuevo):** indica si el reembolso cubre el monto completo del pedido (`reembolso.monto == pedido.total`) — lo distingue un reembolso parcial de uno total sin que el frontend tenga que volver a comparar montos. `transaccionPasarelaId` (la "referencia de pago") se muestra en el frontend como `—` cuando es `null` (reembolsos con origen `ANULACION` que nunca llegaron a cobrarse, o cualquier caso sin transacción de pasarela asociada); el backend sigue devolviendo `null` tal cual, el guion es puramente de presentación.
 
 **Para pruebas locales (Q6):** igual que el resto del módulo — `servicio-postventa` directo en `http://localhost:8082` (más simple mientras se desarrolla; el Gateway en `8080` enruta aquí en producción, ver `AGENTS.md` sección 2 punto 6), `CORS_ORIGINS` ya incluye `http://localhost:5173` por defecto. Con `SEGURIDAD_HABILITADA=false` (default local) no hace falta ningún JWT — si se quiere probar la validación de rol, se necesita un JWT real de Seguridad con `roles: ["ADMIN_VENTAS"]`, o `seguridad.habilitada=true` con un token de prueba del kit de integración.
 

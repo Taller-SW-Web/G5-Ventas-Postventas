@@ -68,7 +68,7 @@ Si necesitas tocar cualquiera de estos puntos, pregunta antes de asumir que el C
 | Estructura y guía de implementación del frontend | [guias/frontend/estructura-frontend.md](guias/frontend/estructura-frontend.md), [guias/frontend/guia-frontend.md](guias/frontend/guia-frontend.md) |
 | Flujo de ramas, commits y PRs | [CONTRIBUTING.md](CONTRIBUTING.md) |
 
-Los documentos bajo `arquitectura/` (C4 niveles 1, 2 y 3) ya no son propuesta — **confirmado 2026-10-16** al responder a Productos (G6): backend en **Render** (`api-gateway`, `servicio-ventas`/M1, `servicio-postventa`/M2, `simulador-pasarela`), frontend en **Vercel**, base de datos en **Supabase**. Solo `servicio-ventas` tiene su `Dockerfile` listo; `api-gateway`, `servicio-postventa` y `simulador-pasarela` todavía no están desplegados. Su contenido funcional (F1 y F2 en M1; F3 a F6 en M2; Mantine UI) está alineado con la sección 2.
+Los documentos bajo `arquitectura/` (C4 niveles 1, 2 y 3) ya no son propuesta — **confirmado 2026-10-16** al responder a Productos (G6): backend en **Render** (`api-gateway`, `servicio-ventas`/M1, `servicio-postventa`/M2, `simulador-pasarela`), frontend en **Vercel**, base de datos en **Supabase**. `servicio-ventas` y, desde 2026-10-17, `servicio-postventa` ya tienen su `Dockerfile` listo (puerto vía `${PORT:8082}` para Render); `api-gateway` y `simulador-pasarela` todavía no están desplegados. Su contenido funcional (F1 y F2 en M1; F3 a F6 en M2; Mantine UI) está alineado con la sección 2.
 
 ---
 
