@@ -120,6 +120,8 @@ Códigos que ya aparecen como valor literal de `codigo` en los contratos. Los de
 | `POST /api/v2/reembolsos` | `403` | Solicitud con origen no permitido (distinto de `ANULACION` o `DEVOLUCION`). | `ORIGEN_NO_PERMITIDO` |
 | `POST /api/v2/reembolsos` | `409` | La `X-Idempotency-Key` ya existe con datos distintos. | `CLAVE_IDEMPOTENCIA_EN_CONFLICTO` |
 | `POST /api/v2/reembolsos` | `409` | El monto supera el saldo reembolsable del pedido. | `SALDO_INSUFICIENTE` |
+| `GET /api/v2/reembolsos` | `400` | `pagina` negativo o `tamano` fuera de 1-100. | `PAGINACION_INVALIDA` |
+| `GET /api/v2/reembolsos/{reembolsoId}` | `404` | El reembolso solicitado no existe. | — |
 | `POST /api/v2/csat` | `400` | Puntuación fuera de rango (1 al 5). | — |
 | `POST /api/v2/csat` | `403` | El `pedidoId` no pertenece al `sub` del usuario autenticado. | — |
 | `POST /api/v2/csat` | `422` | Pedido no está en estado terminal `ENTREGADO`. | `ORDER_NOT_DELIVERED` |

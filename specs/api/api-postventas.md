@@ -422,7 +422,7 @@
 -   **Endpoint:** `GET /api/v2/reembolsos`
 -   **Descripción:** Bandeja del Gestor. `ConsultaReembolsosService`, separado del `POST` de 2.6 (que solo ejecuta extornos).
 -   **Headers:** `Authorization: Bearer <token_gestor>` (rol `ADMIN_VENTAS`)
--   **Query Params:** `estado` (opcional, `EstadoReembolso`), `origen` (opcional, `ANULACION`\|`DEVOLUCION`), `pedidoId` (opcional, código `PED-AAAA-NNNNN`), `pagina` (default `0`), `tamano` (default `10`, máximo `100`). Siempre ordenado por fecha, más recientes primero.
+-   **Query Params:** `estado` (opcional, `EstadoReembolso`), `origen` (opcional, `ANULACION`\|`DEVOLUCION`), `pedidoId` (opcional, código `PED-AAAA-NNNNN`), `buscar` (opcional, **decisión PO 2026-10-16**: código `REEM-`/`ANUL-`/`DEV-`/`PED-` exacto — mismo patrón que `buscar` en 2.10 y en `api-ventas.md` 1.4, no hay nombre de cliente que buscar porque no se persiste, ver Q5 abajo), `desde`/`hasta` (opcional, **decisión PO**: fecha ISO sobre `fecha`, ambos inclusivos), `orden` (opcional, **decisión PO**: `RECIENTES` default \| `ANTIGUOS`), `pagina` (default `0`), `tamano` (default `10`, máximo `100`).
 -   **Respuestas:**
     -   **`200 OK`**:
 
@@ -452,11 +452,47 @@
 
 -   **`400 Bad Request`** (`PAGINACION_INVALIDA`): `pagina` negativo o `tamano` fuera de 1-100.
 
-**Pendiente — sin resolver todavía (preguntas abiertas de quien construye el frontend, Mockup 08):**
-1. **No existe un `GET /api/v2/reembolsos/{reembolsoId}` de detalle.** El panel "Ver" del mockup tendría que armarse con lo que ya trae esta lista (no incluye autorizador, canal ni cliente).
-2. **"Autorizar" y "Ejecutar" siguen siendo un solo paso.** El `POST` de 2.6 ejecuta directo; no hay un estado ni endpoint intermedio de autorización — es una decisión de PO todavía sin tomar: ¿el frontend simula la autorización como confirmación visual, o hace falta un paso real?
-3. **No hay endpoint de "reintento seguro".** Para reintentar, el frontend tendría que reenviar el mismo `POST` de 2.6 con la misma `X-Idempotency-Key` — no existe un `POST /reembolsos/{id}/reintentar` que la reutilice internamente.
-4. **`cliente` y `canal` no se persisten en `Reembolso`.** No aparecen en esta lista; si el mockup los necesita, hay que decidir si se enriquecen consultando a M1 o si se agregan columnas nuevas.
+#### 2.6c Consultar Reembolso por ID (panel "Ver", mockup 08 — nuevo, 2026-10-16, no está en el contrato)
+
+-   **Endpoint:** `GET /api/v2/reembolsos/{reembolsoId}`
+-   **Descripción:** Detalle completo, incluido el historial de intentos (ESP-10) y los datos crudos de la solicitud original — estos últimos son los que el frontend reenvía tal cual a 2.6 para un "Reintentar" (ver nota de reintento abajo).
+-   **Headers:** `Authorization: Bearer <token_gestor>` (rol `ADMIN_VENTAS`)
+-   **Respuestas:**
+    -   **`200 OK`**:
+
+``` json
+{
+  "reembolsoId": "REEM-90812",
+  "pedidoId": "PED-2026-00981",
+  "origen": "ANULACION",
+  "origenId": "ANUL-0012",
+  "monto": 129.90,
+  "moneda": "PEN",
+  "estado": "EXITOSO",
+  "fechaCreacion": "2026-09-23T00:15:00Z",
+  "idempotencyKey": "a4c89f55-1211-4fce-bc2a-605e55e396dc",
+  "motivo": "Entrega fallida definitiva en ruta; anulación tramitada por M1",
+  "solicitadoPor": "SISTEMA_M1",
+  "autorizador": null,
+  "canal": "CHATBOT",
+  "cliente": "Juan Pérez Rodríguez",
+  "transaccionPasarelaId": "TX-SIM-871239",
+  "intentos": [
+    { "numeroIntento": 1, "estado": "EXITOSO", "idTransaccion": "TX-SIM-871239", "resultado": null, "fechaHora": "2026-09-23T00:15:30Z" }
+  ]
+}
+```
+
+-   **`404 Not Found`**: `reembolsoId` no existe.
+
+**Decisiones de PO (2026-10-16), resuelven las 4 preguntas que quedaron abiertas:**
+
+1. **`autorizador`:** cuando `origen: DEVOLUCION`, es `devolucion.id_autorizador` de la devolución de origen (mismo esquema `postventa`, join directo). Cuando `origen: ANULACION`, queda `null` por ahora — la anulación vive en M1 y no existe todavía un endpoint para que M2 consulte su `id_autorizador`; no se construye solo para este campo. `solicitadoPor` (ya existe en el `POST` de 2.6) sirve como aproximación de quién originó el reembolso mientras tanto.
+2. **"Autorizar" es solo una confirmación visual del frontend, sin estado ni endpoint nuevo.** Un reembolso no es algo que el Gestor cree a mano desde la bandeja — es el efecto automático de una anulación (F2) o una devolución aprobada (F3). El respaldo de auditoría (RNF-03) ya existe: actor, motivo y fecha quedan registrados en la acción de origen (anulación/devolución), y en un reintento el actor sale del JWT del Gestor que lo ejecuta.
+3. **El reintento es el mismo mecanismo que ya especifica ESP-09 (guía 8.3): reenviar el `POST /api/v2/reembolsos` original con la misma `X-Idempotency-Key`** — no se construye un `POST /reembolsos/{id}/reintentar` aparte. Para que el frontend pueda armar ese reenvío sin tener los datos originales a mano, este detalle expone `idempotencyKey`, `origen`, `origenId`, `pedidoId`, `monto`, `moneda`, `motivo` y `solicitadoPor` — el botón "Reintentar" toma este JSON y lo manda tal cual a 2.6.
+4. **`canal` y `cliente` se resuelven consultando a M1** (`VentasClient.consultarPedido`, el mismo cliente que ya usa el resto de F3/F4) — no se agregan columnas nuevas a `reembolso`. Solo en el **detalle** (2.6c): una consulta por reembolso es aceptable, pero repetirla por cada fila de una página de 2.6b no — por eso **la bandeja (2.6b) no trae `canal` ni `cliente`**, y el detalle sí.
+
+**Para pruebas locales (Q6):** igual que el resto del módulo — `servicio-postventa` directo en `http://localhost:8082` (más simple mientras se desarrolla; el Gateway en `8080` enruta aquí en producción, ver `AGENTS.md` sección 2 punto 6), `CORS_ORIGINS` ya incluye `http://localhost:5173` por defecto. Con `SEGURIDAD_HABILITADA=false` (default local) no hace falta ningún JWT — si se quiere probar la validación de rol, se necesita un JWT real de Seguridad con `roles: ["ADMIN_VENTAS"]`, o `seguridad.habilitada=true` con un token de prueba del kit de integración.
 
 ### F5: Calificación de Experiencia / CSAT (Responsable: Johan)
 

@@ -861,9 +861,19 @@ Se llama dentro de la misma transacción que guarda el nuevo reembolso. La colum
 
 ### 8.3. Reintento de un reembolso `PENDIENTE` o `FALLIDO`
 
-ESP-09 pide poder recuperarlo sin crear otro. Basta con que una nueva llamada con la **misma clave y mismos datos** vuelva a intentar la pasarela si el estado no es `EXITOSO`, agregando un nuevo `reembolso_intento` con `numero_intento + 1`. Nunca se crea un segundo `reembolso`.
+ESP-09 pide poder recuperarlo sin crear otro. Basta con que una nueva llamada con la **misma clave y mismos datos** vuelva a intentar la pasarela si el estado no es `EXITOSO`, agregando un nuevo `reembolso_intento` con `numero_intento + 1`. Nunca se crea un segundo `reembolso`. **El frontend obtiene esos "mismos datos" del detalle de 2.6c** (`idempotencyKey`, `origen`, `origenId`, `pedidoId`, `monto`, `moneda`, `motivo`, `solicitadoPor`) y los reenvía tal cual a 2.6 — no se construye un endpoint `/reintentar` aparte (decisión PO, 2026-10-16).
 
-### 8.4. Lista para terminar F4
+### 8.4. 2.6b y 2.6c — bandeja y detalle del Gestor (construido 2026-10-16, mockup 08)
+
+`ConsultaReembolsosService` ya existe (`GET /api/v2/reembolsos` con `estado`/`origen`/`pedidoId`/`pagina`/`tamano`). Falta, por decisión de PO del mismo día:
+
+1. Agregar a `ConsultaReembolsosService` los filtros `buscar`, `desde`/`hasta` y `orden` — mismo patrón que `FiltroReclamos`/`PedidosFiltro` (ya en el repo, copiar el enfoque).
+2. Construir `GET /api/v2/reembolsos/{reembolsoId}` (2.6c): trae todo lo de la fila de la lista más `idempotencyKey`, `motivo`, `solicitadoPor`, `intentos` completo (`ReembolsoIntento`), y:
+   - `autorizador`: si `origen == DEVOLUCION`, `devolucion.id_autorizador` (join directo, mismo esquema); si `origen == ANULACION`, `null` (no hay endpoint en M1 para consultarlo, no se construye solo para esto).
+   - `canal`/`cliente`: `VentasClient.consultarPedido(pedidoId)` — **solo en el detalle**, nunca en la lista (evitar N llamadas a M1 por página).
+3. "Autorizar" en el mockup es un modal de confirmación del frontend, sin estado ni endpoint — no hay nada que construir en el backend para eso.
+
+### 8.5. Lista para terminar F4
 
 - [ ] Entidades actualizadas con H3 (`Reembolso`, `ReembolsoIntento`) y campo `origenId` de H4
 - [ ] Idempotencia: misma clave y mismos datos, misma clave y otros datos
@@ -871,6 +881,8 @@ ESP-09 pide poder recuperarlo sin crear otro. Basta con que una nueva llamada co
 - [ ] Intentos guardados (ESP-10), nunca se editan ni se borran
 - [ ] Prueba de concurrencia: dos hilos con el mismo saldo, solo uno pasa
 - [ ] Criterios ESP-09-CA-01 a CA-10 y ESP-10-CA-01 a CA-05
+- [x] 2.6b bandeja del Gestor — construida (falta `buscar`/`desde`/`hasta`/`orden`, ver 8.4)
+- [ ] 2.6c detalle del Gestor — ver 8.4
 
 ---
 
