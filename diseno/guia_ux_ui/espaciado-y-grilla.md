@@ -33,7 +33,7 @@ const theme = createTheme({
 
 ## Grilla responsive
 
-El layout usa una **grilla de 12 columnas** para escritorio, tablet y móvil. Los componentes ocupan diferente cantidad de columnas según el ancho disponible. Los breakpoints se basan en los valores predeterminados de Mantine 9.6.2, que usa `em` y equivale a 576, 768, 992, 1200 y 1408 px.
+El layout usa una **grilla de 12 columnas** para escritorio, tablet y móvil. Los componentes ocupan diferente cantidad de columnas según el ancho disponible. Los breakpoints se basan en los valores predeterminados de Mantine 9.7.2, que usa `em` y equivale a 576, 768, 992, 1200 y 1408 px.
 
 | Breakpoint | Ancho de referencia | Columnas | Margen lateral | Gutter | Ancho máximo |
 |---|---|---|---|---|---|

@@ -1,6 +1,6 @@
 # Guía para programar el frontend - Módulo D Ventas y Postventa
 
-El repositorio `G5-Ventas-Postventas-Frontend` está vacío (2026-10-12) — esta guía es para arrancarlo desde cero, a diferencia de la guía de backend (que corrige código ya existente). Se usa junto con `guias/frontend/estructura-frontend.md`, `specs/stack-frontend.md`, `specs/api-contract.md` (o `specs/api/api-ventas.md` y `api-postventas.md`, más detallados) y los mockups de alta fidelidad (Figma, exportados como imágenes `M0N_...`, uno por pantalla y por cada modal/overlay que la compone — más detallados que los `.md` de `diseno/mockups/`).
+El esqueleto (Fase 0) del repositorio `G5-Ventas-Postventas-Frontend` ya está creado (2026-10-13), siguiendo esta guía — ver `guias/frontend/estructura-frontend.md` para la estructura real ya confirmada. Esta guía sigue siendo la referencia para programar cada pantalla, a diferencia de la guía de backend (que corrige código ya existente). Se usa junto con `guias/frontend/estructura-frontend.md`, `specs/stack-frontend.md`, `specs/api-contract.md` (o `specs/api/api-ventas.md` y `api-postventas.md`, más detallados) y los mockups de alta fidelidad (Figma, exportados como imágenes `M0N_...`, uno por pantalla y por cada modal/overlay que la compone — más detallados que los `.md` de `diseno/mockups/`).
 
 Si esta guía y un mockup/contrato no coinciden, manda el mockup o el contrato; avisa en el grupo para corregir la guía.
 
@@ -111,7 +111,7 @@ Centralizado, no uno por pantalla (stack-frontend.md, sección 5.1):
 
 ## 4. Autenticación y permisos
 
-**Corrección sobre `specs/stack-frontend.md` sección 7:** ese documento todavía dice que el acceso administrativo es para rol `GESTOR` o `ADMIN` — eso es el nombre viejo. El catálogo cerrado de Seguridad (G7) solo tiene `ADMIN_VENTAS` para el Gestor (ver `AGENTS.md`, sección 2, punto 9). El portal valida contra `ADMIN_VENTAS`, no contra `GESTOR` ni `ADMIN`.
+**`specs/stack-frontend.md` sección 7 ya corregida (2026-10-13):** decía que el acceso administrativo era para rol `GESTOR` o `ADMIN` — eso era el nombre viejo. El catálogo cerrado de Seguridad (G7) solo tiene `ADMIN_VENTAS` para el Gestor (ver `AGENTS.md`, sección 2, punto 9). El portal valida contra `ADMIN_VENTAS`, no contra `GESTOR` ni `ADMIN` — ya implementado así en `src/services/auth.ts` (`ROL_GESTOR = 'ADMIN_VENTAS'`) y `src/components/RutaProtegida/`.
 
 - El login lo resuelve Seguridad (G7, fuera de este repo) y entrega un JWT de usuario con el claim `roles`.
 - El portal del Gestor (todas las pantallas de esta guía) exige el rol `ADMIN_VENTAS`. Si el token no lo tiene: pantalla de acceso denegado, nunca ocultar solo visualmente las rutas `/admin/*` (stack-frontend.md, sección 7).

@@ -97,12 +97,14 @@ CREADO ──────► PAGADO ──────► EN_PREPARACION ──�
 | `CREADO`               | `ANULADO`         | Aviso del canal de pago no completado       | `CANAL_CHATBOT`      | `PAGO_NO_COMPLETADO`      | No                    |
 | `CREADO`               | `ANULADO`         | Solicitud de anulación (ver F2)             | `CLIENTE` o `GESTOR` | Catálogo de ESP-05, salvo `PAGO_NO_COMPLETADO` | No       |
 | `CREADO`               | `ANULADO`         | Productos rechaza la reserva de stock o el consumo de cupón (async, RabbitMQ) — aprobado en equipo 2026-10-12 | `SISTEMA_PRODUCTOS` | `STOCK_NO_DISPONIBLE` o `CUPON_RECHAZADO` | No |
+| `CREADO`               | `EN_PREPARACION`  | Productos confirma la reserva de stock de una orden de reemplazo (F3, `api-ventas.md` 1.11) — **exclusiva de `pedido.tipo = REEMPLAZO`**, nunca una venta normal; no hay `PAGADO` que esperar (sin cobro) — acuerdo con Productos, issue G6 #100, 2026-10-16 | `SISTEMA_PRODUCTOS` | — | No |
 | `PAGADO`               | `EN_PREPARACION`  | Acción interna del flujo de preparación     | `SISTEMA_LOGISTICA`    | —                          | No                    |
 | `PAGADO`               | `ENTREGADO`       | Venta de mostrador (canal `RETAIL`, sin envío) — en la misma operación de creación, confirmado 2026-10-12 con G4 | `CLIENTE`   | `ENTREGA_INMEDIATA_EN_TIENDA` | No                    |
 | `PAGADO`               | `ANULADO`         | Solicitud de anulación (ver F2)             | `CLIENTE` o `GESTOR` | Catálogo de ESP-05, salvo `PAGO_NO_COMPLETADO` | No       |
 | `PAGADO`               | `ANULADO`         | Productos rechaza la reserva de stock después del pago (caso Chatbot: cobra antes de que Productos confirme) — origina reembolso automático a F4 | `SISTEMA_PRODUCTOS` | `STOCK_NO_DISPONIBLE` | No |
 | `EN_PREPARACION`       | `DESPACHADO`      | Confirmación de Despacho (E)                | `SISTEMA_LOGISTICA`   | —                          | No                    |
 | `EN_PREPARACION`       | `ANULADO`         | Solicitud de anulación aprobada (ver F2)    | `GESTOR`     | Catálogo de ESP-05        | **Sí**                |
+| `EN_PREPARACION`       | `ANULADO`         | Productos rechaza o vence la reserva de una orden de reemplazo ya confirmada (F3, caso raro — normalmente se rechaza en `CREADO`) — **exclusiva de `pedido.tipo = REEMPLAZO`** — acuerdo con Productos, issue G6 #100, 2026-10-16 | `SISTEMA_PRODUCTOS` | `STOCK_NO_DISPONIBLE` | No |
 | `DESPACHADO`           | `ENTREGADO`       | Notificación de entrega de Despacho (E)     | `SISTEMA_LOGISTICA`   | —                          | No                    |
 | `DESPACHADO`           | `ANULADO`         | Entrega fallida definitiva (Despacho, ver api-ventas.md 1.6) | `SISTEMA_LOGISTICA` | `ENTREGA_FALLIDA_DEFINITIVA` | No         |
 

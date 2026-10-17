@@ -1,6 +1,6 @@
 # Paleta de colores
 
-La paleta del Marketplace Multicanal se organiza en **colores de acción, acentos de marca, superficies, texto y colores semánticos de estado**. Se basa en la paleta de Mantine 9.6.2 y en colores personalizados del proyecto, para mantener correspondencia directa entre el sistema de diseño en Figma y la implementación en React.
+La paleta del Marketplace Multicanal se organiza en **colores de acción, acentos de marca, superficies, texto y colores semánticos de estado**. Se basa en la paleta de Mantine 9.7.2 y en colores personalizados del proyecto, para mantener correspondencia directa entre el sistema de diseño en Figma y la implementación en React.
 
 - **Naranja:** representa la acción principal de la interfaz (llamadas a la acción, botones principales y elementos interactivos prioritarios).
 - **Volt** (verde lima): acento de alto impacto para promociones, disponibilidad, destacados y momentos de celebración visual.
@@ -80,7 +80,7 @@ En Figma, todos los colores se registran como **Variables** con nombres semánti
 
 Los colores de éxito, alerta, error e información tienen significado semántico y **no deben utilizarse con fines decorativos**. Un estado nunca se comunicará únicamente mediante color: deberá acompañarse de texto y, cuando corresponda, iconografía.
 
-## Correspondencia con Mantine 9.6.2
+## Correspondencia con Mantine 9.7.2
 
 Mantine organiza cada familia de colores en diez tonalidades numeradas de 0 a 9, desde las más claras hasta las más oscuras. `primaryColor` establece la familia principal y `primaryShade` determina qué tonalidad utiliza normalmente el componente principal.
 

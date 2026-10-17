@@ -67,13 +67,13 @@ El sistema DEBE coordinar la reposición de stock y, cuando corresponda, la canc
 
 - **DADO** un pedido anulado que ya tenía una solicitud de despacho programada.
 - **CUANDO** se confirma la anulación.
-- **ENTONCES** el sistema libera la reserva con Productos (`POST /api/v1/inventario/{reservaId}/liberar`, acuerdo con Productos, 2026-10-11 — ver `integraciones/ACUERDO_G6_PRODUCTOS.md`) y solicita a Despacho (E) la cancelación del envío.
+- **ENTONCES** el sistema libera la reserva con Productos (`POST /api/v1/inventario/reservas/{reservaId}/liberar`, acuerdo con Productos, 2026-10-11 — ver `integraciones/ACUERDO_G6_PRODUCTOS.md`) y solicita a Despacho (E) la cancelación del envío.
 
 #### CA-02. Reposición inmediata de stock por PAGO_NO_COMPLETADO
 
 - **DADO** un pedido en `CREADO` anulado por el canal con motivo `PAGO_NO_COMPLETADO`.
 - **CUANDO** se confirma la anulación.
-- **ENTONCES** el sistema libera de inmediato la reserva de stock en Productos (`POST /api/v1/inventario/{reservaId}/liberar`), sin invocar a Despacho (E), ya que el pedido nunca llegó a programarse para envío.
+- **ENTONCES** el sistema libera de inmediato la reserva de stock en Productos (`POST /api/v1/inventario/reservas/{reservaId}/liberar`), sin invocar a Despacho (E), ya que el pedido nunca llegó a programarse para envío.
 
 ### RF-02. Origen del reembolso sin duplicar
 
@@ -109,7 +109,7 @@ Cuando Despacho (E) responde `409 Conflict` a `POST /api/v1/despachos/pedidos/{i
 
 - **DADO** un pedido cuya anulación fue aprobada por el Gestor, con una solicitud de cancelación de despacho en curso hacia Despacho (E).
 - **CUANDO** Despacho responde `409 Conflict` porque el despacho ya está `EN_CAMINO`.
-- **ENTONCES** el sistema NO reintenta esa misma llamada de cancelación, marca la solicitud de anulación como improcedente (no `RECHAZADA` por el Gestor, sino no aplicable por estar ya en reparto) y notifica al cliente que su pedido ya está en camino. Si luego llega `DESPACHO_ENTREGADO`, el cliente es dirigido al flujo de devolución (F3). Si en cambio el cliente rechaza el paquete en puerta y Despacho lo marca `DESPACHO_FALLIDO`, el sistema sí vuelve a invocar la cancelación (el pedido ya está anulado de nuestro lado) — Despacho responde `202 Accepted`, registra `pedidoAnulado=true`, bloquea cualquier reprogramación en almacén y cierra el despacho directamente como `DEVUELTO_A_ORIGEN`.
+- **ENTONCES** el sistema NO reintenta esa misma llamada de cancelación, marca la solicitud de anulación como `RECHAZADA` (mismo valor cerrado de `anulacion.estado`, con motivo técnico `PEDIDO_EN_CAMINO` — no es un rechazo del Gestor, implementado 2026-10-16 en `AnulacionService`) y responde `409 Conflict` (`PEDIDO_EN_CAMINO`) indicando que el pedido ya salió a reparto y que, si se entrega, el cliente puede usar el flujo de devolución (F3). Si en cambio el cliente rechaza el paquete en puerta y Despacho lo marca `DESPACHO_FALLIDO`, el sistema sí vuelve a invocar la cancelación (el pedido ya está anulado de nuestro lado) — Despacho responde `202 Accepted`, registra `pedidoAnulado=true`, bloquea cualquier reprogramación en almacén y cierra el despacho directamente como `DEVUELTO_A_ORIGEN`.
 
 ## 6. Frontend
 
@@ -145,7 +145,7 @@ Cuando Despacho (E) responde `409 Conflict` a `POST /api/v1/despachos/pedidos/{i
 | CA-01 y CA-02 | Anular un pedido con despacho programado, y un pedido `CREADO` por `PAGO_NO_COMPLETADO`. | Integración | Stock repuesto en ambos casos; despacho cancelado solo cuando existía. |
 | CA-03 y CA-04 | Anular un pedido `PAGADO` (incluyendo reintento) y un pedido `CREADO` sin pago. | Integración | Una sola solicitud de reembolso en el primer caso; ninguna en el segundo. |
 | CA-05 | Simular una falla de Despacho (E) durante la coordinación. | Integración | Inconsistencia registrada y visible para el Gestor. |
-| CA-06 | Simular un `409 Conflict` de Despacho (E) al cancelar un despacho ya `EN_CAMINO`. | Integración | No hay reintento; la anulación queda marcada como improcedente (no como falla técnica); cliente notificado. |
+| CA-06 | Simular un `409 Conflict` de Despacho (E) al cancelar un despacho ya `EN_CAMINO`. | Integración | No hay reintento; la anulación queda `RECHAZADA` con motivo `PEDIDO_EN_CAMINO` (no como falla técnica de CA-05); cliente notificado vía `409`. |
 
 ## 11. Criterio de completitud
 

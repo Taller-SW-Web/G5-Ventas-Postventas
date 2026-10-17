@@ -348,6 +348,7 @@ Al cruzar contratos, especificaciones y base salieron estos huecos. Las decision
 | H9 | Falta un actor para cuando Productos rechaza la reserva de stock o el consumo de cupón (no es `CLIENTE`, `GESTOR`, pasarela ni Despacho) | F1 | Aprobado en equipo (2026-10-12): nuevo actor `SISTEMA_PRODUCTOS` y motivos `STOCK_NO_DISPONIBLE`/`CUPON_RECHAZADO`. Ver 5.2 y 6.1 |
 | H10 | El pedido `RETAIL` necesita campos que la tabla original no tenía (`tiendaId`, desglose de pago mixto, fecha de venta retroactiva) | F1 | Acuerdo con Retail (G4, 2026-10-12): columnas `pedido.tienda_id` y `pago.monto_efectivo`/`monto_tarjeta`/`fecha_venta`. Ver 4.1 y 5.3 |
 | H11 | `postventa.devolucion` no tenía hora de registro, fecha de resolución ni la referencia a la operación derivada (reembolso o despacho de un cambio) — pero `ESP-07` 8.3 y `ESP-08` 8.3 ya prometen devolver esos campos | F3 | Columnas `fecha_registro`, `fecha_resolucion`, `referencia_operacion`. Ver 4.1 |
+| H12 | `id_producto` está declarado `bigint` en `ventas.detalle_pedido`, `postventa.devolucion_item` y `postventa.agregado_ventas`, pero Productos (G6) identifica sus SKUs con texto (ej. `"PROD-101"`), nunca un número — detectado 2026-10-16 revisando `DetallePedido.java`/`DevolucionItem.java`, que ya usan `String`/`varchar(64)` | F1, F3, F6 | Cambiar el tipo a `varchar(64)` en las 3 tablas. Ver 4.1 |
 
 ### 4.1. Cambios en la base (ya aplicados en Supabase)
 
@@ -361,6 +362,8 @@ Cada responsable actualiza sus entidades para que coincidan con estas columnas y
 | H10 | `ventas.pedido.tienda_id` | Columna `varchar(40)`, null salvo `RETAIL` | Michael (**corregido 2026-10-12** — `Pedido.java` y `CrearPedidoService` ya la usan, dejó de guardarse dentro de `direccion`) |
 | H10 | `ventas.pago.monto_efectivo`, `monto_tarjeta`, `fecha_venta` | Columnas nuevas para `RETAIL` con `metodoPago: MIXTO` o venta sin conexión | Michael (**corregido 2026-10-12** — `Pago.java` y `CrearPedidoService` ya las guardan) — **falta confirmar con Michael si ya aplicó el `ALTER TABLE` sobre la Supabase real**, no solo en la entidad |
 | H11 | `postventa.devolucion.fecha_registro`, `fecha_resolucion`, `referencia_operacion` | Columnas nuevas (ver script en 7.6) | Joseph — **aplicado en Supabase el 2026-10-12**, `Devolucion.java` ya las usa |
+| H12 | `ventas.detalle_pedido.id_producto`, `postventa.devolucion_item.id_producto`, `postventa.agregado_ventas.id_producto` | `varchar(64)` en vez de `bigint` | **Ya corregido en las entidades** (`DetallePedido.java`, `DevolucionItem.java`) — **falta confirmar si ya se aplicó el `ALTER TABLE` sobre la Supabase real** |
+| F3 (recepción física) | `postventa.devolucion.requiere_devolucion_fisica`, tablas nuevas `postventa.devolucion_recepcion` y `postventa.historial_devolucion` | Ver script actualizado en `infra/bd/ventas_postventa_schema.sql` | **Ya implementado en el código** (`RecepcionDevolucion.java`, `HistorialDevolucion.java`, `RecepcionService.java`) — **falta confirmar si ya se aplicó en Supabase** |
 | H2 | `postventa.devolucion` | Columnas `descripcion` e `id_cliente` | Joseph |
 | H2 | `postventa.devolucion_item` | Tabla nueva: `id_devolucion`, `id_producto`, `cantidad` (> 0) | Joseph |
 | H3 | `postventa.reembolso` | Columna `id_pedido` | Luis Alejandro |
@@ -397,9 +400,12 @@ Especificaciones: ESP-01, ESP-02, ESP-03, ESP-04. Contrato: `api-ventas.md` 1.1 
 | 1.1 | `POST /api/v1/pedidos` | scope `ventas:pedidos:crear` (token de servicio del canal) | 201 | `PedidoService.crear` |
 | 1.2 | `POST /api/v1/pedidos/{pedidoId}/pagos/notificacion` | scope `ventas:pagos:webhook` | 200 | `PagoService.procesarNotificacion` |
 | 1.3 | `GET /api/v1/pedidos/{pedidoId}` | rol `CLIENTE` (dueño del pedido) o `ADMIN_VENTAS` — **no es scope** | 200 | `PedidoService.consultar` |
-| 1.4 | `GET /api/v1/pedidos` (uso administrativo, filtra por `clienteId`) | rol `ADMIN_VENTAS` — **no es scope** | 200 | `PedidoService.listar` |
+| 1.4 | `GET /api/v1/pedidos` (bandeja del Gestor, `clienteId` opcional, más `canal`/`buscar`/`orden` fuera de contrato, ver 5.1 nota) | rol `ADMIN_VENTAS` — **no es scope** | 200 | `PedidoService.listar` |
 | 1.4b | `GET /api/v1/pedidos/me` (acuerdo H-03) | rol `CLIENTE`, identidad por `sub` del JWT, sin `clienteId` en la URL — **no es scope** | 200 | `PedidoService.listarMios` |
-| 1.5 | `POST /api/v1/integraciones/despachos/eventos` (reemplaza el viejo 1.5/1.6, ver 5.6/5.7) | scope `ventas:pedidos:estado` (token de servicio de Despacho, reusado — decisión nuestra, 2026-10-13) | 200 | `LogisticaService.procesarEvento` |
+| 1.5 | `POST /api/v1/integraciones/despachos/eventos` (reemplaza el viejo 1.5/1.6, ver 5.6/5.7) | scope `ventas:pedidos:estado` (token de servicio de Despacho, reusado — decisión nuestra, 2026-10-13) | 200 | `EventoDespachoService.procesar` (vía `DespachoEventosController`) |
+| 1.11 | `POST /api/v1/pedidos/reemplazos` (nuevo, 2026-10-16 — F3, acuerdo con Productos issue G6 #100, ver 5.10) | scope `ventas:pedidos:reemplazar` (token de servicio de `modulo-postventa`, pendiente de que Seguridad lo registre) | 201/200 | `ReemplazoService.crear` |
+| 1.12 | `POST /api/v1/pedidos/{pedidoId}/preparacion` (nuevo, 2026-10-16, ver 5.11) | rol `ADMIN_VENTAS` | 200 | `DespachoPedidoService.iniciarPreparacion` |
+| 1.13 | `POST /api/v1/pedidos/{pedidoId}/despacho` (nuevo, 2026-10-16, ver 5.11) | rol `ADMIN_VENTAS` | 200 | `DespachoPedidoService.paqueteSellado` |
 
 `ventas:pedidos:leer` y `ventas:admin` **no son scopes reales** — Seguridad no los registra porque dependen de identidad de persona, no de módulo. Se resuelven con el claim `roles` del token de usuario (ver sección 12 y `api-ventas.md`, catálogo de scopes).
 
@@ -516,8 +522,8 @@ Despacho (G2) confirmó que no van a llamar a `PATCH /pedidos/{id}/estado` ni a 
 
 **Pendiente antes de programarlo** (ya no depende de G2, ver `api-ventas.md` 1.5 y `integraciones/ACUERDO_G2_DESPACHO.md`):
 - Agregar `pedido.fecha_estimada_entrega` al modelo de datos (confirmado necesario, falta la migración) para que `DESPACHO_REPROGRAMADO` la actualice con `datos.nuevaFechaProgramada`.
-- Definir la señal interna que marca "paquete sellado y listo" para disparar `POST /api/v1/despachos` (no apenas `EN_PREPARACION`) — diseño de F1/frontend, pendiente.
-- F2: manejar el `409 Conflict` de Despacho al cancelar un despacho ya `EN_CAMINO` como rechazo de negocio (no reintentar, marcar la anulación como improcedente), no como la falla técnica de ESP-06 CA-05 — ver ESP-06 CA-06 (nuevo).
+- ~~Definir la señal interna que marca "paquete sellado y listo"~~ — **construido 2026-10-16:** dos botones del Gestor, ver 1.12/1.13 y 5.11.
+- ~~F2: manejar el `409 Conflict` de Despacho al cancelar un despacho ya `EN_CAMINO`~~ — **construido 2026-10-16** en `AnulacionService`: `RECHAZADA` con motivo `PEDIDO_EN_CAMINO` (ESP-06 CA-06); si Despacho falla por otro motivo (5xx/sin respuesta), la anulación sigue y queda la inconsistencia registrada en el log (ESP-06 CA-05).
 
 <details>
 <summary>Diseño anterior (ya no vigente, se deja solo como referencia de lo que cambió)</summary>
@@ -546,11 +552,43 @@ Al 2026-10-12, revisando el repo directamente:
 - [x] `ResultadoReservaService` listo para aplicar la respuesta de la reserva (confirmada/rechazada) — **falta** el `@RabbitListener` real de `po.sales.q` (hoy solo se llama en modo simulado desde `CrearPedidoService`)
 - [x] 1.2 notificación de pago, idempotente
 - [x] 1.4b (`/pedidos/me`, acuerdo H-03) — `PedidoService.listarMios`
-- [ ] 1.3 y 1.4 consultar y listar — hoy son stubs (`NoImplementadoException`, 501)
-- [ ] 1.5 (nuevo diseño, webhook único) — todavía sin construir, mejor así porque el diseño cambió (ver 5.6/5.7); **las rutas viejas `PATCH .../estado` y `POST .../eventos-logistica` que hoy están mapeadas como stubs en el controller hay que borrarlas, no implementarlas**
+- [x] 1.3 y 1.4 consultar y listar — construidos; 1.4 además con `canal`/`buscar`/`orden` y `nombreCliente` (ver tabla de 5.1, no están en el contrato original)
+- [x] 1.5 (nuevo diseño, webhook único) — `DespachoEventosController`/`EventoDespachoService` construidos
+- [x] 1.11, 1.12 y 1.13 (orden de reemplazo, iniciar preparación, paquete sellado) — ver 5.10/5.11
 - [ ] Consumo y restauración de cupón por RabbitMQ (`promotions.coupon.consumption.requested`) — no hay nada programado todavía, incluyendo el motivo `CUPON_RECHAZADO` (ver 6.1)
 - [ ] `EnvioEventosScheduler` y `PostventaClient.enviarEvento`
 - [ ] Criterios de aceptación de ESP-01 a ESP-04 probados
+- [x] 1.11 orden de reemplazo (`ReemplazoService`) — construido 2026-10-16, ver 5.10
+
+### 5.10. 1.11 Orden de reemplazo (`ReemplazoService`, construido 2026-10-16)
+
+F3 lo invoca al aprobar un `CAMBIO` (ESP-08, flujo B). Resuelve lo que antes iba a ser una coordinación directa de M2 con Despacho — ahora M1 crea un pedido normal, sin cobro:
+
+1. Valida que `pedidoOrigenId` exista y esté `ENTREGADO` (si no: 404/409), y que su canal no sea `RETAIL` (409 `REEMPLAZO_NO_APLICA` — esos cambios se hacen en tienda).
+2. Cada `sku` del body debe pertenecer a una línea del pedido original, y la cantidad pedida no debe exceder la comprada (400 `ITEM_NO_PERTENECE_AL_PEDIDO` / `CANTIDAD_EXCEDE_COMPRADA`).
+3. Crea el `Pedido` con `tipo: REEMPLAZO`, `idPedidoOrigen`, `devolucionId`, copiando contacto/dirección del original; `total = 0` (sin fila de `Pago` — el cliente ya pagó el original).
+4. Llama a `ProductosClient.reservar(...)` — el mismo método de 1.1, mismo scope, nada nuevo que pedirle a Productos.
+5. **Idempotente por `devolucionId`:** un índice único (`ux_pedido_reemplazo_vigente`, solo `estado <> ANULADO`) impide dos reemplazos vigentes de la misma devolución. Si ya existe uno, responde `200` con ese mismo pedido en vez de crear otro; si la carrera la gana otra petición, captura el `DataIntegrityViolationException` y hace lo mismo.
+6. Si Productos acepta la **reserva** (modo simulado: al instante): `CREADO → EN_PREPARACION` (actor `SISTEMA_PRODUCTOS`, sin pasar por `PAGADO` — ver `MaquinaEstados`, transiciones exclusivas de `REEMPLAZO`). Ojo: esto es solo la reserva, no el consumo — sigue igual que 1.1 (reservar al crear, confirmar/consumir después). Sigue el flujo normal de F1 (Gestor marca "Iniciar preparación" ya está implícito aquí, luego "Paquete sellado" → 5.11).
+7. Si Productos rechaza la reserva al crear: `→ ANULADO` (actor `SISTEMA_PRODUCTOS`, motivo `STOCK_NO_DISPONIBLE`) y M1 publica `pedido.anulado` con `datos.devolucionId` — `DevolucionService.reemplazoAnulado` en M2 reabre la devolución a `EN_EVALUACION`.
+8. **El consumo real de la reserva se difiere a "Paquete sellado" (5.11)**, no pasa aquí — como no hay `PAGADO` que lo dispare, `DespachoPedidoService.paqueteSellado` llama a `ProductosClient.confirmar` justo antes de crear el despacho. Si la reserva venció para entonces: `EN_PREPARACION → ANULADO` (mismo motivo, mismo aviso a M2) — ver 5.11.
+9. Al entregarse, `pedido.entregado` con `datos.devolucionId` — `DevolucionService.reemplazoEntregado` en M2 cierra el lado logístico del cambio.
+
+Ver `api-ventas.md` 1.11, `ESP-03` 7.2 (nuevas transiciones) y `ESP-08` 8.1/flujo B/reglas 7, 17, 18.
+
+### 5.11. 1.12 y 1.13 Botones del Gestor: preparación y despacho (`DespachoPedidoService`, construido 2026-10-16)
+
+Resuelven la señal pendiente de "qué dispara `POST /despachos`" (`AGENTS.md` sección 4, acuerdo G2 D1) — son dos botones separados, no uno:
+
+1. **"Iniciar preparación"** (`POST /pedidos/{id}/preparacion`): `PAGADO → EN_PREPARACION`, actor `SISTEMA_LOGISTICA` (la matriz de `ESP-03` ya lo decía así — el Gestor solo lo dispara). Idempotente: si ya está `EN_PREPARACION`, `200` sin error. No aplica a `RETAIL` (409 `DESPACHO_NO_APLICA`).
+2. **"Paquete sellado"** (`POST /pedidos/{id}/despacho`): no cambia el estado — llama a `DespachoClient.crear` (`POST /api/v1/despachos` de G2, contrato 7.1). El pedido pasa a `DESPACHADO` después, cuando llega el webhook de 1.5 (`DESPACHO_EN_CAMINO`).
+   - Exige `EN_PREPARACION` (409 `ESTADO_NO_PERMITE_DESPACHO`) y que el pedido tenga `direccion`/`distrito` (409 `DATOS_ENVIO_INCOMPLETOS`) — son los únicos dos campos de destino que G2 exige, el resto (`referencia`, `departamento`, `provincia`) se omite si está vacío, nunca se manda `""`.
+   - Si es una orden de **reemplazo**: antes de llamar a Despacho, consume la reserva de Productos (`ProductosClient.confirmar`) — mismo `operation_id` en cada intento, así que reintentar es seguro. Si venció: 409 `RESERVA_EXPIRADA`, el reemplazo se anula y M2 reabre la devolución.
+   - `DespachoClient.crear` clasifica la respuesta de G2 por `status` + campo `code` de su `application/problem+json` (nunca por texto): `SIN_COBERTURA` → 422 `DESP_ERROR_SIN_COBERTURA`; otro 4xx de negocio → `RECHAZADO` (409 `DESPACHO_RECHAZADO`, no reintentar); 5xx/401/403/408/429/sin respuesta → `NO_DISPONIBLE` (503 `DESPACHO_NO_DISPONIBLE`, reintentar sirve).
+   - `Idempotency-Key` hacia G2: un UUID v4 **derivado determinísticamente** del `pedidoId` (hash SHA-256 reformateado como UUID v4, `DespachoClient.uuidV4`) — no uno aleatorio que haya que persistir; la misma llamada siempre genera la misma clave, así que reintentar el botón es seguro sin guardar nada extra.
+   - El código de despacho de G2 viene en el campo `idDespacho` de su respuesta (confirmado 2026-10-16) — se guarda para mostrarlo en el detalle del pedido.
+
+Ver `api-ventas.md` 1.12/1.13, `integraciones/ACUERDO_G2_DESPACHO.md` (D1, D10-D12).
 
 ---
 
@@ -724,19 +762,44 @@ No se guarda en la base todavía: la evidencia se asocia cuando se registra la d
 | `decision` | Qué se hace |
 |---|---|
 | `RECHAZADA` | `fundamento` obligatorio (400 si falta). `estado = RECHAZADA`, `resolucion = RECHAZO`, `fundamento_rechazo`, `id_autorizador` |
-| `APROBADA` con `tipo = DEVOLUCION_DINERO` | `estado = APROBADA`, `resolucion = REEMBOLSO`. Llamar a `ReembolsoService.procesar(...)` con origen `DEVOLUCION`, clave `DEVOLUCION-{id}`. Si queda `EXITOSO`: `estado = COMPLETADA` |
-| `APROBADA` con `tipo = CAMBIO` | `ProductosClient.consultarDisponibilidad`. Sin stock: 409 `SIN_STOCK` (el Gestor puede volver a resolver como reembolso o rechazo). Con stock: `resolucion = CAMBIO`, `DespachoClient.programarLogisticaCambio`. Cuando Despacho confirme: `COMPLETADA` |
+| `APROBADA` con `tipo = DEVOLUCION_DINERO` | `estado = APROBADA`, `resolucion = REEMBOLSO`. Llamar a `ReembolsoService.procesar(...)` con origen `DEVOLUCION`, clave `DEVOLUCION-{id}`. Si queda `EXITOSO`: `estado = COMPLETADA` — **esto no depende de la recepción física, ver 7.5b** |
+| `APROBADA` con `tipo = CAMBIO` | `ProductosClient.hayDisponibilidad` (chequeo preliminar, informativo). Sin stock: 409 `SIN_STOCK` (el Gestor puede volver a resolver como reembolso o rechazo). Con stock: `resolucion = CAMBIO`, `VentasClient.solicitarReemplazo(...)` (`POST /api/v1/pedidos/reemplazos`, M1 1.11 — **ya no se llama a Despacho directo**, ver 5.10 y 7.5c). El reintegro de inventario **tampoco se dispara aquí** — ver 7.5b. `COMPLETADA` cuando M1 avisa `pedido.entregado` (y la recepción física, si aplica, ya está confirmada) |
 
 - Solo se resuelve si está `SOLICITADA` o `EN_EVALUACION`; si no, 409.
 - Una devolución no puede terminar con cambio y reembolso a la vez.
 - Sumar `devoluciones_aprobadas` en `agregado_metricas` (sección 10.4) al aprobar.
 - **`decision` acepta además `tipoResolucion` opcional** (`CAMBIO` o `REEMBOLSO`, contrato v1.5.0) — permite derivar un `CAMBIO` sin stock a `REEMBOLSO` sin tener que inventarlo del lado del cliente.
+- **`requiereDevolucionFisica` opcional** (booleano, por defecto `true`, solo con `REEMBOLSO`) — si es `false`, no se espera confirmación de recepción ni reintegro (ver 7.5b).
 - **El autorizador sale del `sub` del token del Gestor**, nunca de un campo del cuerpo — se retiró `autorizadorId` del request a partir de v1.5.0.
 - **Repetir la misma aprobación** sobre un expediente que quedó `APROBADA` (porque F4 o Despacho no confirmaron todavía) reintenta la coordinación sin duplicar nada — el expediente solo pasa a `COMPLETADA` cuando F4 o Despacho confirman.
 
+### 7.5b. 2.5b Confirmar recepción física (nuevo, construido 2026-10-16)
+
+**Cambio de diseño importante, hecho al responder el issue G6 #51 (P-02):** la aprobación del Gestor en 2.5 (`APROBADA`) **ya no dispara el reintegro de inventario**. G6 prohíbe incrementar stock solo por una aprobación comercial — hay que confirmar antes que la unidad llegó físicamente y es apta para reventa. Ya está construido: `PATCH /api/v2/devoluciones/{devolucionId}/recepcion` (`api-postventas.md` 2.5b), `RecepcionService`/`RecepcionDevolucion` (`postventa.devolucion`).
+
+1. Precondición: `devolucion.estado = APROBADA`, `resolucion` en `CAMBIO` o `REEMBOLSO`, y `requiereDevolucionFisica = true`. Si no: 409 `RESOLUCION_NO_APROBADA`.
+2. Body: `lineas[].sku` (debe corresponder a una línea del pedido devuelto), `lineas[].cantidadRecibida`, `lineas[].cantidadApta` (≤ recibida, si no 400 `CANTIDAD_INVALIDA`), `evidencia` opcional.
+3. **Idempotencia real (G6 P-05):** si la confirmación repite exactamente las mismas cantidades que una operación que quedó `PENDIENTE` (Productos no respondió la vez anterior), se reintenta con el **mismo** `operation_id` — no se crea una fila nueva. Si ya se recibieron todas las unidades devueltas de ese SKU: 409 `RECEPCION_YA_CONFIRMADA`. Una recepción parcial distinta (llegan más unidades después) es una operación nueva, con su propio `operation_id`.
+4. Se guardan las filas en `devolucion_recepcion` como `PENDIENTE` *antes* de llamar a Productos (para poder reintentar si falla), y `HistorialDevolucion` registra el detalle.
+5. `ProductosClient.reintegrar(...)` (`POST /api/v1/inventario/reintegros`, `reason: DEVOLUCION_ACEPTADA`) — **solo** con `cantidadApta`. Si `cantidadApta` es 0 para todas las líneas, no se llama a Productos en absoluto. Si Productos no responde: 503 `PRODUCTOS_NO_DISPONIBLE`, las filas quedan `PENDIENTE` para el siguiente intento (punto 3). Si responde: filas a `COMPLETADO`.
+6. `location_id` sale de `integracion.productos-ubicacion-devoluciones` (env `PRODUCTOS_UBICACION_DEVOLUCIONES`) — **confirmado 2026-10-16 por G6 (issue #100, Marco Castilla):** Lurín es el almacén de recepción, `location_id` = `9129b578-631e-1735-8427-b683fb524380` (ALM-LURIN, ALMACEN_CENTRAL). Falta setear el valor real en `.env` (no está en este repo — avisar a Michael): `PRODUCTOS_UBICACION_DEVOLUCIONES=9129b578-631e-1735-8427-b683fb524380`. Mientras no esté seteado, sin ese valor en modo real: 503 en vez de inventar uno.
+7. No cambia `devolucion.estado` directamente — sigue `APROBADA` hasta que `DevolucionService.completarSiCorresponde(...)` confirme que ya no falta nada (reembolso exitoso en F4, o el reemplazo de M1 entregado en `CAMBIO`, ver 7.5c); ahí pasa a `COMPLETADA`.
+
+**Importante para `REEMBOLSO`:** el llamado a `ReembolsoService` en 2.5 (paso de arriba) no espera a este endpoint — el dinero se devuelve igual, haya llegado o no el producto. Este paso 2.5b solo afecta inventario, nunca el reembolso.
+
+Ver `ESP-08` 8.2b y reglas 14-16, y `integraciones/ACUERDO_G6_PRODUCTOS.md` para el payload exacto de `/inventario/reintegros`. Modelo de datos: `postventa.devolucion_recepcion`, `postventa.historial_devolucion` y `postventa.devolucion.requiere_devolucion_fisica` — ver `infra/bd/ventas_postventa_schema.sql` (**falta confirmar si ya se aplicó en Supabase**).
+
+### 7.5c. Avisos de M1 sobre el reemplazo (`DevolucionService.reemplazoAnulado`/`reemplazoEntregado`, construido 2026-10-16)
+
+M1 avisa por `POST /api/v2/eventos` (el mismo canal de siempre, `EnvioEventosScheduler` de M1 → `PostventaClient`) cuando la orden de reemplazo de un `CAMBIO` cambia de estado — ya no hay coordinación directa con Despacho de este lado:
+
+- **`pedido.anulado` con `datos.devolucionId`:** Productos rechazó o venció la reserva del reemplazo. `reemplazoAnulado` busca la devolución por ese código y la devuelve a `EN_EVALUACION` (`HistorialDevolucion` registra el motivo), **no** la deja `RECHAZADA` — el Gestor puede volver a resolverla y pedir otro reemplazo.
+- **`pedido.entregado` con `datos.devolucionId`:** el reemplazo llegó al cliente. `reemplazoEntregado` marca esa parte como confirmada; `completarSiCorresponde` cierra la devolución a `COMPLETADA` si la recepción física (7.5b) también está lista.
+- Un aviso de una devolución que no existe, o de un reemplazo que ya no es el vigente de esa devolución (viejo o repetido), se ignora — M1 no tiene que reintentarlo.
+
 ### 7.6. Lista para terminar F3
 
-Al 2026-10-12, F3 está completo y en `main`:
+Al 2026-10-16, F3 está completo en `main`, incluida la recepción física:
 
 - [x] Entidades actualizadas con H2 (`Devolucion`, `DevolucionItem`)
 - [x] Subir evidencia con validación de tipo y tamaño
@@ -744,15 +807,21 @@ Al 2026-10-12, F3 está completo y en `main`:
 - [x] Consultar y listar
 - [x] Resolver: rechazo, reembolso y cambio
 - [x] Usar las columnas de H11 (`fecha_registro`, `fecha_resolucion`, `referencia_operacion`)
+- [x] 2.5b Confirmar recepción física — `RecepcionService`, `devolucion_recepcion`, `historial_devolucion` (ver 7.5b)
+- [x] `ProductosClient.reintegrar` con el payload real de G6 (`operation_id`, `order_id`, `source_ref`, `reason`, `lines[]`) — sin inventar `location_id`
 - [x] Verificado contra Supabase real: el servicio arranca y los endpoints 2.1 a 2.5 funcionan (2026-10-12)
+- [x] `CAMBIO` ya no coordina directo con Despacho — pide la orden de reemplazo a M1 (1.11) y reacciona a `pedido.anulado`/`pedido.entregado` (ver 7.5c)
 
 Pendientes:
 
 - [ ] Reemplazar el reembolso simulado (`SolicitadorReembolsoSimulado`) por `ReembolsoService` de F4 cuando exista
 - [ ] Sumar `devoluciones_aprobadas` al dashboard cuando exista `ProyeccionesService`
 - [ ] Cuando Seguridad registre `ventas:pedidos:consultar`, `VentasClient` debe usar el token de servicio de M2 en vez de reenviar el token de quien llama (ver 3.7)
-- [ ] Conectar Productos (ruta de disponibilidad, por acordar) y Despacho (sin acuerdo todavía)
-- [ ] Criterios de aceptación de ESP-07 y ESP-08
+- [ ] `ProductosClient.consultarDisponibilidad` para `CAMBIO` (`hayDisponibilidad` hoy lanza 503 en modo real) — construir contra `GET /api/v1/inventario/disponibilidad` cuando G6 autorice explícitamente a M2 y Seguridad registre `inventario:disponibilidad:leer`
+- [ ] Activar `ProductosClient.reintegrar` en modo real — el código ya está (7.5b); G6 ya confirmó el `location_id` (punto 6 arriba), falta setear `PRODUCTOS_UBICACION_DEVOLUCIONES=9129b578-631e-1735-8427-b683fb524380` y `PRODUCTOS_URL=https://g6-productos-ofertas.duckdns.org` (comentado/deshabilitado todavía — G6 avisó que no está operativa, ver `integraciones/ACUERDO_G6_PRODUCTOS.md`) en el `.env` real, y que Seguridad registre `inventario:reintegrar` para `modulo-postventa`
+- [ ] Criterios de aceptación de ESP-07 y ESP-08 (incluye CA-07/CA-08/CA-09 y reglas 17-18, nuevos)
+- [ ] Confirmar en Supabase: H12 (`id_producto` a `varchar(64)`), las tablas/columna nuevas de recepción física (`devolucion_recepcion`, `historial_devolucion`, `devolucion.requiere_devolucion_fisica`) y las de la orden de reemplazo en M1 (`pedido.tipo`, `id_pedido_origen`, `devolucion_id`, `ux_pedido_reemplazo_vigente`)
+- [ ] Que Seguridad registre `ventas:pedidos:reemplazar` para `modulo-postventa` (1.11) — ver `integraciones/ACUERDO_G7_SEGURIDAD.md`
 
 ---
 
@@ -792,9 +861,19 @@ Se llama dentro de la misma transacción que guarda el nuevo reembolso. La colum
 
 ### 8.3. Reintento de un reembolso `PENDIENTE` o `FALLIDO`
 
-ESP-09 pide poder recuperarlo sin crear otro. Basta con que una nueva llamada con la **misma clave y mismos datos** vuelva a intentar la pasarela si el estado no es `EXITOSO`, agregando un nuevo `reembolso_intento` con `numero_intento + 1`. Nunca se crea un segundo `reembolso`.
+ESP-09 pide poder recuperarlo sin crear otro. Basta con que una nueva llamada con la **misma clave y mismos datos** vuelva a intentar la pasarela si el estado no es `EXITOSO`, agregando un nuevo `reembolso_intento` con `numero_intento + 1`. Nunca se crea un segundo `reembolso`. **El frontend obtiene esos "mismos datos" del detalle de 2.6c** (`idempotencyKey`, `origen`, `origenId`, `pedidoId`, `monto`, `moneda`, `motivo`, `solicitadoPor`) y los reenvía tal cual a 2.6 — no se construye un endpoint `/reintentar` aparte (decisión PO, 2026-10-16).
 
-### 8.4. Lista para terminar F4
+### 8.4. 2.6b y 2.6c — bandeja y detalle del Gestor (construido 2026-10-16, mockup 08)
+
+`ConsultaReembolsosService` ya existe (`GET /api/v2/reembolsos` con `estado`/`origen`/`pedidoId`/`pagina`/`tamano`). Falta, por decisión de PO del mismo día:
+
+1. Agregar a `ConsultaReembolsosService` los filtros `buscar`, `desde`/`hasta` y `orden` — mismo patrón que `FiltroReclamos`/`PedidosFiltro` (ya en el repo, copiar el enfoque).
+2. Construir `GET /api/v2/reembolsos/{reembolsoId}` (2.6c): trae todo lo de la fila de la lista más `idempotencyKey`, `motivo`, `solicitadoPor`, `intentos` completo (`ReembolsoIntento`), y:
+   - `autorizador`: si `origen == DEVOLUCION`, `devolucion.id_autorizador` (join directo, mismo esquema); si `origen == ANULACION`, `null` (no hay endpoint en M1 para consultarlo, no se construye solo para esto).
+   - `canal`/`cliente`: `VentasClient.consultarPedido(pedidoId)` — **solo en el detalle**, nunca en la lista (evitar N llamadas a M1 por página).
+3. "Autorizar" en el mockup es un modal de confirmación del frontend, sin estado ni endpoint — no hay nada que construir en el backend para eso.
+
+### 8.5. Lista para terminar F4
 
 - [ ] Entidades actualizadas con H3 (`Reembolso`, `ReembolsoIntento`) y campo `origenId` de H4
 - [ ] Idempotencia: misma clave y mismos datos, misma clave y otros datos
@@ -802,6 +881,8 @@ ESP-09 pide poder recuperarlo sin crear otro. Basta con que una nueva llamada co
 - [ ] Intentos guardados (ESP-10), nunca se editan ni se borran
 - [ ] Prueba de concurrencia: dos hilos con el mismo saldo, solo uno pasa
 - [ ] Criterios ESP-09-CA-01 a CA-10 y ESP-10-CA-01 a CA-05
+- [x] 2.6b bandeja del Gestor — construida (falta `buscar`/`desde`/`hasta`/`orden`, ver 8.4)
+- [ ] 2.6c detalle del Gestor — ver 8.4
 
 ---
 

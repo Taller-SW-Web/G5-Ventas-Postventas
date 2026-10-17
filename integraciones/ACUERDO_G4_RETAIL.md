@@ -27,8 +27,10 @@ Nada directamente — Retail es quien consume nuestra API (`POST /api/v1/pedidos
 
 ## Pendiente de confirmar / resolver
 
-- **G2 (Despacho) todavía no confirma** si `LISTO_PARA_RECOJO` es efectivamente un sub-estado suyo (R10) — no bloquea este acuerdo, Retail ya corrige su ejemplo independientemente de esa respuesta.
-- Verificar que Retail actualice su `api-contracts.md` (§1.1, §4.3, §5.5, decisión D-04) para quitar la responsabilidad de emisión de comprobante que seguía atribuyéndonos a nosotros (R6).
+- **G2 (Despacho) ya confirmó** que `LISTO_PARA_RECOJO` no es un estado ni sub-estado suyo (2026-10-13, Kevin) — es que el cliente eligió recoger en tienda al comprar. Esto no es un sub-estado de Despacho: es el gap de `RECOJO_TIENDA` de abajo.
+- **`RECOJO_TIENDA` (click & collect) sin especificar — nunca se envió la consulta a Retail.** `ESP-01` solo tiene `envio.tipoEntrega: RECOJO_TIENDA` como valor suelto de un enum (línea 171), sin ningún camino en la máquina de estados (`ESP-03`), sin que `tiendaId` sea obligatorio para ese caso, y sin acuerdo de quién marca "listo para recoger" ni quién marca `ENTREGADO`. Preguntas pendientes de mandar: (1) ¿`tiendaId` obligatorio con `RECOJO_TIENDA`, igual que en `RETAIL`? (2) ¿quién/qué marca "listo para recoger" y notifica al cliente? (3) ¿quién marca `ENTREGADO` cuando el cliente recoge — endpoint que llama Retail, o acción del Gestor? (4) ¿corre igual el plazo de 7 días de F3 desde ese `ENTREGADO`?
+- **Verificar si Retail ya actualizó su `api-contracts.md`** (§1.1, §4.3, §5.5, decisión D-04) para quitar la responsabilidad de emisión de comprobante que seguía atribuyéndonos a nosotros (R6) — pedido el 2026-10-12, nunca confirmado.
+- **Aclarar la tabla de "límites de responsabilidad" de Retail** (recibida vía G2 el 2026-10-13) que atribuye a "Ventas y Postventa (G5)" la propiedad de "comprobante fiscal" — contradice R6 si se lee literal. Sin confirmar si es un error de transcripción o una contradicción real; hay que pedirles la tabla con el formato intacto antes de asumir cualquiera de las dos.
 
 ## Historial
 

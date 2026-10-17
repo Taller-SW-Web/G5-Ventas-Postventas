@@ -205,7 +205,7 @@ El frontend debe:
 
 - Validar la existencia del token antes de mostrar contenido administrativo
 - Respetar el rol recibido desde Seguridad (G)
-- Permitir acceso a funciones administrativas solo a `GESTOR` o `ADMIN`, según el contrato
+- Permitir acceso a funciones administrativas solo al rol `ADMIN_VENTAS` (claim `roles` del JWT de Seguridad) — nunca `GESTOR` ni `ADMIN`, ver `AGENTS.md` sección 2, punto 9
 - Mostrar una vista de acceso denegado cuando el usuario no tenga permisos
 - No depender únicamente del frontend para proteger operaciones sensibles; el backend debe volver a validar rol y autorización
 
