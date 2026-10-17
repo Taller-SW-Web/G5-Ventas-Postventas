@@ -417,6 +417,47 @@
 -   **`409 Conflict`** (`CLAVE_IDEMPOTENCIA_EN_CONFLICTO`): La `X-Idempotency-Key` ya existe para una solicitud con datos distintos (origen, monto, moneda), o la pasarela respondió con error.
 -   **`409 Conflict`** (`SALDO_INSUFICIENTE`): El monto, sumado a los reembolsos `EXITOSO`/`PENDIENTE` ya registrados para el mismo pedido, supera el total pagado.
 
+#### 2.6b Listar Reembolsos (bandeja del Gestor, mockup 08 — nuevo, 2026-10-16, no está en el contrato)
+
+-   **Endpoint:** `GET /api/v2/reembolsos`
+-   **Descripción:** Bandeja del Gestor. `ConsultaReembolsosService`, separado del `POST` de 2.6 (que solo ejecuta extornos).
+-   **Headers:** `Authorization: Bearer <token_gestor>` (rol `ADMIN_VENTAS`)
+-   **Query Params:** `estado` (opcional, `EstadoReembolso`), `origen` (opcional, `ANULACION`\|`DEVOLUCION`), `pedidoId` (opcional, código `PED-AAAA-NNNNN`), `pagina` (default `0`), `tamano` (default `10`, máximo `100`). Siempre ordenado por fecha, más recientes primero.
+-   **Respuestas:**
+    -   **`200 OK`**:
+
+``` json
+{
+  "contenido": [
+    {
+      "reembolsoId": "REEM-90812",
+      "pedidoId": "PED-2026-00981",
+      "origen": "ANULACION",
+      "origenId": "ANUL-0012",
+      "monto": 129.90,
+      "moneda": "PEN",
+      "estado": "EXITOSO",
+      "transaccionPasarelaId": "TX-SIM-871239",
+      "fecha": "2026-09-23",
+      "intentos": 1,
+      "ultimoResultado": "EXITOSO",
+      "fechaUltimoIntento": "2026-09-23T00:15:30Z"
+    }
+  ],
+  "pagina": 0,
+  "totalPaginas": 1,
+  "totalElementos": 1
+}
+```
+
+-   **`400 Bad Request`** (`PAGINACION_INVALIDA`): `pagina` negativo o `tamano` fuera de 1-100.
+
+**Pendiente — sin resolver todavía (preguntas abiertas de quien construye el frontend, Mockup 08):**
+1. **No existe un `GET /api/v2/reembolsos/{reembolsoId}` de detalle.** El panel "Ver" del mockup tendría que armarse con lo que ya trae esta lista (no incluye autorizador, canal ni cliente).
+2. **"Autorizar" y "Ejecutar" siguen siendo un solo paso.** El `POST` de 2.6 ejecuta directo; no hay un estado ni endpoint intermedio de autorización — es una decisión de PO todavía sin tomar: ¿el frontend simula la autorización como confirmación visual, o hace falta un paso real?
+3. **No hay endpoint de "reintento seguro".** Para reintentar, el frontend tendría que reenviar el mismo `POST` de 2.6 con la misma `X-Idempotency-Key` — no existe un `POST /reembolsos/{id}/reintentar` que la reutilice internamente.
+4. **`cliente` y `canal` no se persisten en `Reembolso`.** No aparecen en esta lista; si el mockup los necesita, hay que decidir si se enriquecen consultando a M1 o si se agregan columnas nuevas.
+
 ### F5: Calificación de Experiencia / CSAT (Responsable: Johan)
 
 #### 2.7 Registrar Encuesta CSAT
@@ -442,6 +483,31 @@
     -   **`403 Forbidden`**: El `pedidoId` no pertenece al `sub` del usuario autenticado en el JWT (acuerdo H-04).
     -   **`422 Unprocessable Entity`** (`ORDER_NOT_DELIVERED`): El pedido no está en estado terminal `ENTREGADO`. *(Excepción al código `PEDIDO_NO_ENTREGADO`/`409` que usa el resto de este contrato — para este endpoint específico se usó literalmente el código y HTTP status acordados con Marketplace en H-04; ver nota en [catalogo-errores.md](catalogo-errores.md).)*
     -   **`409 Conflict`** (`CSAT_ALREADY_SUBMITTED`): Ya existe una encuesta registrada para ese pedido. *(Mismo caso que `CALIFICACION_DUPLICADA` en el resto del repo; aquí se usa el nombre acordado con Marketplace.)*
+
+#### 2.7b Listar Calificaciones (bandeja del Gestor, mockup 09 — nuevo, 2026-10-16, no está en el contrato)
+
+-   **Endpoint:** `GET /api/v2/csat`
+-   **Descripción:** Detalle CSAT, distribución y comentarios por canal para el Gestor. `resumen` se calcula sobre todo el filtro aplicado, no solo sobre la página actual; `distribucion` siempre trae las claves `1` a `5` (con `0` si no hay datos para ese puntaje).
+-   **Headers:** `Authorization: Bearer <token_gestor>` (rol `ADMIN_VENTAS`)
+-   **Query Params:** `canal` (opcional), `puntaje` (opcional, 1-5), `desde`/`hasta` (opcional, fecha ISO), `pagina` (default `0`), `tamano` (default `10`).
+-   **Respuestas:**
+    -   **`200 OK`**:
+
+``` json
+{
+  "contenido": [
+    { "pedidoId": "PED-2026-00981", "puntaje": 5, "comentario": "Excelente", "canal": "CHATBOT", "fecha": "2026-09-23" }
+  ],
+  "pagina": 0,
+  "totalPaginas": 1,
+  "totalElementos": 1,
+  "resumen": {
+    "total": 1,
+    "promedio": 5.0,
+    "distribucion": { "1": 0, "2": 0, "3": 0, "4": 0, "5": 1 }
+  }
+}
+```
 
 ### F6: Reclamos y Dashboard (Responsable: Fabrizio)
 
@@ -534,6 +600,10 @@
     -   `clienteId` (opcional): Identificador del cliente.
     -   `estado` (opcional):
         `REGISTRADO | EN_PROCESO | ATENDIDO | DERIVADO`
+    -   `buscar` (opcional, **agregado 2026-10-16, no está en el contrato** — mockup 07): un código `PED-AAAA-NNNNN` filtra por ese pedido; cualquier otro texto busca por código de reclamo exacto, documento exacto o parte del nombre del consumidor.
+    -   `sla` (opcional, **agregado 2026-10-16**): `EN_PLAZO` (6+ días hábiles) \| `POR_VENCER` (3-5) \| `CRITICO` (0-2) \| `VENCIDO` (pasó la fecha límite sin respuesta) \| `ATENDIDO` (ya tiene respuesta formal) — semáforo del plazo legal, distinto de `estado`: un reclamo puede estar `EN_PROCESO` y `VENCIDO` a la vez.
+    -   `desde` / `hasta` (opcional, **agregado 2026-10-16**): fecha ISO, día de registro (UTC), ambos inclusivos.
+    -   `orden` (opcional, **agregado 2026-10-16**): `RECIENTES` (default) \| `ANTIGUOS`, por fecha de registro.
     -   `pagina` (opcional, default: `0`)
     -   `tamano` (opcional, default: `10`)
 -   **Respuestas:**
@@ -665,19 +735,19 @@
     "moneda": "PEN",
     "motivo": null,
     "items": [
-      { "productoId": 101, "cantidad": 1, "importe": 129.90 }
-    ]
+      { "productoId": "PROD-101", "cantidad": 1, "importe": 129.90 }
+    ],
+    "devolucionId": null
   }
 }
 ```
 
 -   `datos.vendedorId` y `datos.items` solo vienen en `pedido.pagado` (se usan para `agregado_ventas`); en `pedido.anulado` y `pedido.entregado` pueden omitirse. `datos.motivo` es obligatorio solo en `pedido.anulado`.
+-   `datos.devolucionId` solo viene cuando el pedido es una orden de reemplazo de un `CAMBIO` (`pedido.tipo: REEMPLAZO`, `api-ventas.md` 1.11, acuerdo con Productos issue G6 #100) — identifica la devolución de M2 que originó el reemplazo. `EventoPedidoService` usa `pedido.anulado` con este campo para reabrir la devolución a `EN_EVALUACION` (`DevolucionService.reemplazoAnulado`) y `pedido.entregado` para cerrar su lado logístico (`reemplazoEntregado`). Nunca viene en una venta normal.
 -   `tipo`: `pedido.pagado | pedido.anulado | pedido.entregado`.
 -   `idEvento`: UUID generado por M1. Si M1 reintenta, envía el mismo
     valor.
 -   **Respuestas:**
-    -   **`200 OK`**: Evento procesado, o ya había sido procesado antes
-        (se guarda en `postventa.evento_recibido` y no se procesa dos
-        veces).
+    -   **`200 OK`**: `{ "idEvento": "...", "repetido": false }` si es la primera vez que se procesa; `repetido: true` si ya se había procesado antes (se guarda en `postventa.evento_recibido` y no se procesa dos veces) — en ambos casos M1 deja de reintentar.
     -   **`400 Bad Request`**: `tipo` desconocido o estructura inválida.
     -   **`401 Unauthorized`**: Credencial distinta a la de M1.

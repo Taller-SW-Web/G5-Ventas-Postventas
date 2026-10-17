@@ -65,12 +65,23 @@ Códigos que ya aparecen como valor literal de `codigo` en los contratos. Los de
 | `PATCH /api/v1/pedidos/{pedidoId}/estado` | `409` | Transición no permitida por la máquina de estados. | `TRANSICION_NO_PERMITIDA` |
 | `POST /api/v1/pedidos/{pedidoId}/anulaciones` | `400` | Motivo ausente o no tipificado. | — |
 | `POST /api/v1/pedidos/{pedidoId}/anulaciones` | `409` | Pedido ya en `DESPACHADO` o `ENTREGADO` (derivar al microservicio M2). | — |
+| `PATCH /api/v1/pedidos/{pedidoId}/anulaciones/{anulacionId}` | `409` | Al aprobar, Despacho (G2) respondió que el paquete ya salió (`EN_CAMINO`) — la anulación queda `RECHAZADA`, no se reintenta (ESP-06 CA-06). | `PEDIDO_EN_CAMINO` |
 | `POST /api/v1/pedidos/reemplazos` | `400` | Un `sku` no está en el pedido original. | `ITEM_NO_PERTENECE_AL_PEDIDO` |
 | `POST /api/v1/pedidos/reemplazos` | `400` | Se pide reponer más unidades de ese `sku` de las que se compraron. | `CANTIDAD_EXCEDE_COMPRADA` |
 | `POST /api/v1/pedidos/reemplazos` | `404` | `pedidoOrigenId` no existe. | `PEDIDO_NO_ENCONTRADO` |
 | `POST /api/v1/pedidos/reemplazos` | `409` | El pedido original no está `ENTREGADO`. | `PEDIDO_NO_ENTREGADO` |
 | `POST /api/v1/pedidos/reemplazos` | `409` | El pedido original es del canal `RETAIL` (esos cambios se hacen en tienda). | `REEMPLAZO_NO_APLICA` |
 | `POST /api/v1/pedidos/reemplazos` | `409` | La `devolucionId` ya tiene un reemplazo vigente de otro pedido origen. | `REEMPLAZO_YA_EXISTE` |
+| `POST /api/v1/pedidos/{pedidoId}/preparacion` | `409` | El pedido no está `PAGADO`. | `TRANSICION_NO_PERMITIDA` |
+| `POST /api/v1/pedidos/{pedidoId}/preparacion` | `409` | El pedido es `RETAIL` (se entrega en tienda, sin despacho). | `DESPACHO_NO_APLICA` |
+| `POST /api/v1/pedidos/{pedidoId}/despacho` | `409` | El pedido no está `EN_PREPARACION`. | `ESTADO_NO_PERMITE_DESPACHO` |
+| `POST /api/v1/pedidos/{pedidoId}/despacho` | `409` | Falta `direccion` o `distrito` del pedido. | `DATOS_ENVIO_INCOMPLETOS` |
+| `POST /api/v1/pedidos/{pedidoId}/despacho` | `409` | El pedido es `RETAIL`. | `DESPACHO_NO_APLICA` |
+| `POST /api/v1/pedidos/{pedidoId}/despacho` | `409` | Orden de reemplazo: la reserva de Productos venció antes de sellar. | `RESERVA_EXPIRADA` |
+| `POST /api/v1/pedidos/{pedidoId}/despacho` | `422` | Despacho (G2) no cubre el destino del pedido. | `DESP_ERROR_SIN_COBERTURA` |
+| `POST /api/v1/pedidos/{pedidoId}/despacho` | `409` | Despacho (G2) rechazó la solicitud (otro motivo de negocio). | `DESPACHO_RECHAZADO` |
+| `POST /api/v1/pedidos/{pedidoId}/despacho` | `503` | Despacho (G2) no respondió. | `DESPACHO_NO_DISPONIBLE` |
+| `POST /api/v1/pedidos/{pedidoId}/despacho` | `503` | Orden de reemplazo: Productos no confirmó el consumo de la reserva. | `PRODUCTOS_NO_DISPONIBLE` |
 
 ---
 

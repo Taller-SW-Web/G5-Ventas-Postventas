@@ -400,10 +400,12 @@ Especificaciones: ESP-01, ESP-02, ESP-03, ESP-04. Contrato: `api-ventas.md` 1.1 
 | 1.1 | `POST /api/v1/pedidos` | scope `ventas:pedidos:crear` (token de servicio del canal) | 201 | `PedidoService.crear` |
 | 1.2 | `POST /api/v1/pedidos/{pedidoId}/pagos/notificacion` | scope `ventas:pagos:webhook` | 200 | `PagoService.procesarNotificacion` |
 | 1.3 | `GET /api/v1/pedidos/{pedidoId}` | rol `CLIENTE` (dueño del pedido) o `ADMIN_VENTAS` — **no es scope** | 200 | `PedidoService.consultar` |
-| 1.4 | `GET /api/v1/pedidos` (uso administrativo, filtra por `clienteId`) | rol `ADMIN_VENTAS` — **no es scope** | 200 | `PedidoService.listar` |
+| 1.4 | `GET /api/v1/pedidos` (bandeja del Gestor, `clienteId` opcional, más `canal`/`buscar`/`orden` fuera de contrato, ver 5.1 nota) | rol `ADMIN_VENTAS` — **no es scope** | 200 | `PedidoService.listar` |
 | 1.4b | `GET /api/v1/pedidos/me` (acuerdo H-03) | rol `CLIENTE`, identidad por `sub` del JWT, sin `clienteId` en la URL — **no es scope** | 200 | `PedidoService.listarMios` |
-| 1.5 | `POST /api/v1/integraciones/despachos/eventos` (reemplaza el viejo 1.5/1.6, ver 5.6/5.7) | scope `ventas:pedidos:estado` (token de servicio de Despacho, reusado — decisión nuestra, 2026-10-13) | 200 | `LogisticaService.procesarEvento` |
+| 1.5 | `POST /api/v1/integraciones/despachos/eventos` (reemplaza el viejo 1.5/1.6, ver 5.6/5.7) | scope `ventas:pedidos:estado` (token de servicio de Despacho, reusado — decisión nuestra, 2026-10-13) | 200 | `EventoDespachoService.procesar` (vía `DespachoEventosController`) |
 | 1.11 | `POST /api/v1/pedidos/reemplazos` (nuevo, 2026-10-16 — F3, acuerdo con Productos issue G6 #100, ver 5.10) | scope `ventas:pedidos:reemplazar` (token de servicio de `modulo-postventa`, pendiente de que Seguridad lo registre) | 201/200 | `ReemplazoService.crear` |
+| 1.12 | `POST /api/v1/pedidos/{pedidoId}/preparacion` (nuevo, 2026-10-16, ver 5.11) | rol `ADMIN_VENTAS` | 200 | `DespachoPedidoService.iniciarPreparacion` |
+| 1.13 | `POST /api/v1/pedidos/{pedidoId}/despacho` (nuevo, 2026-10-16, ver 5.11) | rol `ADMIN_VENTAS` | 200 | `DespachoPedidoService.paqueteSellado` |
 
 `ventas:pedidos:leer` y `ventas:admin` **no son scopes reales** — Seguridad no los registra porque dependen de identidad de persona, no de módulo. Se resuelven con el claim `roles` del token de usuario (ver sección 12 y `api-ventas.md`, catálogo de scopes).
 
@@ -520,8 +522,8 @@ Despacho (G2) confirmó que no van a llamar a `PATCH /pedidos/{id}/estado` ni a 
 
 **Pendiente antes de programarlo** (ya no depende de G2, ver `api-ventas.md` 1.5 y `integraciones/ACUERDO_G2_DESPACHO.md`):
 - Agregar `pedido.fecha_estimada_entrega` al modelo de datos (confirmado necesario, falta la migración) para que `DESPACHO_REPROGRAMADO` la actualice con `datos.nuevaFechaProgramada`.
-- Definir la señal interna que marca "paquete sellado y listo" para disparar `POST /api/v1/despachos` (no apenas `EN_PREPARACION`) — diseño de F1/frontend, pendiente.
-- F2: manejar el `409 Conflict` de Despacho al cancelar un despacho ya `EN_CAMINO` como rechazo de negocio (no reintentar, marcar la anulación como improcedente), no como la falla técnica de ESP-06 CA-05 — ver ESP-06 CA-06 (nuevo).
+- ~~Definir la señal interna que marca "paquete sellado y listo"~~ — **construido 2026-10-16:** dos botones del Gestor, ver 1.12/1.13 y 5.11.
+- ~~F2: manejar el `409 Conflict` de Despacho al cancelar un despacho ya `EN_CAMINO`~~ — **construido 2026-10-16** en `AnulacionService`: `RECHAZADA` con motivo `PEDIDO_EN_CAMINO` (ESP-06 CA-06); si Despacho falla por otro motivo (5xx/sin respuesta), la anulación sigue y queda la inconsistencia registrada en el log (ESP-06 CA-05).
 
 <details>
 <summary>Diseño anterior (ya no vigente, se deja solo como referencia de lo que cambió)</summary>
@@ -550,8 +552,9 @@ Al 2026-10-12, revisando el repo directamente:
 - [x] `ResultadoReservaService` listo para aplicar la respuesta de la reserva (confirmada/rechazada) — **falta** el `@RabbitListener` real de `po.sales.q` (hoy solo se llama en modo simulado desde `CrearPedidoService`)
 - [x] 1.2 notificación de pago, idempotente
 - [x] 1.4b (`/pedidos/me`, acuerdo H-03) — `PedidoService.listarMios`
-- [ ] 1.3 y 1.4 consultar y listar — hoy son stubs (`NoImplementadoException`, 501)
-- [ ] 1.5 (nuevo diseño, webhook único) — todavía sin construir, mejor así porque el diseño cambió (ver 5.6/5.7); **las rutas viejas `PATCH .../estado` y `POST .../eventos-logistica` que hoy están mapeadas como stubs en el controller hay que borrarlas, no implementarlas**
+- [x] 1.3 y 1.4 consultar y listar — construidos; 1.4 además con `canal`/`buscar`/`orden` y `nombreCliente` (ver tabla de 5.1, no están en el contrato original)
+- [x] 1.5 (nuevo diseño, webhook único) — `DespachoEventosController`/`EventoDespachoService` construidos
+- [x] 1.11, 1.12 y 1.13 (orden de reemplazo, iniciar preparación, paquete sellado) — ver 5.10/5.11
 - [ ] Consumo y restauración de cupón por RabbitMQ (`promotions.coupon.consumption.requested`) — no hay nada programado todavía, incluyendo el motivo `CUPON_RECHAZADO` (ver 6.1)
 - [ ] `EnvioEventosScheduler` y `PostventaClient.enviarEvento`
 - [ ] Criterios de aceptación de ESP-01 a ESP-04 probados
@@ -566,11 +569,26 @@ F3 lo invoca al aprobar un `CAMBIO` (ESP-08, flujo B). Resuelve lo que antes iba
 3. Crea el `Pedido` con `tipo: REEMPLAZO`, `idPedidoOrigen`, `devolucionId`, copiando contacto/dirección del original; `total = 0` (sin fila de `Pago` — el cliente ya pagó el original).
 4. Llama a `ProductosClient.reservar(...)` — el mismo método de 1.1, mismo scope, nada nuevo que pedirle a Productos.
 5. **Idempotente por `devolucionId`:** un índice único (`ux_pedido_reemplazo_vigente`, solo `estado <> ANULADO`) impide dos reemplazos vigentes de la misma devolución. Si ya existe uno, responde `200` con ese mismo pedido en vez de crear otro; si la carrera la gana otra petición, captura el `DataIntegrityViolationException` y hace lo mismo.
-6. Si Productos confirma la reserva (modo simulado: al instante): `CREADO → EN_PREPARACION` (actor `SISTEMA_PRODUCTOS`, sin pasar por `PAGADO` — ver `MaquinaEstados`, transiciones exclusivas de `REEMPLAZO`). Sigue el flujo normal de F1 (Gestor marca "paquete sellado" → Despacho).
-7. Si Productos rechaza o vence la reserva: `→ ANULADO` (actor `SISTEMA_PRODUCTOS`, motivo `STOCK_NO_DISPONIBLE`) y M1 publica `pedido.anulado` con `datos.devolucionId` — `DevolucionService.reemplazoAnulado` en M2 reabre la devolución a `EN_EVALUACION`.
-8. Al entregarse, `pedido.entregado` con `datos.devolucionId` — `DevolucionService.reemplazoEntregado` en M2 cierra el lado logístico del cambio.
+6. Si Productos acepta la **reserva** (modo simulado: al instante): `CREADO → EN_PREPARACION` (actor `SISTEMA_PRODUCTOS`, sin pasar por `PAGADO` — ver `MaquinaEstados`, transiciones exclusivas de `REEMPLAZO`). Ojo: esto es solo la reserva, no el consumo — sigue igual que 1.1 (reservar al crear, confirmar/consumir después). Sigue el flujo normal de F1 (Gestor marca "Iniciar preparación" ya está implícito aquí, luego "Paquete sellado" → 5.11).
+7. Si Productos rechaza la reserva al crear: `→ ANULADO` (actor `SISTEMA_PRODUCTOS`, motivo `STOCK_NO_DISPONIBLE`) y M1 publica `pedido.anulado` con `datos.devolucionId` — `DevolucionService.reemplazoAnulado` en M2 reabre la devolución a `EN_EVALUACION`.
+8. **El consumo real de la reserva se difiere a "Paquete sellado" (5.11)**, no pasa aquí — como no hay `PAGADO` que lo dispare, `DespachoPedidoService.paqueteSellado` llama a `ProductosClient.confirmar` justo antes de crear el despacho. Si la reserva venció para entonces: `EN_PREPARACION → ANULADO` (mismo motivo, mismo aviso a M2) — ver 5.11.
+9. Al entregarse, `pedido.entregado` con `datos.devolucionId` — `DevolucionService.reemplazoEntregado` en M2 cierra el lado logístico del cambio.
 
 Ver `api-ventas.md` 1.11, `ESP-03` 7.2 (nuevas transiciones) y `ESP-08` 8.1/flujo B/reglas 7, 17, 18.
+
+### 5.11. 1.12 y 1.13 Botones del Gestor: preparación y despacho (`DespachoPedidoService`, construido 2026-10-16)
+
+Resuelven la señal pendiente de "qué dispara `POST /despachos`" (`AGENTS.md` sección 4, acuerdo G2 D1) — son dos botones separados, no uno:
+
+1. **"Iniciar preparación"** (`POST /pedidos/{id}/preparacion`): `PAGADO → EN_PREPARACION`, actor `SISTEMA_LOGISTICA` (la matriz de `ESP-03` ya lo decía así — el Gestor solo lo dispara). Idempotente: si ya está `EN_PREPARACION`, `200` sin error. No aplica a `RETAIL` (409 `DESPACHO_NO_APLICA`).
+2. **"Paquete sellado"** (`POST /pedidos/{id}/despacho`): no cambia el estado — llama a `DespachoClient.crear` (`POST /api/v1/despachos` de G2, contrato 7.1). El pedido pasa a `DESPACHADO` después, cuando llega el webhook de 1.5 (`DESPACHO_EN_CAMINO`).
+   - Exige `EN_PREPARACION` (409 `ESTADO_NO_PERMITE_DESPACHO`) y que el pedido tenga `direccion`/`distrito` (409 `DATOS_ENVIO_INCOMPLETOS`) — son los únicos dos campos de destino que G2 exige, el resto (`referencia`, `departamento`, `provincia`) se omite si está vacío, nunca se manda `""`.
+   - Si es una orden de **reemplazo**: antes de llamar a Despacho, consume la reserva de Productos (`ProductosClient.confirmar`) — mismo `operation_id` en cada intento, así que reintentar es seguro. Si venció: 409 `RESERVA_EXPIRADA`, el reemplazo se anula y M2 reabre la devolución.
+   - `DespachoClient.crear` clasifica la respuesta de G2 por `status` + campo `code` de su `application/problem+json` (nunca por texto): `SIN_COBERTURA` → 422 `DESP_ERROR_SIN_COBERTURA`; otro 4xx de negocio → `RECHAZADO` (409 `DESPACHO_RECHAZADO`, no reintentar); 5xx/401/403/408/429/sin respuesta → `NO_DISPONIBLE` (503 `DESPACHO_NO_DISPONIBLE`, reintentar sirve).
+   - `Idempotency-Key` hacia G2: un UUID v4 **derivado determinísticamente** del `pedidoId` (hash SHA-256 reformateado como UUID v4, `DespachoClient.uuidV4`) — no uno aleatorio que haya que persistir; la misma llamada siempre genera la misma clave, así que reintentar el botón es seguro sin guardar nada extra.
+   - El código de despacho de G2 viene en el campo `idDespacho` de su respuesta (confirmado 2026-10-16) — se guarda para mostrarlo en el detalle del pedido.
+
+Ver `api-ventas.md` 1.12/1.13, `integraciones/ACUERDO_G2_DESPACHO.md` (D1, D10-D12).
 
 ---
 

@@ -322,16 +322,19 @@ Descripción: Permite a clientes, canales y administradores consultar el estado 
 - **`401 Unauthorized`**: Token ausente o inválido.
 - **`403 Forbidden`**: El cliente autenticado no es el titular de la orden.
 - **`404 Not Found`**: El pedido solicitado no existe.
-### 1.4 Listar Pedidos por Cliente (uso administrativo)
+### 1.4 Listar Pedidos (bandeja del Gestor, mockup 02)
 
 - **Endpoint:** `GET /api/v1/pedidos`
-Descripción: Listado paginado de pedidos para el Gestor/Backoffice — requiere indicar explícitamente el `clienteId` a consultar. Para que un canal muestre "mis pedidos" al propio cliente autenticado, usar **1.4b** (`/pedidos/me`), no este endpoint.
+Descripción: Listado paginado de pedidos para el Gestor. Sin `clienteId` lista todos — ya **no** es obligatorio (corregido 2026-10-16, antes el contrato lo exigía). Para que un canal muestre "mis pedidos" al propio cliente autenticado, usar **1.4b** (`/pedidos/me`), no este endpoint.
 - **Headers:** `Authorization: Bearer <token_gestor>` (requiere rol `ADMIN_VENTAS`, claim `roles` del JWT — no es un scope, ver catálogo de scopes)
 ### Query Params
-clienteId (requerido para clientes): UUID del cliente en Seguridad (claim `sub`).
+clienteId (opcional): UUID del cliente en Seguridad (claim `sub`).
 estado (opcional): `CREADO` | `PAGADO` | `EN_PREPARACION` | `DESPACHADO` | `ENTREGADO` | `ANULADO`
-desde (opcional): Fecha inicial ISO.
-hasta (opcional): Fecha final ISO.
+canal (opcional, **agregado 2026-10-16, no estaba en el contrato**): `MARKETPLACE` | `CHATBOT` | `RETAIL`.
+buscar (opcional, **agregado 2026-10-16**): un código `PED-AAAA-NNNNN` filtra por ese pedido exacto; cualquier otro texto busca por número de documento exacto o parte del nombre de contacto.
+orden (opcional, **agregado 2026-10-16**): `RECIENTES` (default) | `ANTIGUOS`, por fecha de creación.
+desde (opcional): Fecha inicial ISO (día de creación, UTC, inclusive).
+hasta (opcional): Fecha final ISO (inclusive).
 pagina (opcional, default: 0)
 tamano (opcional, default: 10)
 ### Respuestas
@@ -346,7 +349,8 @@ tamano (opcional, default: 10)
       "estado": "`EN_PREPARACION`",
       "total": 129.90,
       "moneda": "PEN",
-      "fechaCreacion": "2026-09-23T00:05:00Z"
+      "fechaCreacion": "2026-09-23T00:05:00Z",
+      "nombreCliente": "Juan Pérez Rodríguez"
     }
   ],
   "pagina": 0,
@@ -354,6 +358,9 @@ tamano (opcional, default: 10)
   "totalElementos": 1
 }
 ```
+
+- `nombreCliente` (**agregado 2026-10-16, no está en el contrato**): nombre de contacto del pedido, para la columna "Cliente" de la bandeja (mockup 02).
+- `clienteId` en la raíz de la respuesta queda `null` cuando no se filtró por un cliente puntual.
 ### 1.4b Listar Mis Pedidos (acuerdo H-03)
 - **Endpoint:** `GET /api/v1/pedidos/me`
 Descripción: Devuelve los pedidos del cliente autenticado. La identidad sale del claim `sub` del token; no se acepta `clienteId` en la URL.
@@ -426,7 +433,7 @@ Ya **no se envía `guiaRemision`** (Despacho no emite ni gestiona guías de remi
 **Scope del token (decisión nuestra, 2026-10-13):** reusamos `ventas:pedidos:estado`, ya concedido a `modulo-despacho`, en vez del `despachos:eventos:recibir` nuevo que propuso G2 — es semánticamente correcto, ya está concedido y evita pedirle otro registro a Seguridad. Ver `integraciones/ACUERDO_G2_DESPACHO.md`.
 
 **Pendientes de implementación (nuestros, ya no hay nada por preguntarle a Despacho — ver `integraciones/ACUERDO_G2_DESPACHO.md`):**
-1. **Señal interna que marca "paquete físicamente preparado y sellado"** para disparar `POST /api/v1/despachos`: Despacho confirmó el criterio (no alcanza con `EN_PREPARACION`), pero qué acción de nuestro lado representa ese momento (¿botón del Gestor en el centro de despacho?, ¿checklist?) sigue sin definirse — no depende de G2, es diseño de F1/frontend.
+1. ~~Señal interna que marca "paquete físicamente preparado y sellado"~~ — **resuelto 2026-10-16:** dos botones del Gestor, ver 1.12 (`POST /pedidos/{id}/preparacion`) y 1.13 (`POST /pedidos/{id}/despacho`).
 2. **Columna `pedido.fecha_estimada_entrega`** para `DESPACHO_REPROGRAMADO` — agregar al modelo de datos (`diagrama-fisico.md`, `diagrama-logico.md`, `ventas_postventa_schema.sql`) y aplicar en Supabase.
 3. **Manejo de `409 Conflict` al cancelar despacho por condición de carrera** (`EN_CAMINO` ya en curso cuando Ventas pide cancelar): G2 confirmó que no debemos reintentar y que la anulación debe marcarse como improcedente comercialmente, no como una falla técnica — ver ESP-06 CA-06 (nuevo, distinto del CA-05 existente que cubre timeout/5xx).
 
@@ -525,6 +532,39 @@ Descripción: El Gestor resuelve una anulación en `PENDIENTE_AUTORIZACION`. Si 
 Si `decision` es `RECHAZADA`, `estadoPedido` vuelve a `EN_PREPARACION` y `estadoAnulacion` queda en `RECHAZADA`.
 ### Errores
 - **`409 Conflict`**: La anulación no está en `PENDIENTE_AUTORIZACION`, o el pedido ya no está en `EN_PREPARACION` (por ejemplo, ya despachó) — en ese caso la anulación pasa a `RECHAZADA`.
+
+---
+
+# F1 (continuación): Botones del Gestor para preparación y despacho (resuelve AGENTS.md sección 4, acuerdo G2 D1 — construido 2026-10-16)
+
+No estaban en el contrato original. Resuelven la señal pendiente de "qué dispara `POST /despachos`" — son dos acciones separadas del Gestor, no una sola.
+
+### 1.12 Iniciar Preparación
+
+- **Endpoint:** `POST /api/v1/pedidos/{pedidoId}/preparacion`
+- **Descripción:** Botón "Iniciar preparación" del Gestor — `PAGADO → EN_PREPARACION`. Actor `SISTEMA_LOGISTICA` (es el flujo interno de preparación; el Gestor solo lo dispara, no cambia el actor de la matriz de `ESP-03`). No aplica a `RETAIL` (ya nace y se entrega sin pasar por aquí).
+- **Headers:** `Authorization: Bearer <token_gestor>` (rol `ADMIN_VENTAS`)
+- **Idempotente:** si el pedido ya está `EN_PREPARACION`, responde `200` sin error ("El pedido ya estaba en preparación").
+- **Respuestas:**
+    - **`200 OK`**: `{ "pedidoId": "PED-2026-00981", "estado": "EN_PREPARACION", "idDespacho": null, "mensaje": "Pedido en preparación" }`
+    - **`409 Conflict`** (`TRANSICION_NO_PERMITIDA`): el pedido no está `PAGADO`.
+    - **`409 Conflict`** (`DESPACHO_NO_APLICA`): el pedido es `RETAIL`.
+
+### 1.13 Paquete Sellado
+
+- **Endpoint:** `POST /api/v1/pedidos/{pedidoId}/despacho`
+- **Descripción:** Botón "Paquete sellado" del Gestor — crea el despacho en Despacho (G2), `POST /api/v1/despachos` de su contrato 7.1. No cambia el estado del pedido: pasa a `DESPACHADO` cuando Despacho avisa que salió (webhook de 1.5). **Orden de reemplazo (F3, acuerdo G6 #100):** como nunca pasó por `PAGADO`, antes de crear el despacho M1 confirma/consume aquí la reserva de Productos con el mismo `operation_id` en cada intento (reintentar es seguro); si la reserva venció, el reemplazo se anula y M2 reabre la devolución a `EN_EVALUACION` (ver `ESP-08` regla 18).
+- **Headers:** `Authorization: Bearer <token_gestor>` (rol `ADMIN_VENTAS`)
+- **Idempotente:** mismo pedido → misma `Idempotency-Key` hacia Despacho (UUID v4 derivado del `pedidoId`, no uno nuevo por intento) — reintentar es seguro.
+- **Respuestas:**
+    - **`200 OK`**: `{ "pedidoId": "PED-2026-00981", "estado": "EN_PREPARACION", "idDespacho": "DESP-00412", "mensaje": "Despacho solicitado a G2" }` — `idDespacho` sale del campo `idDespacho` de la respuesta de Despacho (confirmado 2026-10-16).
+    - **`409 Conflict`** (`ESTADO_NO_PERMITE_DESPACHO`): el pedido no está `EN_PREPARACION`.
+    - **`409 Conflict`** (`DATOS_ENVIO_INCOMPLETOS`): falta `direccion` o `distrito` — son los dos únicos campos de destino que Despacho exige; `referencia`, `departamento` y `provincia` son opcionales (confirmado con G2, 2026-10-16).
+    - **`409 Conflict`** (`DESPACHO_NO_APLICA`): el pedido es `RETAIL`.
+    - **`409 Conflict`** (`RESERVA_EXPIRADA`): solo en una orden de reemplazo — la reserva de Productos venció antes de sellar.
+    - **`422 Unprocessable Entity`** (`DESP_ERROR_SIN_COBERTURA`): Despacho no cubre el destino. Despacho responde `application/problem+json` con un campo `code` — M1 clasifica el error por `status` + `code`, nunca por el texto.
+    - **`409 Conflict`** (`DESPACHO_RECHAZADO`): Despacho rechazó la solicitud por otro motivo de negocio (no reintentar).
+    - **`503 Service Unavailable`** (`DESPACHO_NO_DISPONIBLE` / `PRODUCTOS_NO_DISPONIBLE`): Despacho o Productos no respondieron — el pedido sigue `EN_PREPARACION`, se puede reintentar.
 
 ---
 
