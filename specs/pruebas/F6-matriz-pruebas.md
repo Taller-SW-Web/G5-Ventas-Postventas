@@ -10,7 +10,7 @@ Esta matriz reúne los casos que deben verificarse durante la implementación de
 
 ## 2. Referencias
 
-- [F6 — Reclamos, dashboard y reportes](F6-Reclamo,dashboard%20y%20reportes.md)
+- [F6 — Reclamos, dashboard y reportes](../funcionalidades/F6-Reclamo,dashboard%20y%20reportes.md)
 - [ESP-13 — Registro del Libro de Reclamaciones](../especificaciones/funcionales/ESP-13-registro-libro-reclamos.md)
 - [ESP-14 — Formato y evidencia de atención](../especificaciones/funcionales/ESP-14-formato-evidencia-atencion.md)
 - [ESP-15 — Tablas agregadas y optimización](../especificaciones/funcionales/ESP-15-tablas-agregadas-optimizacion.md)
