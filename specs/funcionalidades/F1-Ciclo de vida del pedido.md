@@ -153,13 +153,13 @@ El sistema DEBE aplicar únicamente las transiciones dibujadas en la máquina de
 
 - **DADO** un pedido en estado `CREADO`.
 - **CUANDO** se recibe la notificación de pago exitoso desde la pasarela o webhook de pagos.
-- **ENTONCES** el sistema transiciona el pedido a `PAGADO`, registra el historial con actor `PASARELA_PAGOS`, confirma el consumo de la reserva de stock con Productos (`POST /api/v1/inventario/{reservaId}/confirmar`, acuerdo 2026-10-11 — ver `integraciones/ACUERDO_G6_PRODUCTOS.md`) y publica el evento `pedido pagado`.
+- **ENTONCES** el sistema transiciona el pedido a `PAGADO`, registra el historial con actor `PASARELA_PAGOS`, confirma el consumo de la reserva de stock con Productos (`POST /api/v1/inventario/reservas/{reservaId}/confirmar`, acuerdo 2026-10-11 — ver `integraciones/ACUERDO_G6_PRODUCTOS.md`) y publica el evento `pedido pagado`.
 
 #### CA-07b. Transición directa a ANULADO (pago rechazado por la pasarela)
 
 - **DADO** un pedido en estado `CREADO`.
 - **CUANDO** se recibe la notificación de pago rechazado desde la pasarela (`resultado: RECHAZADO`).
-- **ENTONCES** el sistema transiciona el pedido de forma directa a `ANULADO` con motivo `PAGO_NO_COMPLETADO`, sin requerir autorización del Gestor, registra el historial con actor `PASARELA_PAGOS`, libera la reserva de stock en Productos (`POST /api/v1/inventario/{reservaId}/liberar`) y, si se había aplicado cupón, publica `promotions.coupon.restoration.requested` para que Productos lo restaure (acuerdo con Productos, 2026-10-11 — ver `integraciones/ACUERDO_G6_PRODUCTOS.md`) — igual que en CA-12, pero disparado por la pasarela en vez del canal. No genera ninguna orden de reembolso hacia F4, porque nunca hubo pago confirmado.
+- **ENTONCES** el sistema transiciona el pedido de forma directa a `ANULADO` con motivo `PAGO_NO_COMPLETADO`, sin requerir autorización del Gestor, registra el historial con actor `PASARELA_PAGOS`, libera la reserva de stock en Productos (`POST /api/v1/inventario/reservas/{reservaId}/liberar`) y, si se había aplicado cupón, publica `promotions.coupon.restoration.requested` para que Productos lo restaure (acuerdo con Productos, 2026-10-11 — ver `integraciones/ACUERDO_G6_PRODUCTOS.md`) — igual que en CA-12, pero disparado por la pasarela en vez del canal. No genera ninguna orden de reembolso hacia F4, porque nunca hubo pago confirmado.
 
 #### CA-08. Transición inválida (salto de estado)
 
@@ -183,7 +183,7 @@ El sistema DEBE aplicar únicamente las transiciones dibujadas en la máquina de
 
 - **DADO** un pedido en estado `CREADO`.
 - **CUANDO** el Canal (Chatbot / Web) envía la solicitud de anulación con motivo tipificado `PAGO_NO_COMPLETADO` tras agotarse el tiempo límite de espera (timeout) o producirse el rechazo definitivo del cobro.
-- **ENTONCES** el sistema transiciona el pedido de forma directa a `ANULADO` sin requerir autorización ni intervención del rol Gestor, registra el historial con actor `CANAL_CHATBOT` y motivo `PAGO_NO_COMPLETADO`, libera la reserva de stock en Productos (`POST /api/v1/inventario/{reservaId}/liberar`) y, si se había aplicado cupón, publica `promotions.coupon.restoration.requested` para que Productos lo restaure, y no genera ninguna orden de reembolso hacia F4.
+- **ENTONCES** el sistema transiciona el pedido de forma directa a `ANULADO` sin requerir autorización ni intervención del rol Gestor, registra el historial con actor `CANAL_CHATBOT` y motivo `PAGO_NO_COMPLETADO`, libera la reserva de stock en Productos (`POST /api/v1/inventario/reservas/{reservaId}/liberar`) y, si se había aplicado cupón, publica `promotions.coupon.restoration.requested` para que Productos lo restaure, y no genera ninguna orden de reembolso hacia F4.
 
 ### RF-04. Historial y trazabilidad
 

@@ -476,6 +476,7 @@
   "autorizador": null,
   "canal": "CHATBOT",
   "cliente": "Juan Pérez Rodríguez",
+  "metodoPago": "TARJETA_CREDITO",
   "transaccionPasarelaId": "TX-SIM-871239",
   "intentos": [
     { "numeroIntento": 1, "estado": "EXITOSO", "idTransaccion": "TX-SIM-871239", "resultado": null, "fechaHora": "2026-09-23T00:15:30Z" }
@@ -491,6 +492,7 @@
 2. **"Autorizar" es solo una confirmación visual del frontend, sin estado ni endpoint nuevo.** Un reembolso no es algo que el Gestor cree a mano desde la bandeja — es el efecto automático de una anulación (F2) o una devolución aprobada (F3). El respaldo de auditoría (RNF-03) ya existe: actor, motivo y fecha quedan registrados en la acción de origen (anulación/devolución), y en un reintento el actor sale del JWT del Gestor que lo ejecuta.
 3. **El reintento es el mismo mecanismo que ya especifica ESP-09 (guía 8.3): reenviar el `POST /api/v2/reembolsos` original con la misma `X-Idempotency-Key`** — no se construye un `POST /reembolsos/{id}/reintentar` aparte. Para que el frontend pueda armar ese reenvío sin tener los datos originales a mano, este detalle expone `idempotencyKey`, `origen`, `origenId`, `pedidoId`, `monto`, `moneda`, `motivo` y `solicitadoPor` — el botón "Reintentar" toma este JSON y lo manda tal cual a 2.6.
 4. **`canal` y `cliente` se resuelven consultando a M1** (`VentasClient.consultarPedido`, el mismo cliente que ya usa el resto de F3/F4) — no se agregan columnas nuevas a `reembolso`. Solo en el **detalle** (2.6c): una consulta por reembolso es aceptable, pero repetirla por cada fila de una página de 2.6b no — por eso **la bandeja (2.6b) no trae `canal` ni `cliente`**, y el detalle sí.
+5. **`metodoPago` sale de la misma consulta a M1** (`pago.metodoPago` del pedido) y se agrega al detalle junto a `canal`/`cliente` — mismo criterio del punto 4, no se duplica en `reembolso`. `transaccionPasarelaId` (la "referencia de pago") se muestra en el frontend como `—` cuando es `null` (reembolsos con origen `ANULACION` que nunca llegaron a cobrarse, o cualquier caso sin transacción de pasarela asociada); el backend sigue devolviendo `null` tal cual, el guion es puramente de presentación.
 
 **Para pruebas locales (Q6):** igual que el resto del módulo — `servicio-postventa` directo en `http://localhost:8082` (más simple mientras se desarrolla; el Gateway en `8080` enruta aquí en producción, ver `AGENTS.md` sección 2 punto 6), `CORS_ORIGINS` ya incluye `http://localhost:5173` por defecto. Con `SEGURIDAD_HABILITADA=false` (default local) no hace falta ningún JWT — si se quiere probar la validación de rol, se necesita un JWT real de Seguridad con `roles: ["ADMIN_VENTAS"]`, o `seguridad.habilitada=true` con un token de prueba del kit de integración.
 
