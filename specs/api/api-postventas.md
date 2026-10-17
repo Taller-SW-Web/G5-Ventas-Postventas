@@ -163,6 +163,7 @@
     "autorizadorId": "GESTOR-03",
     "fechaResolucion": "2026-09-23T16:00:00Z",
     "referenciaOperacion": "REEM-90812",
+    "requiereDevolucionFisica": true,
     "reembolso": {
       "reembolsoId": "REEM-90812",
       "estado": "EXITOSO",
@@ -178,11 +179,40 @@
       "url": "https://api.empresa.com/v2/uploads/evidencias/ev-981-foto1.jpg"
     }
   ],
-  "fechaRegistro": "2026-09-23T15:51:00Z"
+  "fechaRegistro": "2026-09-23T15:51:00Z",
+  "historial": [
+    {
+      "estadoAnterior": null,
+      "estado": "SOLICITADA",
+      "actor": "CLIENTE",
+      "idActor": "3f9a2b7e-6c1d-4e2a-9b3f-7a1d2c4e5f6a",
+      "detalle": null,
+      "fecha": "2026-09-23T15:51:00Z"
+    },
+    {
+      "estadoAnterior": "SOLICITADA",
+      "estado": "APROBADA",
+      "actor": "GESTOR",
+      "idActor": "GESTOR-03",
+      "detalle": "Falla de fábrica confirmada en control de calidad",
+      "fecha": "2026-09-23T16:00:00Z"
+    }
+  ],
+  "recepciones": [
+    {
+      "sku": "SKU-AUR-01",
+      "productoId": "PROD-101",
+      "cantidadRecibida": 1,
+      "cantidadApta": 1,
+      "reintegroEstado": "COMPLETADO",
+      "idActor": "3f9a2b7e-6c1d-4e2a-9b3f-7a1d2c4e5f6a",
+      "fecha": "2026-09-24T10:00:00Z"
+    }
+  ]
 }
 ```
 
-`resolucion.tipoResolucion` es `CAMBIO`, `REEMBOLSO` o `RECHAZO` — puede no coincidir con `tipo` del expediente cuando un `CAMBIO` se derivó a reembolso por falta de stock (ver 2.5, `SIN_STOCK`).
+`resolucion.tipoResolucion` es `CAMBIO`, `REEMBOLSO` o `RECHAZO` — puede no coincidir con `tipo` del expediente cuando un `CAMBIO` se derivó a reembolso por falta de stock (ver 2.5, `SIN_STOCK`). `resolucion.requiereDevolucionFisica` (agregado al contrato) refleja lo pedido en 2.5 (o su default `true`) para que el frontend no tenga que recordarlo aparte. `historial` (agregado al contrato, actor `CLIENTE`/`CANAL`/`GESTOR`/`SISTEMA`, RNF-03) y `recepciones` (agregado al contrato, una fila por línea confirmada en 2.5b) vienen vacíos/`null` mientras no aplica; `recepciones` solo existe si hubo al menos una confirmación de 2.5b.
 
 -   **`200 OK` (En evaluación):**
 
@@ -205,12 +235,13 @@
 
 -   **`404 Not Found`** (`DEVOLUCION_NO_ENCONTRADA`): El expediente solicitado no existe.
 
-#### 2.4 Listar Devoluciones por Cliente (uso administrativo)
+#### 2.4 Listar Devoluciones (uso administrativo)
 
 -   **Endpoint:** `GET /api/v2/devoluciones`
+-   **Descripción:** Bandeja del Gestor (mockup 06). Sin `clienteId` lista todos los expedientes — mismo criterio que `api-ventas.md` 1.4 (`clienteId` opcional desde 2026-10-16). **Pendiente de implementación (encontrado 2026-10-17):** `DevolucionController.listar` en el backend real todavía tiene `clienteId` como parámetro obligatorio (sin `required = false`) — eso rompe con `400` la bandeja principal de Mockup 06, que llama a este endpoint sin `clienteId`. El contrato ya queda fijado como opcional abajo; falta el ajuste de una línea en el backend (`DevolucionController`/`DevolucionService`).
 -   **Headers:** `Authorization: Bearer <token_gestor>` (requiere rol `ADMIN_VENTAS`, claim `roles` del JWT — no es un scope). Para que un cliente consulte sus propias devoluciones, usar **2.4b** (`/devoluciones/me`), no este endpoint.
 -   **Query Params:**
-    -   `clienteId` (requerido): Identificador del cliente.
+    -   `clienteId` (opcional, **corregido 2026-10-17** — antes el contrato lo exigía): Identificador del cliente. Sin él, lista todos los expedientes.
     -   `estado` (opcional):
         `SOLICITADA | EN_EVALUACION | APROBADA | RECHAZADA | COMPLETADA`
     -   `tipo` (opcional): `CAMBIO | DEVOLUCION_DINERO`
@@ -239,8 +270,8 @@
 }
 ```
 
+-   `clienteId` en la raíz de la respuesta queda `null` cuando no se filtró por un cliente puntual (mismo criterio que 1.4).
 -   **Respuestas de error:**
-    -   **`400 Bad Request`** (`PARAMETRO_FALTANTE`): Falta `clienteId`.
     -   **`400 Bad Request`** (`PAGINACION_INVALIDA`): `pagina`/`tamano` fuera de rango o no numéricos.
 
 #### 2.4b Listar Mis Devoluciones
@@ -358,9 +389,12 @@
   "lineas": [
     { "sku": "SKU-AUR-01", "cantidadApta": 1 }
   ],
-  "reintegroSolicitado": true
+  "reintegroSolicitado": true,
+  "estado": "COMPLETADA"
 }
 ```
+
+-   `estado` (agregado al contrato): el estado del expediente **después** de esta recepción — pasa a `COMPLETADA` si con esta confirmación ya no falta nada (reembolso ya `EXITOSO` en F4, o reemplazo ya entregado en `CAMBIO`); si todavía falta algo, se mantiene en `APROBADA`.
 
 -   **Respuestas de error:**
     -   **`400 Bad Request`** (`CANTIDAD_INVALIDA`): `cantidadApta` mayor que `cantidadRecibida`, o SKU no pertenece al pedido original.
@@ -622,10 +656,21 @@
   "fechaLimiteSLA": "2026-10-14T23:59:59Z",
   "fechaRegistro": "2026-09-23T00:10:00Z",
   "fechaAtencion": "2026-09-23T08:30:00Z",
-  "respuestaVisibleCliente": "Estimado Juan, su reclamo fue atendido. Se coordinó la entrega prioritaria y se emitió una bonificación a su cuenta."
+  "respuestaVisibleCliente": "Estimado Juan, su reclamo fue atendido. Se coordinó la entrega prioritaria y se emitió una bonificación a su cuenta.",
+  "consumidor": {
+    "nombreCompleto": "Juan Pérez Rodríguez",
+    "documento": "45678912",
+    "email": "juan.perez@example.com",
+    "telefono": "987654321"
+  },
+  "atendidoPor": "GESTOR-02",
+  "estadoSla": "ATENDIDO",
+  "diasHabilesRestantes": null,
+  "slaCumplido": true
 }
 ```
 
+-   `consumidor`, `atendidoPor`, `estadoSla`, `diasHabilesRestantes` y `slaCumplido` (agregados al contrato, 2026-10-17): los usa la pantalla de Reclamos (mockup 07). `estadoSla` es el semáforo del plazo (`EN_PLAZO`\|`POR_VENCER`\|`CRITICO`\|`VENCIDO`\|`ATENDIDO`, ver 2.10), distinto de `estado`. `diasHabilesRestantes` es `null` cuando ya está `ATENDIDO` (0 = vence hoy, negativo = vencido). `slaCumplido` es `null` mientras no haya respuesta formal, y después indica si la respuesta llegó dentro del plazo (ESP-14 CA-04).
 -   **`401 Unauthorized`**: Token ausente o inválido.
 -   **`404 Not Found`**: Reclamo no encontrado con ese código de
     seguimiento.
@@ -659,7 +704,12 @@
       "motivo": "INCUMPLIMIENTO_PLAZO_ENTREGA",
       "estado": "ATENDIDO",
       "fechaRegistro": "2026-09-23T00:10:00Z",
-      "fechaLimiteSLA": "2026-10-14T23:59:59Z"
+      "fechaLimiteSLA": "2026-10-14T23:59:59Z",
+      "pedidoId": "PED-2026-00981",
+      "canal": "CHATBOT",
+      "nombreConsumidor": "Juan Pérez Rodríguez",
+      "estadoSla": "ATENDIDO",
+      "diasHabilesRestantes": null
     }
   ],
   "pagina": 0,
@@ -667,6 +717,8 @@
   "totalElementos": 1
 }
 ```
+
+-   `pedidoId`, `canal`, `nombreConsumidor`, `estadoSla` y `diasHabilesRestantes` (agregados al contrato, 2026-10-17): la bandeja del mockup 07 los muestra sin abrir cada reclamo — mismo significado que en 2.9.
 
 #### 2.10b Listar Mis Reclamos
 
@@ -739,9 +791,12 @@
     "montoReembolsadoPEN": 5890.50,
     "csatPromedio": 4.62,
     "reclamosPendientesSLA": 3
-  }
+  },
+  "ultimaActualizacion": "2026-09-30T22:00:00Z"
 }
 ```
+
+-   `ultimaActualizacion` (agregado al contrato, 2026-10-17): hasta cuándo están consolidados los agregados (ESP-15 §7); `null` si el periodo no tiene actividad.
 
 ---
 
