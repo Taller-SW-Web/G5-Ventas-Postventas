@@ -37,7 +37,7 @@ Según el acuerdo A10 con Seguridad (G7) hay dos tipos de token:
 | `ventas:pedidos:anular` | `POST /api/v1/pedidos/{id}/anulaciones` (1.7) | Marketplace, Chatbot y Retail |
 | `ventas:pedidos:estado` | `POST /api/v1/integraciones/despachos/eventos` (1.5 — reemplaza el `PATCH .../estado` y `POST .../eventos-logistica` anteriores) | Despacho (E) — reusamos este scope ya concedido a `modulo-despacho`, decisión nuestra (2026-10-13); no se pide el `despachos:eventos:recibir` que propuso G2, ver `integraciones/ACUERDO_G2_DESPACHO.md` |
 | `ventas:pagos:webhook` | `POST /api/v1/pedidos/{id}/pagos/notificacion` (1.2) | Simulador de pasarela y Chatbot |
-| `ventas:pedidos:consultar` | `GET /api/v1/pedidos/{id}` (1.3), uso exclusivo módulo-a-módulo | `modulo-postventa` (F3 valida `ENTREGADO`; F5 valida `ENTREGADO` para CSAT) — **propuesto 2026-10-12, pendiente de que Seguridad lo registre**, ver `integraciones/ACUERDO_G7_SEGURIDAD.md` |
+| `ventas:pedidos:consultar` | `GET /api/v1/pedidos/{id}` (1.3), uso exclusivo módulo-a-módulo | `modulo-postventa` (F3 valida `ENTREGADO`; F5 valida `ENTREGADO` para CSAT) — **registrado** (Seguridad, PR #60, verificado 2026-10-21), ver `integraciones/ACUERDO_G7_SEGURIDAD.md` |
 | `ventas:pedidos:reemplazar` | `POST /api/v1/pedidos/reemplazos` (1.11) | `modulo-postventa` (F3, orden de reemplazo de un `CAMBIO`) — **propuesto 2026-10-16, pendiente de que Seguridad lo registre**, ver `integraciones/ACUERDO_G7_SEGURIDAD.md` |
 
 | Rol (token de usuario) | Endpoints |

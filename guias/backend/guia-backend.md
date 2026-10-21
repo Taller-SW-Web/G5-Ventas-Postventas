@@ -279,7 +279,7 @@ Cada cliente devuelve un `record` propio (por ejemplo `PedidoResumen`), no un `J
 - `ProductosClient`: disponibilidad para un cambio y reintegro de stock. En modo simulado, `PROD-999` no tiene stock.
 - `DespachoClient`: logística de un cambio de producto.
 
-**Pendiente, cuando Seguridad registre `ventas:pedidos:consultar`** (ver `integraciones/ACUERDO_G7_SEGURIDAD.md`): `VentasClient` hoy reenvía el token de quien lo llama al pedir 1.3 a M1 — cuando el scope exista, debe usar el token de servicio propio de M2 en vez de reenviar el de quien llama.
+**Pendiente (ya no bloqueado — `ventas:pedidos:consultar` quedó registrado el 2026-10-21, ver `integraciones/ACUERDO_G7_SEGURIDAD.md`):** `VentasClient` hoy reenvía el token de quien lo llama al pedir 1.3 a M1 — ahora que el scope existe, debe usar el token de servicio propio de M2 en vez de reenviar el de quien llama. Falta solo la provisión real de credenciales (client_credentials, Hito 4) para activarlo en modo real.
 
 ### 3.8. Git (flujo simple)
 
@@ -816,8 +816,8 @@ Pendientes:
 
 - [ ] Reemplazar el reembolso simulado (`SolicitadorReembolsoSimulado`) por `ReembolsoService` de F4 cuando exista
 - [ ] Sumar `devoluciones_aprobadas` al dashboard cuando exista `ProyeccionesService`
-- [ ] Cuando Seguridad registre `ventas:pedidos:consultar`, `VentasClient` debe usar el token de servicio de M2 en vez de reenviar el token de quien llama (ver 3.7)
-- [ ] `ProductosClient.consultarDisponibilidad` para `CAMBIO` (`hayDisponibilidad` hoy lanza 503 en modo real) — construir contra `GET /api/v1/inventario/disponibilidad` cuando G6 autorice explícitamente a M2 y Seguridad registre `inventario:disponibilidad:leer`
+- [ ] `ventas:pedidos:consultar` ya está registrado (2026-10-21) — falta que `VentasClient` use el token de servicio de M2 en vez de reenviar el token de quien llama (ver 3.7), y la provisión real de credenciales en Hito 4
+- [ ] `ProductosClient.consultarDisponibilidad` para `CAMBIO` (`hayDisponibilidad` hoy lanza 503 en modo real) — construir contra `GET /api/v1/inventario/disponibilidad`; G6 ya autorizó explícitamente a M2 (issue G6 #100, 2026-10-16), solo falta que Seguridad registre `inventario:disponibilidad:leer` (ya se le pidió, issue de Seguridad #51)
 - [ ] Activar `ProductosClient.reintegrar` en modo real — el código ya está (7.5b); G6 ya confirmó el `location_id` (punto 6 arriba), falta setear `PRODUCTOS_UBICACION_DEVOLUCIONES=9129b578-631e-1735-8427-b683fb524380` y `PRODUCTOS_URL=https://g6-productos-ofertas.duckdns.org` (comentado/deshabilitado todavía — G6 avisó que no está operativa, ver `integraciones/ACUERDO_G6_PRODUCTOS.md`) en el `.env` real, y que Seguridad registre `inventario:reintegrar` para `modulo-postventa`
 - [ ] Criterios de aceptación de ESP-07 y ESP-08 (incluye CA-07/CA-08/CA-09 y reglas 17-18, nuevos)
 - [ ] Confirmar en Supabase: H12 (`id_producto` a `varchar(64)`), las tablas/columna nuevas de recepción física (`devolucion_recepcion`, `historial_devolucion`, `devolucion.requiere_devolucion_fisica`) y las de la orden de reemplazo en M1 (`pedido.tipo`, `id_pedido_origen`, `devolucion_id`, `ux_pedido_reemplazo_vigente`)
