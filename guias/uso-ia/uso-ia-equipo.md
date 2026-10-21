@@ -35,7 +35,7 @@ código antes de cada Pull Request y para anticipar problemas de integración en
 Las decisiones de arquitectura, la interpretación del contrato y la responsabilidad sobre cada línea que llega a `main`
 se mantuvieron siempre en manos del integrante responsable de cada funcionalidad.
 
-**Principio rector:** *la IA propone, el desarrollador decide, las pruebas confirman.*
+**Principio rector:** *el equipo diseña y decide, la IA asiste en la implementación, el equipo revisa y las pruebas confirman.*
 
 ---
 
@@ -56,17 +56,17 @@ enriquecían las revisiones entre compañeros.
 ## 3. Flujo de trabajo con IA
 
 ```
- 1. CONTEXTO        AGENTS.md + specs/api-*.md + guías + mockups de Figma
+ 1. DISEÑO          El equipo define la solución: contrato, reglas, estados y pantallas
         │
- 2. PROMPT          Tarea acotada: un endpoint, una pantalla, un caso de prueba
+ 2. CONTEXTO        AGENTS.md + specs/api-*.md + guías + mockups de Figma
         │
- 3. PROPUESTA       La IA genera código y explica sus decisiones
+ 3. IMPLEMENTACIÓN  Tarea acotada; la IA asiste generando código según el diseño definido
         │
- 4. REVISIÓN        El integrante lee, ajusta y valida contra el contrato
+ 4. REVISIÓN        El equipo lee, ajusta y valida contra el contrato
         │
  5. VERIFICACIÓN    mvn clean package · tsc -b · vite build · pruebas manuales
         │
- 6. COMMIT          Pequeño, en Conventional Commits, firmado por su autor
+ 6. INTEGRACIÓN     Commits pequeños en Conventional Commits
         │
  7. PULL REQUEST    Revisión del equipo + simulación de unión con main
 ```
@@ -99,8 +99,8 @@ revisar cada propuesta con atención y produce commits pequeños y legibles (`fe
 - **Frontend:** TypeScript en modo estricto (`tsc -b`) y `vite build` deben pasar antes de cada PR, y cada pantalla
   contempla sus cuatro estados: cargando, error, vacío y con datos.
 
-### 4.5 Revisión humana y autoría responsable
-Cada integrante revisa el código propuesto, lo ajusta si hace falta y realiza el commit desde su propia rama.
+### 4.5 Revisión del equipo
+Todo el código pasa por la revisión del integrante responsable, que lo ajusta al diseño y al contrato antes de integrarlo.
 Los Pull Requests a `main` se revisan antes de fusionarse, y antes de abrirlos se simula la unión con `main`
 para detectar conflictos o errores de compilación provocados por el trabajo de otros integrantes.
 
@@ -318,7 +318,7 @@ REGLAS     - Respeta el contrato; no inventes campos, estados ni respuestas.
 ENTREGA    Código + pruebas unitarias.
            Comandos para verificarlo y lista de dependencias pendientes.
 
-LÍMITES    Sin credenciales en el código. Sin commits automáticos: el commit lo hace el autor.
+LÍMITES    Sin credenciales en el código. Sin cambios fuera del alcance de la tarea.
 ```
 
 ---
@@ -357,4 +357,4 @@ cobertura de pruebas amplia y anticipar problemas de integración entre M1, M2 y
 sistema consistente sin importar qué asistente participó en cada parte.
 
 El criterio técnico, las decisiones de diseño y la responsabilidad sobre el código siguen siendo del equipo: todo lo que
-llega a `main` está revisado, probado y firmado por su autor.
+llega a `main` está diseñado, revisado y probado por el equipo.
