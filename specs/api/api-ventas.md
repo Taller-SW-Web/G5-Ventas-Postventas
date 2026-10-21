@@ -520,6 +520,7 @@ Descripción: El Gestor resuelve una anulación en `PENDIENTE_AUTORIZACION`. Si 
   "comentario": "Motivo validado con el cliente"
 }
 ```
+- `comentario` es **obligatorio en ambas decisiones** (corregido 2026-10-21 — el backend real lo valida con `@NotBlank` sin condicionarlo a `RECHAZADA`): también hay que justificar una aprobación, no solo un rechazo.
 ### Respuestas
 #### `200 OK`
 ```json
@@ -531,6 +532,7 @@ Descripción: El Gestor resuelve una anulación en `PENDIENTE_AUTORIZACION`. Si 
 ```
 Si `decision` es `RECHAZADA`, `estadoPedido` vuelve a `EN_PREPARACION` y `estadoAnulacion` queda en `RECHAZADA`.
 ### Errores
+- **`400 Bad Request`**: `decision` o `comentario` vacíos/ausentes.
 - **`409 Conflict`**: La anulación no está en `PENDIENTE_AUTORIZACION`, o el pedido ya no está en `EN_PREPARACION` (por ejemplo, ya despachó) — en ese caso la anulación pasa a `RECHAZADA`.
 
 ---
