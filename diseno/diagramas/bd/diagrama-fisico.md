@@ -2,6 +2,10 @@
 
 Implementación del [modelo lógico](diagrama-logico.md) en PostgreSQL 17 sobre Supabase (proyecto `nsfrwxrjidyckgfriyhv`). Incluye los tipos reales, valores por defecto, restricciones, índices y la configuración de seguridad. El script que crea todo es [ventas_postventa_schema.sql](../../../infra/bd/ventas_postventa_schema.sql), aplicado como la migración `crear_esquemas_ventas_postventa`.
 
+> **Pendiente de aplicar en Supabase:** `pedido.tienda_id` y `pago.monto_efectivo`/`monto_tarjeta`/`fecha_venta` son columnas del acuerdo con Retail (G4, 2026-10-12 — ver `integraciones/ACUERDO_G4_RETAIL.md`): el pedido `RETAIL` nace `PAGADO` y transiciona a `ENTREGADO` en la misma operación, sin envío. Este documento y el script ya las reflejan; falta la migración real. **Ya aplicado en código (`Pedido.java`/`Pago.java`), falta confirmar si ya se aplicó sobre la Supabase real.**
+>
+> **Aplicado en Supabase el 2026-10-12** y en uso por la entidad `Devolucion` de F3: `devolucion.fecha_registro`, `fecha_resolucion` y `referencia_operacion` cierran el hueco entre lo que `ESP-07` (8.3) y `ESP-08` (8.3) ya prometen devolver (`fechaCreacion`, `fechaResolucion`, `referenciaOperacion`) y lo que la tabla física podía persistir hasta ahora.
+
 ## 1. Diagrama
 
 Esquema ventas (M1):
@@ -34,16 +38,21 @@ erDiagram
         varchar(80) distrito "null"
         varchar(255) direccion "null"
         varchar(40) codigo_cupon "null"
-        varchar(128) idempotency_key UK "null"
+        varchar(128) idempotency_key UK "null, cabecera Idempotency-Key de 1.1"
+        varchar(100) reserva_id "null, reservaId de Productos (G6)"
+        varchar(20) tipo "not null, default VENTA — VENTA o REEMPLAZO (F3, api-ventas.md 1.11, acuerdo G6 #100)"
+        bigint id_pedido_origen "referencia a pedido.id, null — solo REEMPLAZO: pedido original que se cambia"
+        varchar(30) devolucion_id "null — solo REEMPLAZO: devolución de M2 (DEV-AAAA-NNNN) que originó el cambio"
         timestamptz creado_en "not null, default now()"
-        bigint id_cliente "referencia sin FK, null"
-        bigint id_vendedor "referencia sin FK, null"
+        uuid id_cliente "referencia sin FK, null"
+        uuid id_vendedor "referencia sin FK, null"
         bigint id_direccion_entrega "referencia sin FK, null"
+        varchar(40) tienda_id "null, solo RETAIL"
     }
     DETALLE_PEDIDO {
         bigint id PK "identity, not null"
         bigint id_pedido FK "not null"
-        bigint id_producto "referencia sin FK, null"
+        varchar(64) id_producto "referencia sin FK, null — era bigint, corregido (ver H12)"
         varchar(50) sku "not null"
         varchar(255) descripcion "null"
         integer cantidad "not null"
@@ -55,10 +64,13 @@ erDiagram
         bigint id PK "identity, not null"
         bigint id_pedido FK "not null"
         varchar(30) metodo "not null"
-        varchar(100) referencia "null"
+        varchar(100) referencia "null, también referenciaOperacion del POS en RETAIL"
         numeric(12-2) monto "not null"
         varchar(20) estado "not null"
         timestamptz fecha_proceso "null"
+        numeric(12-2) monto_efectivo "null, solo RETAIL con metodo MIXTO"
+        numeric(12-2) monto_tarjeta "null, solo RETAIL con metodo MIXTO"
+        timestamptz fecha_venta "null, solo RETAIL, venta sin conexión hasta 72h atrás"
     }
     HISTORIAL_ESTADO {
         bigint id PK "identity, not null"
@@ -73,8 +85,8 @@ erDiagram
         bigint id PK "identity, not null"
         bigint id_pedido FK,UK "not null"
         varchar(255) motivo "not null"
-        bigint id_solicitante "null"
-        bigint id_autorizador "null"
+        uuid id_solicitante "null"
+        uuid id_autorizador "null"
         varchar(20) estado "not null"
         date fecha "not null"
     }
@@ -100,25 +112,54 @@ Esquema postventa (M2):
 erDiagram
     DEVOLUCION ||--o{ EVIDENCIA_DEVOLUCION : adjunta
     DEVOLUCION ||--|{ DEVOLUCION_ITEM : contiene
+    DEVOLUCION ||--o{ DEVOLUCION_RECEPCION : recibe
+    DEVOLUCION ||--o{ HISTORIAL_DEVOLUCION : audita
     REEMBOLSO ||--|{ REEMBOLSO_INTENTO : registra
     DEVOLUCION {
         bigint id PK "identity, not null"
         bigint id_pedido "referencia sin FK, not null"
-        bigint id_cliente "referencia sin FK, null"
+        uuid id_cliente "referencia sin FK, null"
         varchar(20) tipo "not null"
         varchar(255) motivo "not null"
         text descripcion "null"
         varchar(20) estado "not null"
         varchar(30) resolucion "null"
-        bigint id_autorizador "null"
+        uuid id_autorizador "null"
         text fundamento_rechazo "null"
         date fecha "not null"
+        timestamptz fecha_registro "not null, default now(), hora real de creación (ESP-07 8.3)"
+        timestamptz fecha_resolucion "null, hora de la decisión del Gestor (ESP-08 8.3)"
+        varchar(100) referencia_operacion "null, reembolsoId de F4 o referencia de Despacho según la resolución (ESP-08 8.3)"
+        boolean requiere_devolucion_fisica "not null, default true — false en REEMBOLSO cuando no hay devolución física (ESP-08 8.2b, regla 16)"
     }
     DEVOLUCION_ITEM {
         bigint id PK "identity, not null"
         bigint id_devolucion FK "not null"
-        bigint id_producto "referencia sin FK, not null"
+        varchar(64) id_producto "referencia sin FK, not null — era bigint, corregido (ver H12)"
         integer cantidad "not null"
+    }
+    DEVOLUCION_RECEPCION {
+        bigint id PK "identity, not null"
+        bigint id_devolucion FK "not null"
+        uuid operation_id "not null, el mismo para todas las líneas de una misma confirmación y para el reintegro en Productos (ESP-08 8.2b, G6 P-05)"
+        varchar(50) sku "not null"
+        varchar(64) id_producto "not null"
+        integer cantidad_recibida "not null"
+        integer cantidad_apta "not null, solo esto se reintegra (ESP-08 regla 15)"
+        varchar(20) reintegro_estado "not null, PENDIENTE o COMPLETADO"
+        varchar(500) evidencia "null"
+        varchar(60) id_actor "null, sub de quien recibió (Gestor o almacén, rol ADMIN_VENTAS)"
+        timestamptz fecha_hora "not null"
+    }
+    HISTORIAL_DEVOLUCION {
+        bigint id PK "identity, not null"
+        bigint id_devolucion FK "not null"
+        varchar(20) estado_anterior "null, null en el registro inicial (SOLICITADA)"
+        varchar(20) estado_nuevo "not null"
+        varchar(20) actor "not null, CHECK: CLIENTE, CANAL, GESTOR, SISTEMA"
+        varchar(60) id_actor "null, sub del cliente/Gestor o módulo del canal"
+        text detalle "null"
+        timestamptz fecha_hora "not null"
     }
     EVIDENCIA_DEVOLUCION {
         bigint id PK "identity, not null"
@@ -137,7 +178,7 @@ erDiagram
         char(3) moneda "not null, default PEN"
         varchar(100) id_transaccion "null"
         varchar(20) estado "not null, default PENDIENTE"
-        bigint id_autorizador "null"
+        uuid id_autorizador "null"
         date fecha "not null"
     }
     REEMBOLSO_INTENTO {
@@ -153,7 +194,7 @@ erDiagram
         bigint id PK "identity, not null"
         varchar(30) codigo UK "not null"
         bigint id_pedido "referencia sin FK, null"
-        bigint id_cliente "referencia sin FK, null"
+        uuid id_cliente "referencia sin FK, null"
         varchar(20) tipo "not null"
         varchar(60) motivo "not null"
         text detalle "not null"
@@ -181,8 +222,8 @@ erDiagram
     AGREGADO_VENTAS {
         varchar(7) periodo PK "not null"
         varchar(30) canal PK "not null"
-        bigint id_vendedor PK "not null"
-        bigint id_producto PK "not null"
+        uuid id_vendedor PK "not null"
+        varchar(64) id_producto PK "not null — era bigint, corregido (ver H12)"
         integer unidades "not null"
         numeric(14-2) monto "not null"
         timestamptz actualizado_en "not null, default now()"
@@ -234,7 +275,7 @@ No hay claves foráneas entre los dos esquemas.
 | TEXT | text | Textos largos: detalle, comentario, fundamento_rechazo, respuesta |
 | DATE | date | Fechas sin hora |
 | TIMESTAMP | timestamptz | Fecha y hora con zona horaria |
-| UUID | uuid | Identificador de evento de dominio (outbox_evento.id_evento, postventa.evento_recibido.id_evento) |
+| UUID | uuid | Identificador de evento de dominio (outbox_evento.id_evento, postventa.evento_recibido.id_evento) y de usuario: claim `sub` de Seguridad (id_cliente, id_vendedor, id_solicitante, id_autorizador) |
 | JSONB | jsonb | outbox_evento.payload: el cuerpo del evento tal como se envía a M2 |
 
 ## 4. Valores por defecto
@@ -284,7 +325,7 @@ Valores únicos:
 | Nombre | Tabla | Columnas |
 |---|---|---|
 | pedido_codigo_key | ventas.pedido | codigo |
-| pedido_idempotency_key_key | ventas.pedido | idempotency_key |
+| pedido_idempotency_key_key | ventas.pedido | idempotency_key (admite null) |
 | anulacion_id_pedido_key | ventas.anulacion | id_pedido |
 | reclamo_codigo_key | postventa.reclamo | codigo |
 | reembolso_idempotency_key_key | postventa.reembolso | idempotency_key |
@@ -303,10 +344,10 @@ CHECK:
 | ck_detalle_montos | ventas.detalle_pedido | precio_unitario, descuento e importe ≥ 0 |
 | ck_pago_monto | ventas.pago | monto ≥ 0 |
 | ck_pago_estado | ventas.pago | estado IN (PENDIENTE, CONFIRMADO, RECHAZADO) |
-| ck_historial_actor | ventas.historial_estado | actor IN (CLIENTE, GESTOR, CANAL_CHATBOT, PASARELA_PAGOS, SISTEMA_LOGISTICA) |
+| ck_historial_actor | ventas.historial_estado | actor IN (CLIENTE, GESTOR, CANAL_CHATBOT, PASARELA_PAGOS, SISTEMA_LOGISTICA, SISTEMA_PRODUCTOS) |
 | ck_anulacion_estado | ventas.anulacion | estado IN (PENDIENTE_AUTORIZACION, EJECUTADA, RECHAZADA) |
 | ck_outbox_tipo | ventas.outbox_evento | tipo IN (pedido.pagado, pedido.anulado, pedido.entregado) |
-| ck_evento_recibido_origen | ventas.evento_recibido | origen IN (PASARELA_PAGOS, SISTEMA_LOGISTICA) |
+| ck_evento_recibido_origen | ventas.evento_recibido | origen IN (PASARELA_PAGOS, SISTEMA_LOGISTICA, SISTEMA_PRODUCTOS) |
 | ck_devolucion_estado | postventa.devolucion | estado IN (SOLICITADA, EN_EVALUACION, APROBADA, RECHAZADA, COMPLETADA) |
 | ck_devolucion_item_cantidad | postventa.devolucion_item | cantidad > 0 |
 | ck_reembolso_tipo_origen | postventa.reembolso | tipo_origen IN (ANULACION, DEVOLUCION) |
@@ -348,7 +389,7 @@ Los tres primeros sirven para buscar por pedido en M2 aunque esas columnas no se
 
 ## 8. Pendientes
 
-- El `.drawio` de este diagrama todavía no incluye `outbox_evento`, `evento_recibido` (ambos esquemas), `devolucion_item`, `reembolso_intento` ni `agregado_metricas`, ni sus índices y CHECK — pendiente de que quien lo mantiene lo actualice y reexporte las imágenes.
+- El `.drawio` de este diagrama todavía no incluye `outbox_evento`, `evento_recibido` (ambos esquemas), `devolucion_item`, `reembolso_intento` ni `agregado_metricas`, ni las columnas nuevas de `devolucion` y `reclamo`, ni sus índices y CHECK (sí tiene los `uuid` y `pedido.idempotency_key`) — pendiente de que quien lo mantiene lo actualice y reexporte las imágenes.
 
 ## 9. Otros modelos
 

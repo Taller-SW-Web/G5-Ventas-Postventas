@@ -42,15 +42,20 @@ erDiagram
         varchar(255) direccion
         varchar(40) codigo_cupon
         varchar(128) idempotency_key UK
+        varchar(100) reserva_id
+        varchar(20) tipo "NN, default VENTA"
+        bigint id_pedido_origen "solo REEMPLAZO"
+        varchar(30) devolucion_id "solo REEMPLAZO"
         timestamp creado_en "NN"
-        bigint id_cliente "referencia sin FK"
-        bigint id_vendedor "referencia sin FK"
+        uuid id_cliente "referencia sin FK"
+        uuid id_vendedor "referencia sin FK"
         bigint id_direccion_entrega "referencia sin FK"
+        varchar(40) tienda_id "solo RETAIL"
     }
     DETALLE_PEDIDO {
         bigint id PK
         bigint id_pedido FK "NN"
-        bigint id_producto "referencia sin FK"
+        varchar(64) id_producto "referencia sin FK — era bigint, corregido (ver H12)"
         varchar(50) sku "NN"
         varchar(255) descripcion
         integer cantidad "NN"
@@ -62,10 +67,13 @@ erDiagram
         bigint id PK
         bigint id_pedido FK "NN"
         varchar(30) metodo "NN"
-        varchar(100) referencia
+        varchar(100) referencia "también referenciaOperacion del POS en RETAIL"
         decimal(12-2) monto "NN"
         varchar(20) estado "NN"
         timestamp fecha_proceso
+        decimal(12-2) monto_efectivo "solo RETAIL con metodo MIXTO"
+        decimal(12-2) monto_tarjeta "solo RETAIL con metodo MIXTO"
+        timestamp fecha_venta "solo RETAIL, venta sin conexión hasta 72h atrás"
     }
     HISTORIAL_ESTADO {
         bigint id PK
@@ -80,8 +88,8 @@ erDiagram
         bigint id PK
         bigint id_pedido FK,UK "NN"
         varchar(255) motivo "NN"
-        bigint id_solicitante
-        bigint id_autorizador
+        uuid id_solicitante
+        uuid id_autorizador
         varchar(20) estado "NN"
         date fecha "NN"
     }
@@ -107,25 +115,54 @@ Esquema postventa (M2):
 erDiagram
     DEVOLUCION ||--o{ EVIDENCIA_DEVOLUCION : adjunta
     DEVOLUCION ||--|{ DEVOLUCION_ITEM : contiene
+    DEVOLUCION ||--o{ DEVOLUCION_RECEPCION : recibe
+    DEVOLUCION ||--o{ HISTORIAL_DEVOLUCION : audita
     REEMBOLSO ||--|{ REEMBOLSO_INTENTO : registra
     DEVOLUCION {
         bigint id PK
         bigint id_pedido "referencia sin FK, NN"
-        bigint id_cliente "referencia sin FK"
+        uuid id_cliente "referencia sin FK"
         varchar(20) tipo "NN"
         varchar(255) motivo "NN"
         text descripcion
         varchar(20) estado "NN"
         varchar(30) resolucion
-        bigint id_autorizador
+        uuid id_autorizador
         text fundamento_rechazo
         date fecha "NN"
+        timestamp fecha_registro "NN, default now()"
+        timestamp fecha_resolucion
+        varchar(100) referencia_operacion "reembolsoId de F4 o referencia de Despacho, según resolución"
+        boolean requiere_devolucion_fisica "NN, default true"
     }
     DEVOLUCION_ITEM {
         bigint id PK
         bigint id_devolucion FK "NN"
-        bigint id_producto "referencia sin FK, NN"
+        varchar(64) id_producto "referencia sin FK, NN — era bigint, corregido (ver H12)"
         integer cantidad "NN"
+    }
+    DEVOLUCION_RECEPCION {
+        bigint id PK
+        bigint id_devolucion FK "NN"
+        uuid operation_id "NN, idéntico al del reintegro en Productos"
+        varchar(50) sku "NN"
+        varchar(64) id_producto "NN"
+        integer cantidad_recibida "NN"
+        integer cantidad_apta "NN, solo esto se reintegra"
+        varchar(20) reintegro_estado "NN"
+        varchar(500) evidencia
+        varchar(60) id_actor
+        timestamp fecha_hora "NN"
+    }
+    HISTORIAL_DEVOLUCION {
+        bigint id PK
+        bigint id_devolucion FK "NN"
+        varchar(20) estado_anterior "null en el registro inicial"
+        varchar(20) estado_nuevo "NN"
+        varchar(20) actor "NN"
+        varchar(60) id_actor
+        text detalle
+        timestamp fecha_hora "NN"
     }
     EVIDENCIA_DEVOLUCION {
         bigint id PK
@@ -144,7 +181,7 @@ erDiagram
         char(3) moneda "NN"
         varchar(100) id_transaccion
         varchar(20) estado "NN"
-        bigint id_autorizador
+        uuid id_autorizador
         date fecha "NN"
     }
     REEMBOLSO_INTENTO {
@@ -160,7 +197,7 @@ erDiagram
         bigint id PK
         varchar(30) codigo UK "NN"
         bigint id_pedido "referencia sin FK"
-        bigint id_cliente "referencia sin FK"
+        uuid id_cliente "referencia sin FK"
         varchar(20) tipo "NN"
         varchar(60) motivo "NN"
         text detalle "NN"
@@ -188,8 +225,8 @@ erDiagram
     AGREGADO_VENTAS {
         varchar(7) periodo PK
         varchar(30) canal PK
-        bigint id_vendedor PK
-        bigint id_producto PK
+        uuid id_vendedor PK
+        varchar(64) id_producto PK "era bigint, corregido (ver H12)"
         integer unidades "NN"
         decimal(14-2) monto "NN"
         timestamp actualizado_en "NN"
@@ -241,8 +278,7 @@ ventas (M1):
 pedido           ([id], codigo UK, canal, fecha, estado, moneda, subtotal, descuento, total,
                   nombre_contacto, tipo_documento, numero_documento, telefono, email,
                   modalidad_envio, costo_envio, destinatario, distrito, direccion, codigo_cupon,
-                  idempotency_key UK, creado_en, id_cliente ⇢ G, id_vendedor ⇢ G,
-                  id_direccion_entrega ⇢ E)
+                  idempotency_key UK, reserva_id ⇢ F, creado_en, id_cliente ⇢ G, id_vendedor ⇢ G, id_direccion_entrega ⇢ E)
 
 detalle_pedido   ([id], id_pedido → pedido.id, id_producto ⇢ F, sku, descripcion, cantidad,
                   precio_unitario, descuento, importe)
@@ -316,14 +352,17 @@ Sin clave foránea:
 | Columna | Apunta a | Motivo |
 |---|---|---|
 | devolucion.id_pedido | ventas.pedido | Está en otro microservicio; se valida con la API de M1 |
-| devolucion.id_cliente | Módulo G | Usuarios de Seguridad y Usuarios |
+| devolucion.id_cliente, devolucion.id_autorizador | Módulo G | Usuarios de Seguridad y Usuarios, tipo `uuid` (= claim `sub` del JWT) |
 | devolucion_item.id_producto | Módulo F | Catálogo de Productos y Ofertas |
 | reembolso.id_pedido | ventas.pedido | Para controlar el saldo reembolsable del pedido (ESP-09) |
+| reembolso.id_autorizador | Módulo G | Usuarios de Seguridad y Usuarios, tipo `uuid` (= claim `sub` del JWT) |
 | reclamo.id_pedido | ventas.pedido | Igual que el anterior; es opcional |
-| reclamo.id_cliente | Módulo G | Usuarios de Seguridad y Usuarios |
+| reclamo.id_cliente | Módulo G | Usuarios de Seguridad y Usuarios, tipo `uuid` (= claim `sub` del JWT) |
 | calificacion.id_pedido | ventas.pedido | Igual que el anterior; es único |
 | reembolso.id_origen | ventas.anulacion o postventa.devolucion | Depende de tipo_origen y una de las tablas está en M1 |
-| pedido.id_cliente, pedido.id_vendedor | Módulo G | Usuarios de Seguridad y Usuarios |
+| pedido.id_cliente, pedido.id_vendedor | Módulo G | Usuarios de Seguridad y Usuarios, tipo `uuid` (= claim `sub` del JWT) |
+| anulacion.id_solicitante, anulacion.id_autorizador | Módulo G | Usuarios de Seguridad y Usuarios, tipo `uuid` (= claim `sub` del JWT) |
+| agregado_ventas.id_vendedor | Módulo G | Usuarios de Seguridad y Usuarios, tipo `uuid` (= claim `sub` del JWT) |
 | pedido.id_direccion_entrega | Módulo E | Dato de Despacho y Entrega |
 | detalle_pedido.id_producto | Módulo F | Catálogo de Productos y Ofertas |
 
@@ -331,7 +370,8 @@ Sin clave foránea:
 
 M1:
 
-1. pedido.codigo es único.
+1. pedido.codigo es único. pedido.idempotency_key también (acuerdo H-02): una misma cabecera Idempotency-Key no crea dos pedidos; es null en pedidos anteriores al acuerdo.
+   pedido.reserva_id es el reservaId que asigna Productos (F) al confirmar la reserva de stock (acuerdo G6); es null mientras la reserva está pendiente y siempre en RETAIL.
 2. pedido.estado solo admite CREADO, PAGADO, EN_PREPARACION, DESPACHADO, ENTREGADO y ANULADO. Las transiciones las controla M1 (ESP-03).
 3. Un pedido tiene como máximo una anulación.
 4. detalle_pedido.cantidad es mayor que cero y los montos no pueden ser negativos.
@@ -374,7 +414,7 @@ M2:
 
 ## 7. Pendientes
 
-- El `.drawio` de este diagrama todavía no incluye `outbox_evento`, `evento_recibido`, `devolucion_item`, `reembolso_intento` ni `agregado_metricas` — pendiente de que quien lo mantiene lo actualice y reexporte las imágenes.
+- El `.drawio` de este diagrama todavía no incluye `outbox_evento`, `evento_recibido`, `devolucion_item`, `reembolso_intento` ni `agregado_metricas`, ni las columnas nuevas de `devolucion` y `reclamo` (sí tiene los `uuid` y `pedido.idempotency_key`) — pendiente de que quien lo mantiene lo actualice y reexporte las imágenes.
 
 ## 8. Otros modelos
 

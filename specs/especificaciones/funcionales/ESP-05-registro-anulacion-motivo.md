@@ -43,6 +43,8 @@ Incluye:
 | `PAGADO` | Cliente / Gestor | Motivo tipificado de anulación | **NO** (directa) | `200 OK` → `ANULADO` |
 | `EN_PREPARACION` | Cliente | Motivo tipificado de anulación | **SÍ** (bandeja de aprobación) | `202 Accepted` → pendiente |
 | `DESPACHADO` / `ENTREGADO` | Cualquiera | Cualquiera | Bloqueado | `409 Conflict` → deriva a F3 |
+| `CREADO` | Sistema (Productos, async por RabbitMQ) | `STOCK_NO_DISPONIBLE`, `CUPON_RECHAZADO` | **NO** (automática e inmediata) | `200 OK` → `ANULADO` |
+| `PAGADO` | Sistema (Productos, async por RabbitMQ) | `STOCK_NO_DISPONIBLE` (caso Chatbot, ya cobró) | **NO** (automática e inmediata, con reembolso a F4) | `200 OK` → `ANULADO` |
 
 ### 3.2. Catálogo de motivos tipificados
 
@@ -54,6 +56,8 @@ Incluye:
 | `SOLICITUD_CLIENTE` | Cliente | `CREADO`, `PAGADO`, `EN_PREPARACION` |
 | `ERROR_DATOS_ENVIO` | Cliente | `CREADO`, `PAGADO`, `EN_PREPARACION` |
 | `DUPLICADO` | Cliente / Gestor | `CREADO`, `PAGADO` |
+| `STOCK_NO_DISPONIBLE` | Sistema (Productos, async) | `CREADO`, `PAGADO` (caso Chatbot) |
+| `CUPON_RECHAZADO` | Sistema (Productos, async) | `CREADO` únicamente — si el pedido ya está `PAGADO`, no se anula: se registra como inconsistencia visible para el Gestor (ver ESP-01, regla 12) |
 
 Este catálogo es cerrado: una solicitud con un valor de `motivo` fuera de esta lista se rechaza con `400 Bad Request` (ver CA-04).
 

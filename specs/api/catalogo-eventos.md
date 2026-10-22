@@ -35,6 +35,7 @@ Todos los eventos comparten esta forma (ver ESP-04, sección 8.1):
 | `estadoNuevo` | Enumeración | Sí | Estado resultante. |
 | `actor` | Texto | Sí | Quién/qué disparó la transición (ver valores reales en [ESP-03](../especificaciones/funcionales/ESP-03-transiciones-historial.md)). |
 | `motivo` | Texto | Condicional | Presente solo en `pedido.anulado`. |
+| `datos.devolucionId` | Texto | Condicional | Presente solo cuando el pedido es una orden de reemplazo de un `CAMBIO` (`pedido.tipo: REEMPLAZO`, `api-ventas.md` 1.11, acuerdo con Productos issue G6 #100, 2026-10-16). Identifica la devolución de M2 que originó el reemplazo — permite a M2 reabrir o cerrar el expediente al recibir `pedido.anulado` o `pedido.entregado`. Nunca está presente en una venta normal. |
 | `fechaHora` | Fecha/hora | Sí | Momento de la transición, en UTC. |
 
 ---
@@ -44,8 +45,8 @@ Todos los eventos comparten esta forma (ver ESP-04, sección 8.1):
 | Evento | Disparador | Consumidores | ¿Incluye `motivo`? |
 |---|---|---|---|
 | `pedido.pagado` | Transición `CREADO → PAGADO` | M2 (agregados), F6 | No |
-| `pedido.anulado` | Transición `→ ANULADO` (por `PAGO_NO_COMPLETADO` o por F2) | Productos y Ofertas — F (reposición de stock), F4 (si hubo pago), F6 | Sí, obligatorio — permite a F4 y a Productos saber si hubo pago que reembolsar |
-| `pedido.entregado` | Transición `→ ENTREGADO` (confirmado por Despacho) | F5 (encuesta CSAT), F6 (agregados) | No |
+| `pedido.anulado` | Transición `→ ANULADO` (por `PAGO_NO_COMPLETADO` o por F2) | Productos y Ofertas — F (reposición de stock), F4 (si hubo pago), F6; **F3** si trae `datos.devolucionId` (reabre la devolución a `EN_EVALUACION`, `api-ventas.md` 1.11) | Sí, obligatorio — permite a F4 y a Productos saber si hubo pago que reembolsar |
+| `pedido.entregado` | Transición `→ ENTREGADO` (confirmado por Despacho) | F5 (encuesta CSAT), F6 (agregados); **F3** si trae `datos.devolucionId` (cierra el lado logístico del cambio, `api-ventas.md` 1.11) | No |
 
 ---
 

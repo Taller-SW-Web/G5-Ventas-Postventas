@@ -1,9 +1,33 @@
 -- =====================================================================
 -- Módulo D — Ventas y Postventa
 -- Traducción a PostgreSQL del "Diagrama ER - VentasPostventas.drawio"
--- Actualizado el 10/10/2026 para reflejar exactamente lo que hay en Supabase
--- (migraciones crear_esquemas_ventas_postventa, decisiones_estados_canal_eventos
--- y huecos_h2_h3_h5_h6_postventa).
+-- Actualizado el 12/10/2026 para reflejar exactamente lo que hay en Supabase
+-- (migraciones crear_esquemas_ventas_postventa, decisiones_estados_canal_eventos,
+-- huecos_h2_h3_h5_h6_postventa, ids_usuario_a_uuid, pedido_idempotency_key
+-- y pedido_reserva_productos).
+--
+-- PENDIENTE DE APLICAR EN SUPABASE: ventas.pedido.tienda_id y
+-- ventas.pago.monto_efectivo/monto_tarjeta/fecha_venta son columnas del
+-- acuerdo con Retail (G4, 2026-10-12, ver integraciones/ACUERDO_G4_RETAIL.md)
+-- — el pedido RETAIL nace PAGADO y transiciona a ENTREGADO en la misma
+-- operación, sin envío. Este archivo ya las refleja; falta la migración real.
+--
+-- Aplicado en Supabase el 2026-10-12 (H11, F3): postventa.devolucion.fecha_registro,
+-- fecha_resolucion y referencia_operacion cierran el hueco entre lo que ESP-07 8.3
+-- y ESP-08 8.3 ya prometen devolver y lo que la tabla física podía persistir.
+--
+-- PENDIENTE DE APLICAR EN SUPABASE (H12, detectado 2026-10-16 revisando el código real):
+-- id_producto era bigint en ventas.detalle_pedido, postventa.devolucion_item y
+-- postventa.agregado_ventas, pero Productos (G6) identifica sus SKUs con texto
+-- (ej. "PROD-101"), nunca un número — DetallePedido.java y DevolucionItem.java ya
+-- usan String/varchar(64). Este archivo ya refleja varchar(64); falta la migración
+-- real (ALTER COLUMN) si la base todavía tiene bigint.
+--
+-- PENDIENTE DE APLICAR EN SUPABASE (F3, rediseño de recepción física, 2026-10-13/16,
+-- issue G6 #51 P-02 y ESP-08 8.2b): postventa.devolucion.requiere_devolucion_fisica,
+-- y las tablas nuevas postventa.devolucion_recepcion y postventa.historial_devolucion.
+-- Ya implementado en el código (RecepcionService, HistorialDevolucion); este archivo
+-- ya las refleja, falta confirmar que la migración real se aplicó en Supabase.
 --
 -- Esquema ventas    = M1 (Ventas)
 -- Esquema postventa = M2 (Postventa)
@@ -42,25 +66,32 @@ create table ventas.pedido (
     distrito              varchar(80),
     direccion             varchar(255),
     codigo_cupon          varchar(40),
+    idempotency_key       varchar(128)  unique,   -- cabecera Idempotency-Key de 1.1 (acuerdo H-02)
+    reserva_id            varchar(100),           -- reservaId de Productos (G6); null pendiente o RETAIL
     creado_en             timestamptz   not null default now(),
-    id_cliente            bigint,   -- referencia externa: módulo G (Seguridad y Usuarios)
-    id_vendedor           bigint,   -- referencia externa: módulo G (Seguridad y Usuarios)
+    id_cliente            uuid,     -- referencia externa: módulo G (Seguridad y Usuarios)
+    id_vendedor           uuid,     -- referencia externa: módulo G (Seguridad y Usuarios)
     id_direccion_entrega  bigint,   -- referencia externa: módulo E (Despacho y Entrega)
+    tienda_id             varchar(40),   -- solo RETAIL: código de tienda (ej. TIENDA-MIRAFLORES), reemplaza a envío
+    tipo                  varchar(20)   not null default 'VENTA',  -- VENTA o REEMPLAZO (F3, api-ventas.md 1.11, acuerdo G6 #100)
+    id_pedido_origen      bigint references ventas.pedido(id),    -- solo REEMPLAZO: pedido original que se cambia
+    devolucion_id         varchar(30),                             -- solo REEMPLAZO: devolución de M2 (DEV-AAAA-NNNN)
     constraint ck_pedido_canal check (canal in ('MARKETPLACE','CHATBOT','RETAIL')),
     constraint ck_pedido_estado check (estado in
         ('CREADO','PAGADO','EN_PREPARACION','DESPACHADO','ENTREGADO','ANULADO')),
+    constraint ck_pedido_tipo check (tipo in ('VENTA','REEMPLAZO')),
     constraint ck_pedido_montos check (
         subtotal >= 0 and descuento >= 0 and total >= 0 and costo_envio >= 0)
 );
 
-comment on column ventas.pedido.id_cliente           is 'Referencia externa - módulo G (sin FK física)';
-comment on column ventas.pedido.id_vendedor          is 'Referencia externa - módulo G (sin FK física)';
+comment on column ventas.pedido.id_cliente           is 'Referencia externa - módulo G (sin FK física). UUID del claim sub';
+comment on column ventas.pedido.id_vendedor          is 'Referencia externa - módulo G (sin FK física). UUID del claim sub';
 comment on column ventas.pedido.id_direccion_entrega is 'Referencia externa - módulo E (sin FK física)';
 
 create table ventas.detalle_pedido (
     id               bigint generated always as identity primary key,
     id_pedido        bigint        not null references ventas.pedido(id) on delete cascade,
-    id_producto      bigint,       -- referencia externa: módulo F (Productos y Ofertas)
+    id_producto      varchar(64),  -- referencia externa: módulo F (Productos y Ofertas) — texto, no bigint (H12)
     sku              varchar(50)   not null,
     descripcion      varchar(255),
     cantidad         integer       not null,
@@ -74,15 +105,20 @@ create table ventas.detalle_pedido (
 comment on column ventas.detalle_pedido.id_producto is 'Referencia externa - módulo F (sin FK física)';
 
 create table ventas.pago (
-    id             bigint generated always as identity primary key,
-    id_pedido      bigint        not null references ventas.pedido(id) on delete cascade,
-    metodo         varchar(30)   not null,
-    referencia     varchar(100),
-    monto          numeric(12,2) not null,
-    estado         varchar(20)   not null,
-    fecha_proceso  timestamptz,
+    id              bigint generated always as identity primary key,
+    id_pedido       bigint        not null references ventas.pedido(id) on delete cascade,
+    metodo          varchar(30)   not null,
+    referencia      varchar(100),   -- también usado como referenciaOperacion del POS en RETAIL
+    monto           numeric(12,2) not null,
+    estado          varchar(20)   not null,
+    fecha_proceso   timestamptz,
+    monto_efectivo  numeric(12,2),   -- solo RETAIL con metodo MIXTO
+    monto_tarjeta   numeric(12,2),   -- solo RETAIL con metodo MIXTO
+    fecha_venta     timestamptz,     -- solo RETAIL: fecha real de una venta sin conexión, hasta 72h atrás
     constraint ck_pago_monto  check (monto >= 0),
-    constraint ck_pago_estado check (estado in ('PENDIENTE','CONFIRMADO','RECHAZADO'))
+    constraint ck_pago_estado check (estado in ('PENDIENTE','CONFIRMADO','RECHAZADO')),
+    constraint ck_pago_montos_mixto check (monto_efectivo is null or monto_efectivo >= 0),
+    constraint ck_pago_montos_mixto2 check (monto_tarjeta is null or monto_tarjeta >= 0)
 );
 
 create table ventas.historial_estado (
@@ -94,7 +130,7 @@ create table ventas.historial_estado (
     motivo           varchar(60),
     fecha_hora       timestamptz  not null default now(),
     constraint ck_historial_actor check (actor in
-        ('CLIENTE','GESTOR','CANAL_CHATBOT','PASARELA_PAGOS','SISTEMA_LOGISTICA'))
+        ('CLIENTE','GESTOR','CANAL_CHATBOT','PASARELA_PAGOS','SISTEMA_LOGISTICA','SISTEMA_PRODUCTOS'))
 );
 
 comment on column ventas.historial_estado.motivo is 'Incluye valores como PAGO_NO_COMPLETADO';
@@ -103,8 +139,8 @@ create table ventas.anulacion (
     id              bigint generated always as identity primary key,
     id_pedido       bigint       not null unique references ventas.pedido(id) on delete cascade,
     motivo          varchar(255) not null,
-    id_solicitante  bigint,
-    id_autorizador  bigint,
+    id_solicitante  uuid,
+    id_autorizador  uuid,
     estado          varchar(20)  not null,
     fecha           date         not null default current_date,
     constraint ck_anulacion_estado check (estado in ('PENDIENTE_AUTORIZACION','EJECUTADA','RECHAZADA'))
@@ -128,7 +164,7 @@ create table ventas.evento_recibido (
     id_evento    varchar(100) primary key,  -- transaccionId de la pasarela o guiaRemision:evento
     origen       varchar(30)  not null,
     recibido_en  timestamptz  not null default now(),
-    constraint ck_evento_recibido_origen check (origen in ('PASARELA_PAGOS','SISTEMA_LOGISTICA'))
+    constraint ck_evento_recibido_origen check (origen in ('PASARELA_PAGOS','SISTEMA_LOGISTICA','SISTEMA_PRODUCTOS'))
 );
 
 -- Índices para las claves foráneas de M1
@@ -136,34 +172,46 @@ create index ix_detalle_pedido_id_pedido   on ventas.detalle_pedido(id_pedido);
 create index ix_pago_id_pedido             on ventas.pago(id_pedido);
 create index ix_historial_estado_id_pedido on ventas.historial_estado(id_pedido);
 create index ix_outbox_pendientes          on ventas.outbox_evento(creado_en) where enviado_en is null;
+-- Una devolución solo puede tener un reemplazo vigente (no ANULADO) a la vez (api-ventas.md 1.11, idempotencia).
+create unique index ux_pedido_reemplazo_vigente on ventas.pedido(devolucion_id) where estado <> 'ANULADO' and devolucion_id is not null;
 
 -- =====================================================================
 -- ESQUEMA M2 — POSTVENTA
 -- =====================================================================
 
 create table postventa.devolucion (
-    id                  bigint generated always as identity primary key,
-    id_pedido           bigint       not null,  -- referencia API: el pedido vive en M1
-    tipo                varchar(20)  not null,
-    motivo              varchar(255) not null,
-    estado              varchar(20)  not null,
-    resolucion          varchar(30),
-    id_autorizador      bigint,
-    fundamento_rechazo  text,
-    fecha               date         not null default current_date,
-    descripcion         text,
-    id_cliente          bigint,      -- referencia externa: módulo G
+    id                     bigint generated always as identity primary key,
+    id_pedido              bigint       not null,  -- referencia API: el pedido vive en M1
+    tipo                   varchar(20)  not null,
+    motivo                 varchar(255) not null,
+    estado                 varchar(20)  not null,
+    resolucion             varchar(30),
+    id_autorizador         uuid,
+    fundamento_rechazo     text,
+    fecha                  date         not null default current_date,
+    descripcion            text,
+    id_cliente             uuid,        -- referencia externa: módulo G
+    fecha_registro         timestamptz  not null default now(),   -- ESP-07 8.3, fechaCreacion
+    fecha_resolucion       timestamptz,                           -- ESP-08 8.3, fechaResolucion
+    referencia_operacion   varchar(100),                          -- ESP-08 8.3, referenciaOperacion
+    requiere_devolucion_fisica boolean not null default true,     -- ESP-08 8.2b, regla 16
     constraint ck_devolucion_estado check (estado in
         ('SOLICITADA','EN_EVALUACION','APROBADA','RECHAZADA','COMPLETADA'))
 );
 
+comment on column postventa.devolucion.referencia_operacion is
+    'reembolsoId de F4 o referencia de Despacho, según la resolución';
+
 comment on column postventa.devolucion.id_pedido is 'Referencia API - el pedido vive en M1, sin FK física';
+
+comment on column postventa.devolucion.requiere_devolucion_fisica is
+    'false solo en REEMBOLSO sin devolución física (ESP-08 regla 16); en CAMBIO siempre true';
 
 create table postventa.devolucion_item (
     id             bigint generated always as identity primary key,
-    id_devolucion  bigint  not null references postventa.devolucion(id) on delete cascade,
-    id_producto    bigint  not null,   -- referencia externa: módulo F
-    cantidad       integer not null,
+    id_devolucion  bigint       not null references postventa.devolucion(id) on delete cascade,
+    id_producto    varchar(64)  not null,   -- referencia externa: módulo F — texto, no bigint (H12)
+    cantidad       integer      not null,
     constraint ck_devolucion_item_cantidad check (cantidad > 0)
 );
 
@@ -174,6 +222,42 @@ create table postventa.evidencia_devolucion (
     tipo           varchar(30),
     fecha          date         not null default current_date
 );
+
+-- F3, 2.5b (ESP-08 8.2b, issue G6 #51 P-02 y P-05): una fila por línea de una confirmación de recepción física.
+-- Las líneas de una misma confirmación comparten operation_id, que es el del reintegro en Productos.
+create table postventa.devolucion_recepcion (
+    id                bigint generated always as identity primary key,
+    id_devolucion     bigint       not null references postventa.devolucion(id) on delete cascade,
+    operation_id      uuid         not null,
+    sku               varchar(50)  not null,
+    id_producto       varchar(64)  not null,  -- referencia externa: módulo F
+    cantidad_recibida integer      not null,
+    cantidad_apta     integer      not null,  -- solo esto se reintegra (ESP-08 regla 15)
+    reintegro_estado  varchar(20)  not null,
+    evidencia         varchar(500),
+    id_actor          varchar(60),            -- sub de quien recibió (Gestor o almacén, rol ADMIN_VENTAS)
+    fecha_hora        timestamptz  not null default now(),
+    constraint ck_devolucion_recepcion_cantidad check (cantidad_apta >= 0 and cantidad_apta <= cantidad_recibida),
+    constraint ck_devolucion_recepcion_estado check (reintegro_estado in ('PENDIENTE','COMPLETADO'))
+);
+
+create index ix_devolucion_recepcion_id_devolucion on postventa.devolucion_recepcion(id_devolucion);
+create index ix_devolucion_recepcion_operation_id  on postventa.devolucion_recepcion(operation_id);
+
+-- RNF-03: un registro por cada cambio de estado del expediente de devolución. Nunca se edita ni se borra.
+create table postventa.historial_devolucion (
+    id               bigint generated always as identity primary key,
+    id_devolucion    bigint      not null references postventa.devolucion(id) on delete cascade,
+    estado_anterior  varchar(20),            -- null en el registro inicial (SOLICITADA)
+    estado_nuevo     varchar(20) not null,
+    actor            varchar(20) not null,
+    id_actor         varchar(60),            -- sub del cliente/Gestor, o módulo del canal
+    detalle          text,
+    fecha_hora       timestamptz not null default now(),
+    constraint ck_historial_devolucion_actor check (actor in ('CLIENTE','CANAL','GESTOR','SISTEMA'))
+);
+
+create index ix_historial_devolucion_id_devolucion on postventa.historial_devolucion(id_devolucion);
 
 create table postventa.reclamo (
     id                          bigint generated always as identity primary key,
@@ -191,7 +275,7 @@ create table postventa.reclamo (
     fecha_limite_respuesta      date         not null,
     respuesta_visible_cliente   text,
     canal                       varchar(20)  not null,
-    id_cliente                  bigint,      -- referencia externa: módulo G
+    id_cliente                  uuid,        -- referencia externa: módulo G
     fecha_registro              timestamptz  not null default now(),
     fecha_atencion              timestamptz,
     atendido_por                varchar(50),
@@ -211,7 +295,7 @@ create table postventa.reembolso (
     moneda           char(3)       not null default 'PEN',
     id_transaccion   varchar(100),
     estado           varchar(20)   not null default 'PENDIENTE',
-    id_autorizador   bigint,
+    id_autorizador   uuid,
     fecha            date          not null default current_date,
     id_pedido        bigint,       -- referencia API: el pedido vive en M1 (control de saldo)
     constraint ck_reembolso_tipo_origen check (tipo_origen in ('ANULACION','DEVOLUCION')),
@@ -251,8 +335,8 @@ comment on column postventa.calificacion.id_pedido is 'Referencia API - el pedid
 create table postventa.agregado_ventas (
     periodo          varchar(7)    not null,  -- formato AAAA-MM
     canal            varchar(30)   not null,
-    id_vendedor      bigint        not null,
-    id_producto      bigint        not null,
+    id_vendedor      uuid          not null,
+    id_producto      varchar(64)   not null,  -- texto, no bigint (H12)
     unidades         integer       not null default 0,
     monto            numeric(14,2) not null default 0,
     actualizado_en   timestamptz   not null default now(),
@@ -313,6 +397,8 @@ alter table postventa.reembolso            enable row level security;
 alter table postventa.calificacion         enable row level security;
 alter table postventa.agregado_ventas      enable row level security;
 alter table postventa.devolucion_item      enable row level security;
+alter table postventa.devolucion_recepcion enable row level security;
+alter table postventa.historial_devolucion enable row level security;
 alter table postventa.reembolso_intento    enable row level security;
 alter table postventa.agregado_metricas    enable row level security;
 alter table postventa.evento_recibido      enable row level security;

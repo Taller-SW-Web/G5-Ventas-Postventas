@@ -62,7 +62,7 @@ No se utilizan otros pesos salvo que se incorpore una nueva necesidad al sistema
 - Los textos de **14 px** se reservan para información secundaria y componentes de mayor densidad.
 - El tamaño de **12 px** se utiliza únicamente para información auxiliar, no para contenido principal ni acciones.
 
-## Implementación en Mantine 9.6.2
+## Implementación en Mantine 9.7.2
 
 La tipografía se configura mediante el objeto global del tema (`fontFamily`, `headings` y `fontSizes`).
 

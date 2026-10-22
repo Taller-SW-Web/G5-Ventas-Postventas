@@ -2,7 +2,7 @@
 
 ## Base de implementación
 
-El UI Kit utiliza **Mantine 9.6.2** sobre **React y TypeScript**. Mantine es la biblioteca base para los componentes visuales y permite centralizar colores, tipografía, espaciado, radios, breakpoints y configuración global mediante `MantineProvider` y el objeto de tema.
+El UI Kit utiliza **Mantine 9.7.2** sobre **React y TypeScript**. Mantine es la biblioteca base para los componentes visuales y permite centralizar colores, tipografía, espaciado, radios, breakpoints y configuración global mediante `MantineProvider` y el objeto de tema.
 
 La configuración principal del sistema de diseño se almacena en:
 
@@ -22,7 +22,7 @@ src/theme/theme.ts
 
 | Parámetro | Valor |
 |---|---|
-| Mantine | 9.6.2 |
+| Mantine | 9.7.2 |
 | Tema | Claro |
 | Color de acción principal | `orange.7` — `#F76707` |
 | Hover de acción principal | `#C2410C` |

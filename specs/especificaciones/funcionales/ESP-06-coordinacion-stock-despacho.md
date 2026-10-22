@@ -61,19 +61,19 @@ Incluye:
 
 ### RF-01. Reposición de stock y cancelación de despacho
 
-El sistema DEBE coordinar la reposición de stock y, cuando corresponda, la cancelación de despacho ante toda anulación confirmada.
+El sistema DEBE coordinar la reposición de stock y, cuando corresponda, la cancelación de despacho ante toda anulación confirmada. Si el pedido tenía un cupón aplicado, el sistema también publica `promotions.coupon.restoration.requested` hacia Productos (acuerdo 2026-10-11 — ver `integraciones/ACUERDO_G6_PRODUCTOS.md`).
 
 #### CA-01. Reposición de stock y cancelación de despacho programado
 
 - **DADO** un pedido anulado que ya tenía una solicitud de despacho programada.
 - **CUANDO** se confirma la anulación.
-- **ENTONCES** el sistema solicita a Productos (F) la reposición del stock y a Despacho (E) la cancelación del envío.
+- **ENTONCES** el sistema libera la reserva con Productos (`POST /api/v1/inventario/reservas/{reservaId}/liberar`, acuerdo con Productos, 2026-10-11 — ver `integraciones/ACUERDO_G6_PRODUCTOS.md`) y solicita a Despacho (E) la cancelación del envío.
 
 #### CA-02. Reposición inmediata de stock por PAGO_NO_COMPLETADO
 
 - **DADO** un pedido en `CREADO` anulado por el canal con motivo `PAGO_NO_COMPLETADO`.
 - **CUANDO** se confirma la anulación.
-- **ENTONCES** el sistema libera de inmediato el stock reservado en Productos (F), sin invocar a Despacho (E), ya que el pedido nunca llegó a programarse para envío.
+- **ENTONCES** el sistema libera de inmediato la reserva de stock en Productos (`POST /api/v1/inventario/reservas/{reservaId}/liberar`), sin invocar a Despacho (E), ya que el pedido nunca llegó a programarse para envío.
 
 ### RF-02. Origen del reembolso sin duplicar
 
@@ -100,6 +100,16 @@ El sistema DEBE registrar de forma visible cualquier falla de un servicio extern
 - **DADO** que la anulación se ejecutó pero la cancelación de despacho falló (E no respondió dentro de 5 segundos, o respondió con error 5xx tras 3 reintentos con backoff exponencial).
 - **CUANDO** ocurre la falla.
 - **ENTONCES** el sistema registra la inconsistencia de forma visible para el Gestor, con evidencia suficiente para reintento manual o automático — nunca la oculta como si todo hubiese salido bien.
+
+### RF-04. Rechazo de la cancelación de despacho por condición de carrera (`409 Conflict`)
+
+Cuando Despacho (E) responde `409 Conflict` a `POST /api/v1/despachos/pedidos/{idPedido}/cancelacion` porque el paquete ya pasó a `EN_CAMINO` entre que el Gestor aprobó la anulación y que Ventas llamó a Despacho, el sistema NO debe tratarlo como la falla técnica de CA-05 (no es un timeout ni un 5xx, es un rechazo de negocio legítimo) — comportamiento confirmado por G2, 2026-10-12.
+
+#### CA-06. `409 Conflict` al cancelar un despacho ya en curso
+
+- **DADO** un pedido cuya anulación fue aprobada por el Gestor, con una solicitud de cancelación de despacho en curso hacia Despacho (E).
+- **CUANDO** Despacho responde `409 Conflict` porque el despacho ya está `EN_CAMINO`.
+- **ENTONCES** el sistema NO reintenta esa misma llamada de cancelación, marca la solicitud de anulación como `RECHAZADA` (mismo valor cerrado de `anulacion.estado`, con motivo técnico `PEDIDO_EN_CAMINO` — no es un rechazo del Gestor, implementado 2026-10-16 en `AnulacionService`) y responde `409 Conflict` (`PEDIDO_EN_CAMINO`) indicando que el pedido ya salió a reparto y que, si se entrega, el cliente puede usar el flujo de devolución (F3). Si en cambio el cliente rechaza el paquete en puerta y Despacho lo marca `DESPACHO_FALLIDO`, el sistema sí vuelve a invocar la cancelación (el pedido ya está anulado de nuestro lado) — Despacho responde `202 Accepted`, registra `pedidoAnulado=true`, bloquea cualquier reprogramación en almacén y cierra el despacho directamente como `DEVUELTO_A_ORIGEN`.
 
 ## 6. Frontend
 
@@ -135,12 +145,13 @@ El sistema DEBE registrar de forma visible cualquier falla de un servicio extern
 | CA-01 y CA-02 | Anular un pedido con despacho programado, y un pedido `CREADO` por `PAGO_NO_COMPLETADO`. | Integración | Stock repuesto en ambos casos; despacho cancelado solo cuando existía. |
 | CA-03 y CA-04 | Anular un pedido `PAGADO` (incluyendo reintento) y un pedido `CREADO` sin pago. | Integración | Una sola solicitud de reembolso en el primer caso; ninguna en el segundo. |
 | CA-05 | Simular una falla de Despacho (E) durante la coordinación. | Integración | Inconsistencia registrada y visible para el Gestor. |
+| CA-06 | Simular un `409 Conflict` de Despacho (E) al cancelar un despacho ya `EN_CAMINO`. | Integración | No hay reintento; la anulación queda `RECHAZADA` con motivo `PEDIDO_EN_CAMINO` (no como falla técnica de CA-05); cliente notificado vía `409`. |
 
 ## 11. Criterio de completitud
 
 ESP-06 se considera completo cuando:
 
-- Los criterios `CA-01` a `CA-05` están implementados y cuentan con pruebas automatizadas exitosas.
+- Los criterios `CA-01` a `CA-06` están implementados y cuentan con pruebas automatizadas exitosas.
 - Ningún pedido anulado sin pago confirmado genera solicitud de reembolso hacia F4.
 - Los reintentos no duplican reembolsos, reposiciones de stock ni cancelaciones de despacho.
 - Las fallas parciales de stock/despacho quedan siempre visibles, nunca ocultas.
