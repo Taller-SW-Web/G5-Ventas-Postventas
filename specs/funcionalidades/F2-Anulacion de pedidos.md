@@ -136,7 +136,7 @@ Superficie visible dentro del panel del Gestor:
 | Elemento | Responsabilidad |
 |---|---|
 | Acción "Anular pedido" | Disponible solo cuando el estado del pedido lo permite; pide motivo tipificado obligatorio. |
-| Bandeja de autorizaciones pendientes | Lista exclusivamente los pedidos `EN_PREPARACION` con solicitud de anulación esperando decisión del Gestor. |
+| Bandeja de anulaciones | Permite listar y filtrar solicitudes de anulación por estado (pendientes de decisión e histórico de aprobadas/rechazadas). |
 | Detalle de la anulación | Muestra motivo, solicitante, autorizador (si aplica) y el resultado de las acciones derivadas (stock, despacho, reembolso). |
 | Alertas de inconsistencia | Resalta visualmente cuando una acción derivada falló y necesita reintento manual/automático. |
 

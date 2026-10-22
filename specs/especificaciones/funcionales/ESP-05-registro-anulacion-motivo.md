@@ -29,7 +29,7 @@ Incluye:
 - Validación de estado anulable (`CREADO`, `PAGADO`, `EN_PREPARACION`).
 - Validación de motivo tipificado obligatorio, contra el catálogo cerrado definido en la sección 3.2.
 - Matriz de autorización según estado y actor disparador (ver tabla 3.1).
-- Bandeja de autorizaciones pendientes para el Gestor cuando el pedido está `EN_PREPARACION`.
+- Bandeja de anulaciones (solicitudes pendientes e histórico de resoluciones) para el Gestor cuando el pedido está `EN_PREPARACION`.
 - Registro del solicitante, autorizador (si aplica), motivo y resultado en el historial de la anulación.
 
 **No incluye:** la coordinación de reposición de stock, cancelación de despacho ni el origen de la solicitud de reembolso a F4 (eso es ESP-06); la ejecución de la transición de estado en sí (la ejecuta F1); el procesamiento contable del reembolso (F4).
@@ -135,7 +135,7 @@ El sistema DEBE exigir autorización explícita del Gestor cuando el pedido est�
 | Elemento | Responsabilidad |
 |---|---|
 | Acción "Anular pedido" | Disponible solo cuando el estado del pedido lo permite; exige motivo tipificado obligatorio. |
-| Bandeja de autorizaciones pendientes | Lista exclusivamente los pedidos `EN_PREPARACION` con solicitud de anulación esperando decisión del Gestor. |
+| Bandeja de anulaciones | Permite listar y filtrar solicitudes de anulación por estado (pendientes de decisión e histórico de aprobadas/rechazadas). |
 | Detalle de la anulación | Muestra motivo, solicitante (cliente, canal o gestor), autorizador (si aplica) y resultado. |
 
 ## 7. Backend

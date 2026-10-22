@@ -402,14 +402,18 @@ Requiere autorización del Gestor si está en `EN_PREPARACION`:
 - **`400 Bad Request`**: Motivo ausente o no tipificado.
 - **`409 Conflict`**: Pedido ya en `DESPACHADO` o `ENTREGADO` (derivar al microservicio M2).
 
-### 1.8 Listar Anulaciones Pendientes de Autorización
+### 1.8 Listar Anulaciones (Bandeja de Anulaciones de F2)
 
-- **Endpoint:** `GET /api/v1/pedidos/anulaciones/pendientes`
-Descripción: Lista las anulaciones en `PENDIENTE_AUTORIZACION` que esperan decisión del Gestor (bandeja de F2).
+- **Endpoint:** `GET /api/v1/pedidos/anulaciones` (soporta también por retrocompatibilidad `GET /api/v1/pedidos/anulaciones/pendientes`)
+Descripción: Lista las anulaciones registradas en el sistema para gestión del Backoffice (bandeja de F2). Soporta paginación, ordenamiento y filtrado delegado en el servidor (Server-Side Filtering, Sorting & Pagination) para control de decisiones pendientes e histórico global de resoluciones.
 - **Headers:** `Authorization: Bearer <token_gestor>` (scope `ventas:admin`)
 ### Query Params
-pagina (opcional, default: 0)
-tamano (opcional, default: 10)
+- `estado` (opcional): Filtro por estado de la solicitud (`PENDIENTE_AUTORIZACION`, `EJECUTADA`, `RECHAZADA`). Si se omite, lista todas las solicitudes.
+- `canal` (opcional): Filtro por canal de origen del pedido (`MARKETPLACE`, `CHATBOT`, `RETAIL`).
+- `busqueda` (opcional): Término de búsqueda por código de pedido o nombre del cliente.
+- `sort` (opcional, default: `fecha,desc`): Criterio y dirección de ordenamiento (`fecha,desc` o `fecha,asc`).
+- `pagina` / `page` (opcional, default: 0): Índice de página basado en 0.
+- `tamano` / `size` (opcional, default: 10): Cantidad de registros por página.
 ### Respuestas
 #### `200 OK`
 ```json
@@ -419,7 +423,11 @@ tamano (opcional, default: 10)
       "solicitudAnulacionId": "ANUL-0012",
       "pedidoId": "PED-2026-00981",
       "motivo": "SOLICITUD_CLIENTE",
-      "fechaSolicitud": "2026-09-23"
+      "fechaSolicitud": "2026-09-23",
+      "estado": "PENDIENTE_AUTORIZACION",
+      "canal": "MARKETPLACE",
+      "nombreCliente": "Carlos Ramírez",
+      "estadoPedido": "EN_PREPARACION"
     }
   ],
   "pagina": 0,
