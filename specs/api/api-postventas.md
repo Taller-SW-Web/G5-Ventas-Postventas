@@ -238,7 +238,7 @@
 #### 2.4 Listar Devoluciones (uso administrativo)
 
 -   **Endpoint:** `GET /api/v2/devoluciones`
--   **Descripción:** Bandeja del Gestor (mockup 06). Sin `clienteId` lista todos los expedientes — mismo criterio que `api-ventas.md` 1.4 (`clienteId` opcional desde 2026-10-16). **Pendiente de implementación (encontrado 2026-10-17):** `DevolucionController.listar` en el backend real todavía tiene `clienteId` como parámetro obligatorio (sin `required = false`) — eso rompe con `400` la bandeja principal de Mockup 06, que llama a este endpoint sin `clienteId`. El contrato ya queda fijado como opcional abajo; falta el ajuste de una línea en el backend (`DevolucionController`/`DevolucionService`).
+-   **Descripción:** Bandeja del Gestor (mockup 06). Sin `clienteId` lista todos los expedientes — mismo criterio que `api-ventas.md` 1.4 (`clienteId` opcional). Implementado: `DevolucionController.listar` acepta `clienteId` opcional y el repositorio filtra todos los expedientes cuando no se envía.
 -   **Headers:** `Authorization: Bearer <token_gestor>` (requiere rol `ADMIN_VENTAS`, claim `roles` del JWT — no es un scope). Para que un cliente consulte sus propias devoluciones, usar **2.4b** (`/devoluciones/me`), no este endpoint.
 -   **Query Params:**
     -   `clienteId` (opcional, **corregido 2026-10-17** — antes el contrato lo exigía): Identificador del cliente. Sin él, lista todos los expedientes.

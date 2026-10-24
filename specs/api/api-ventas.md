@@ -483,15 +483,11 @@ Requiere autorización del Gestor si está en `EN_PREPARACION`:
 
 ### 1.8 Listar Anulaciones (Bandeja de Anulaciones de F2)
 
-<<<<<<< HEAD
+
 - **Endpoint:** `GET /api/v1/pedidos/anulaciones` (soporta también por retrocompatibilidad `GET /api/v1/pedidos/anulaciones/pendientes`)
 Descripción: Lista las anulaciones registradas en el sistema para gestión del Backoffice (bandeja de F2). Soporta paginación, ordenamiento y filtrado delegado en el servidor (Server-Side Filtering, Sorting & Pagination) para control de decisiones pendientes e histórico global de resoluciones.
-- **Headers:** `Authorization: Bearer <token_gestor>` (scope `ventas:admin`)
-=======
-- **Endpoint:** `GET /api/v1/pedidos/anulaciones/pendientes`
-Descripción: Lista las anulaciones en `PENDIENTE_AUTORIZACION` que esperan decisión del Gestor (bandeja de F2).
 - **Headers:** `Authorization: Bearer <token_gestor>` (requiere rol `ADMIN_VENTAS`, claim `roles` del JWT — no es un scope, ver catálogo de scopes)
->>>>>>> origin/main
+
 ### Query Params
 - `estado` (opcional): Filtro por estado de la solicitud (`PENDIENTE_AUTORIZACION`, `EJECUTADA`, `RECHAZADA`). Si se omite, lista todas las solicitudes.
 - `canal` (opcional): Filtro por canal de origen del pedido (`MARKETPLACE`, `CHATBOT`, `RETAIL`).
