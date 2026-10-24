@@ -129,17 +129,19 @@ Este botón permite comenzar otra consulta y no elimina información de los pedi
 
 ## 6. Indicadores principales
 
-La fila de indicadores contiene cinco tarjetas con iconos y valores destacados
+La fila de indicadores contiene tarjetas interactivas que representan los estados oficiales de F1:
 
 | Indicador | Valor inicial | Propósito |
 |---|---:|---|
 | **Total pedidos** | 2,880 | Mostrar la cantidad general de pedidos considerada en la bandeja |
-| **Pendientes** | 426 | Resumir los pedidos agrupados como pendientes de avance operativo |
-| **Pagados** | 1,320 | Identificar los pedidos con pago confirmado |
+| **Creados** | 426 | Pedidos registrados esperando confirmación de cobro (`CREADO`) |
+| **Pagados** | 1,320 | Identificar los pedidos con pago confirmado (`PAGADO`) |
+| **En preparación** | 510 | Pedidos en embalaje y alistamiento en almacén (`EN_PREPARACION`) |
 | **Despachados** | 740 | Mostrar los pedidos que ya se encuentran en proceso de entrega |
-| **Entregados** | 394 | Identificar los pedidos cuya entrega fue completada |
+| **Entregados** | 394 | Identificar los pedidos cuya entrega fue completada (`ENTREGADO`) |
+| **Anulados** | 120 | Identificar los pedidos cancelados (`ANULADO`) |
 
-Estas tarjetas son informativas y no tienen una acción de clic para filtrar el listado, la interacción de consulta se realiza desde los controles superiores
+Estas tarjetas son interactivas: al hacer clic sobre cualquiera de ellas, filtran automáticamente la bandeja por el estado correspondiente (propuesta UX-02).
 
 La categoría **Pendientes** corresponde a una agrupación de presentación, su definición debe mantener coherencia con los estados que realmente administra F1
 
