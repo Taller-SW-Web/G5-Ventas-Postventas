@@ -523,7 +523,7 @@ Evento procesado. Si ese `idEvento` ya se había procesado, `repetido` es `true`
 
 **Pendientes de implementación (nuestros, ya no hay nada por preguntarle a Despacho — ver `integraciones/ACUERDO_G2_DESPACHO.md`):**
 1. ~~Señal interna que marca "paquete físicamente preparado y sellado"~~ — **resuelto 2026-10-16:** dos botones del Gestor, ver 1.12 (`POST /pedidos/{id}/preparacion`) y 1.13 (`POST /pedidos/{id}/despacho`).
-2. **Columna `pedido.fecha_estimada_entrega`** para `DESPACHO_REPROGRAMADO` — **ya está en el código** (entidad `Pedido` y respuesta de 1.3). Falta reflejarla en el modelo de datos (`diagrama-fisico.md`, `diagrama-logico.md`, `ventas_postventa_schema.sql`) y confirmar que la columna existe en Supabase. Lo mismo vale para la tabla `ventas.notificacion_envio` de 1.10.
+2. ~~**Columna `pedido.fecha_estimada_entrega`** para `DESPACHO_REPROGRAMADO`~~ — **resuelto 2026-10-26:** está en el código, en Supabase (verificado) y en el modelo de datos, igual que la tabla `ventas.notificacion_envio` de 1.10.
 3. ~~**Manejo de `409 Conflict` al cancelar despacho por condición de carrera**~~ — **implementado:** al aprobar una anulación (1.9), si Despacho responde que el paquete ya está `EN_CAMINO`, la anulación queda `RECHAZADA` sin reintentar y se responde `409 PEDIDO_EN_CAMINO` (ESP-06 CA-06).
 
 ### 1.6 — retirado (fusionado en 1.5)
