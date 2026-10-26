@@ -1,6 +1,6 @@
 # Contrato de API (OpenAPI / REST) — Microservicio M1: Ventas y Pedidos
 
-**Versión:** 1.6.0
+**Versión:** 1.7.0
 
 **Fecha:** Octubre 2026
 
@@ -12,6 +12,7 @@
 
 | Versión | Fecha | Cambio |
 |---|---|---|
+| 1.7.0 | 2026-10-26 | Nuevo 1.14 `GET /api/v1/pedidos/kpis`: KPIs de ventas del Dashboard (monto vendido, ticket promedio, serie diaria y por canal) sumados en M1, para que el frontend deje de paginar toda la bandeja (1.4). |
 | 1.6.0 | 2026-10-26 | Revisión contra `servicio-ventas`: se cierran los bloques de código y JSON, los estados de los ejemplos van sin comillas invertidas, cada error de F1 lleva su `codigo` (1.3, 1.4, 1.4b, 1.5), se documenta la respuesta de 1.5, 1.3 aclara quién puede consultarla, 1.10 describe el mecanismo de entrega ya implementado y `fecha_estimada_entrega` deja de figurar como pendiente. Índice de endpoints al inicio. |
 | 1.5.0 | 2026-10-16 | 1.4 sin `clienteId` obligatorio y con filtros `canal`, `buscar`, `orden` y campo `nombreCliente` (bandeja del mockup 02). Nuevos 1.11 (orden de reemplazo), 1.12 (iniciar preparación) y 1.13 (paquete sellado). |
 
@@ -77,6 +78,7 @@ Según el acuerdo A10 con Seguridad (G7) hay dos tipos de token:
 | 1.11 | `POST /api/v1/pedidos/reemplazos` | F3 Orden de reemplazo | scope `ventas:pedidos:reemplazar` |
 | 1.12 | `POST /api/v1/pedidos/{pedidoId}/preparacion` | F1 Iniciar preparación | rol `ADMIN_VENTAS` |
 | 1.13 | `POST /api/v1/pedidos/{pedidoId}/despacho` | F1 Paquete sellado | rol `ADMIN_VENTAS` |
+| 1.14 | `GET /api/v1/pedidos/kpis` | F1/F6 KPIs de ventas del Dashboard | rol `ADMIN_VENTAS` |
 
 ## F1: Ciclo de Vida del Pedido (Responsable: Michael)
 ### 1.1 Crear Pedido
@@ -682,6 +684,50 @@ No estaban en el contrato original. Resuelven la señal pendiente de "qué dispa
     - **`422 Unprocessable Entity`** (`DESP_ERROR_SIN_COBERTURA`): Despacho no cubre el destino. Despacho responde `application/problem+json` con un campo `code` — M1 clasifica el error por `status` + `code`, nunca por el texto.
     - **`409 Conflict`** (`DESPACHO_RECHAZADO`): Despacho rechazó la solicitud por otro motivo de negocio (no reintentar).
     - **`503 Service Unavailable`** (`DESPACHO_NO_DISPONIBLE` / `PRODUCTOS_NO_DISPONIBLE`): Despacho o Productos no respondieron — el pedido sigue `EN_PREPARACION`, se puede reintentar.
+
+### 1.14 KPIs de Ventas (Dashboard, mockup 01)
+
+- **Endpoint:** `GET /api/v1/pedidos/kpis`
+- **Descripción:** Montos de venta del periodo ya sumados, para las tarjetas "Ventas" y "Ticket promedio", la tendencia diaria y las ventas por canal del Dashboard. 2.12 (M2) entrega conteos y montos de postventa, pero no el dinero de las ventas; antes el frontend lo calculaba paginando toda la bandeja (1.4). Decisión del equipo (2026-10-26): M1, dueño del pedido, entrega estas sumas — ver ESP-15.
+- **Headers:** `Authorization: Bearer <token_gestor>` (rol `ADMIN_VENTAS`)
+- **Criterio (el mismo que usaba el frontend):** pedidos de venta (no órdenes de reemplazo) creados entre `desde` y `hasta` (día UTC, inclusive).
+    - **Vendido** = `PAGADO`, `EN_PREPARACION`, `DESPACHADO` o `ENTREGADO`. `montoVendido`, `ventasPorDia` y `ventasPorCanal` suman `pedido.total` de los vendidos.
+    - `pedidosTotal` cuenta los pedidos del periodo **sin** los que siguen en `CREADO` (sin pagar); es la base de la tasa de anulación.
+    - `ticketPromedio` = `montoVendido / pedidosVendidos`, redondeado a 2 decimales; `null` si no hubo ventas.
+    - `ventasPorDia` trae un elemento por cada día del rango, con `0` si no hubo ventas.
+
+### Query Params
+desde (**obligatorio**): fecha ISO `AAAA-MM-DD`.
+hasta (**obligatorio**): fecha ISO `AAAA-MM-DD`, no anterior a `desde`. El rango puede tener como máximo 366 días.
+canal (opcional): `MARKETPLACE` | `CHATBOT` | `RETAIL`.
+
+### Respuestas
+#### `200 OK`
+```json
+{
+  "desde": "2026-10-01",
+  "hasta": "2026-10-02",
+  "canal": null,
+  "montoVendido": 180.00,
+  "pedidosVendidos": 3,
+  "ticketPromedio": 60.00,
+  "pedidosTotal": 4,
+  "pedidosEntregados": 1,
+  "pedidosAnulados": 1,
+  "ventasPorDia": [
+    { "fecha": "2026-10-01", "monto": 150.00 },
+    { "fecha": "2026-10-02", "monto": 30.00 }
+  ],
+  "ventasPorCanal": { "MARKETPLACE": 50.00, "CHATBOT": 100.00, "RETAIL": 30.00 }
+}
+```
+
+| HTTP | Código | Cuándo |
+|---|---|---|
+| `400` | `PARAMETRO_INVALIDO` | Falta `desde` o `hasta`, `desde` es posterior a `hasta`, o el rango supera 366 días |
+| `400` | `FORMATO_INVALIDO` | Fecha mal escrita o `canal` fuera de catálogo |
+| `401` | `TOKEN_INVALIDO` | Token ausente o inválido |
+| `403` | `ACCESO_DENEGADO` | El token no tiene el rol `ADMIN_VENTAS` |
 
 ---
 
