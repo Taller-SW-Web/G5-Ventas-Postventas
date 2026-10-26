@@ -41,7 +41,7 @@ Códigos que ya aparecen como valor literal de `codigo` en los contratos. Los de
 | `TOKEN_INVALIDO` / `ACCESO_DENEGADO` | Token ausente o inválido (`401`) / sin el rol o scope que exige el endpoint (`403`). | Todos los endpoints de M1 |
 | `CODIGO_INVALIDO` | Un código público (`PED-…`, `ANUL-…`) no termina en un número. | api-ventas.md, 1.2, 1.5, 1.9, 1.11, 1.12, 1.13 (`400`) |
 | `PAGINACION_INVALIDA` | Paginación fuera de rango: en 1.4, `pagina` negativa o `tamano` fuera de 1-50; en 1.4b, `page` menor que 1 o `pageSize` fuera de 1-50. | api-ventas.md, 1.4 y 1.4b (`400`) |
-| `PARAMETRO_INVALIDO` | Combinación de filtros inválida: `desde` posterior a `hasta`. | api-ventas.md, 1.4 (`400`) |
+| `PARAMETRO_INVALIDO` | Combinación de filtros inválida: `desde` posterior a `hasta`; en 1.14 además falta `desde`/`hasta` o el rango supera 366 días. | api-ventas.md, 1.4 y 1.14 (`400`) |
 | `MOTIVO_REQUERIDO` | Una transición a `ANULADO` llega sin motivo (regla 5 de ESP-03). Es una salvaguarda interna de la máquina de estados: los endpoints validan el motivo antes. | ESP-03 (`400`) |
 | `MOTIVO_INVALIDO` | Motivo de anulación ausente, fuera del catálogo de ESP-05 o que no aplica al estado del pedido. | api-ventas.md, 1.7 (`400`) |
 | `PEDIDO_NO_ANULABLE` | El pedido está `DESPACHADO`, `ENTREGADO` o ya `ANULADO`. | api-ventas.md, 1.7 (`409`) |

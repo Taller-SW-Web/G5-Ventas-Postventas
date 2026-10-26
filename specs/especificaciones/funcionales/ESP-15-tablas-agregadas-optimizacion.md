@@ -104,6 +104,8 @@ El sistema debe conservar evidencia suficiente para reconocer un evento ya aplic
 
 Los agregados son la fuente de lectura de `GET /api/v2/dashboard/metricas`. La consulta combina las proyecciones del periodo solicitado y aplica opcionalmente el filtro de canal definido en el contrato.
 
+> **Montos de venta del Dashboard (decisión del equipo, 2026-10-26):** el dinero de las ventas (monto vendido, ticket promedio, tendencia diaria y ventas por canal) **no** sale de estos agregados, sino de `GET /api/v1/pedidos/kpis` de M1 (`api-ventas.md` 1.14). M1 es el dueño del pedido y lo calcula con una sola consulta, ya descontando los anulados; hacerlo aquí exigía una columna nueva en `agregado_metricas`, recalcular los pedidos históricos y depender de que lleguen todos los eventos. El Dashboard combina 2.12 (conteos y postventa) con 1.14 (montos de venta). Reemplaza la solución anterior, en la que el frontend paginaba toda la bandeja de pedidos (1.4) para sumar los montos.
+
 La interfaz administrativa debe poder identificar la última consolidación disponible a partir del timestamp de actualización de las proyecciones. Ese dato informa la vigencia de las métricas, pero no modifica los valores calculados ni sustituye el filtro de periodo y canal.
 
 El resultado debe poder construir esta estructura sin consultar todas las operaciones transaccionales:
