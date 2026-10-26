@@ -4,9 +4,11 @@ Pasa las entidades del [modelo conceptual](diagrama-conceptual.md) a tablas, con
 
 | Esquema | Microservicio | Tablas |
 |---|---|---|
-| ventas | M1 | pedido, detalle_pedido, pago, historial_estado, anulacion, outbox_evento, evento_recibido |
-| postventa | M2 | devolucion, devolucion_item, evidencia_devolucion, reembolso, reembolso_intento, reclamo, calificacion, agregado_ventas, agregado_metricas, evento_recibido |
+| ventas | M1 | pedido, detalle_pedido, pago, historial_estado, anulacion, solicitud_reembolso, outbox_evento, notificacion_envio, evento_recibido |
+| postventa | M2 | devolucion, devolucion_item, devolucion_recepcion, historial_devolucion, evidencia_devolucion, reembolso, reembolso_intento, reclamo, calificacion, agregado_ventas, agregado_metricas, evento_recibido |
 
+> `notificacion_envio`, `solicitud_reembolso` y `pedido.fecha_estimada_entrega` también están en Supabase (verificado con consulta directa el 2026-10-26).
+>
 > `outbox_evento` y `evento_recibido` (ambos esquemas), `devolucion_item`, `reembolso_intento` y `agregado_metricas` ya están aplicadas en Supabase — confirmado en el código real de `servicio-ventas` y en la guía de implementación del backend compartida por el equipo (no versionada en este repo). El `.drawio` todavía no refleja estos cambios; queda pendiente que quien lo mantiene lo actualice y reexporte las imágenes.
 
 ## 1. Diagrama
@@ -20,6 +22,9 @@ erDiagram
     PEDIDO ||--|{ HISTORIAL_ESTADO : audita
     PEDIDO ||--o| ANULACION : "puede tener"
     PEDIDO ||--o{ OUTBOX_EVENTO : publica
+    PEDIDO ||--o{ NOTIFICACION_ENVIO : avisa
+    PEDIDO ||--o{ SOLICITUD_REEMBOLSO : origina
+    ANULACION ||--o| SOLICITUD_REEMBOLSO : "puede generar"
     PEDIDO {
         bigint id PK
         varchar(30) codigo UK "NN"
@@ -51,6 +56,7 @@ erDiagram
         uuid id_vendedor "referencia sin FK"
         bigint id_direccion_entrega "referencia sin FK"
         varchar(40) tienda_id "solo RETAIL"
+        timestamp fecha_estimada_entrega "la fija Despacho al reprogramar"
     }
     DETALLE_PEDIDO {
         bigint id PK
@@ -106,6 +112,29 @@ erDiagram
         varchar(100) id_evento PK
         varchar(30) origen "NN"
         timestamp recibido_en "NN"
+    }
+    NOTIFICACION_ENVIO {
+        uuid id_evento PK
+        bigint id_pedido FK "NN"
+        varchar(20) estado_publico "NN"
+        jsonb payload "NN"
+        timestamp creado_en "NN"
+        timestamp enviado_en
+        integer intentos "NN"
+    }
+    SOLICITUD_REEMBOLSO {
+        bigint id PK
+        bigint id_anulacion FK,UK "NN"
+        bigint id_pedido FK "NN"
+        decimal(12-2) monto "NN"
+        char(3) moneda "NN"
+        varchar(255) motivo "NN"
+        varchar(20) estado "NN"
+        varchar(30) reembolso_id
+        integer intentos "NN"
+        varchar(255) ultimo_error
+        timestamp creado_en "NN"
+        timestamp actualizado_en "NN"
     }
 ```
 
@@ -278,7 +307,9 @@ ventas (M1):
 pedido           ([id], codigo UK, canal, fecha, estado, moneda, subtotal, descuento, total,
                   nombre_contacto, tipo_documento, numero_documento, telefono, email,
                   modalidad_envio, costo_envio, destinatario, distrito, direccion, codigo_cupon,
-                  idempotency_key UK, reserva_id ⇢ F, creado_en, id_cliente ⇢ G, id_vendedor ⇢ G, id_direccion_entrega ⇢ E)
+                  idempotency_key UK, reserva_id ⇢ F, tipo, id_pedido_origen, devolucion_id ⇢ M2.devolucion,
+                  creado_en, id_cliente ⇢ G, id_vendedor ⇢ G, id_direccion_entrega ⇢ E, tienda_id,
+                  fecha_estimada_entrega)
 
 detalle_pedido   ([id], id_pedido → pedido.id, id_producto ⇢ F, sku, descripcion, cantidad,
                   precio_unitario, descuento, importe)
@@ -291,8 +322,15 @@ historial_estado ([id], id_pedido → pedido.id, estado_anterior, estado_nuevo, 
 anulacion        ([id], id_pedido → pedido.id UK, motivo, id_solicitante, id_autorizador,
                   estado, fecha)
 
+solicitud_reembolso ([id], id_anulacion → anulacion.id UK, id_pedido → pedido.id, monto, moneda,
+                  motivo, estado, reembolso_id ⇢ M2.reembolso, intentos, ultimo_error,
+                  creado_en, actualizado_en)
+
 outbox_evento    ([id_evento], id_pedido → pedido.id, tipo, payload, creado_en, enviado_en,
                   intentos)
+
+notificacion_envio ([id_evento], id_pedido → pedido.id, estado_publico, payload, creado_en,
+                  enviado_en, intentos)
 
 evento_recibido  ([id_evento], origen, recibido_en)
 ```
@@ -341,6 +379,9 @@ Con clave foránea:
 | pedido | historial_estado | id_pedido | 1 a 1..N | Se borra el historial |
 | pedido | anulacion | id_pedido (UK) | 1 a 0..1 | Se borra la anulación |
 | pedido | outbox_evento | id_pedido | 1 a 0..N | Se borran los eventos pendientes de envío |
+| pedido | notificacion_envio | id_pedido | 1 a 0..N | Se borran los avisos a Marketplace |
+| pedido | solicitud_reembolso | id_pedido | 1 a 0..N | Se borran las solicitudes de reembolso |
+| anulacion | solicitud_reembolso | id_anulacion (UK) | 1 a 0..1 | Se borra la solicitud de reembolso |
 | devolucion | evidencia_devolucion | id_devolucion | 1 a 0..N | Se borran las evidencias |
 | devolucion | devolucion_item | id_devolucion | 1 a 1..N | Se borran los ítems |
 | reembolso | reembolso_intento | id_reembolso | 1 a 1..N | Se borran los intentos |

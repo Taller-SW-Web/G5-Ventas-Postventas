@@ -6,24 +6,30 @@
 -- huecos_h2_h3_h5_h6_postventa, ids_usuario_a_uuid, pedido_idempotency_key
 -- y pedido_reserva_productos).
 --
--- PENDIENTE DE APLICAR EN SUPABASE: ventas.pedido.tienda_id y
--- ventas.pago.monto_efectivo/monto_tarjeta/fecha_venta son columnas del
--- acuerdo con Retail (G4, 2026-10-12, ver integraciones/ACUERDO_G4_RETAIL.md)
--- — el pedido RETAIL nace PAGADO y transiciona a ENTREGADO en la misma
--- operación, sin envío. Este archivo ya las refleja; falta la migración real.
+-- VERIFICADO EN SUPABASE EL 2026-10-26 (consulta directa a information_schema):
+-- ya están aplicados todos los cambios que este encabezado daba como pendientes —
+-- columnas de Retail (G4: pedido.tienda_id, pago.monto_efectivo/monto_tarjeta/fecha_venta),
+-- H12 (id_producto varchar), recepción física de F3 (devolucion.requiere_devolucion_fisica,
+-- devolucion_recepcion, historial_devolucion), orden de reemplazo (pedido.tipo,
+-- id_pedido_origen, devolucion_id), pedido.fecha_estimada_entrega y las tablas
+-- ventas.notificacion_envio y ventas.solicitud_reembolso. Los ids de usuario ya son uuid.
+--
+-- Historial:
+-- Acuerdo con Retail (G4, 2026-10-12, ver integraciones/ACUERDO_G4_RETAIL.md):
+-- el pedido RETAIL nace PAGADO y transiciona a ENTREGADO en la misma operación, sin envío.
 --
 -- Aplicado en Supabase el 2026-10-12 (H11, F3): postventa.devolucion.fecha_registro,
 -- fecha_resolucion y referencia_operacion cierran el hueco entre lo que ESP-07 8.3
 -- y ESP-08 8.3 ya prometen devolver y lo que la tabla física podía persistir.
 --
--- PENDIENTE DE APLICAR EN SUPABASE (H12, detectado 2026-10-16 revisando el código real):
+-- H12 (detectado 2026-10-16 revisando el código real, ya aplicado):
 -- id_producto era bigint en ventas.detalle_pedido, postventa.devolucion_item y
 -- postventa.agregado_ventas, pero Productos (G6) identifica sus SKUs con texto
 -- (ej. "PROD-101"), nunca un número — DetallePedido.java y DevolucionItem.java ya
 -- usan String/varchar(64). Este archivo ya refleja varchar(64); falta la migración
 -- real (ALTER COLUMN) si la base todavía tiene bigint.
 --
--- PENDIENTE DE APLICAR EN SUPABASE (F3, rediseño de recepción física, 2026-10-13/16,
+-- F3, rediseño de recepción física (ya aplicado; 2026-10-13/16,
 -- issue G6 #51 P-02 y ESP-08 8.2b): postventa.devolucion.requiere_devolucion_fisica,
 -- y las tablas nuevas postventa.devolucion_recepcion y postventa.historial_devolucion.
 -- Ya implementado en el código (RecepcionService, HistorialDevolucion); este archivo
@@ -76,6 +82,7 @@ create table ventas.pedido (
     tipo                  varchar(20)   not null default 'VENTA',  -- VENTA o REEMPLAZO (F3, api-ventas.md 1.11, acuerdo G6 #100)
     id_pedido_origen      bigint references ventas.pedido(id),    -- solo REEMPLAZO: pedido original que se cambia
     devolucion_id         varchar(30),                             -- solo REEMPLAZO: devolución de M2 (DEV-AAAA-NNNN)
+    fecha_estimada_entrega timestamptz,                            -- la fija Despacho con DESPACHO_REPROGRAMADO (api-ventas.md 1.5)
     constraint ck_pedido_canal check (canal in ('MARKETPLACE','CHATBOT','RETAIL')),
     constraint ck_pedido_estado check (estado in
         ('CREADO','PAGADO','EN_PREPARACION','DESPACHADO','ENTREGADO','ANULADO')),
@@ -159,9 +166,40 @@ create table ventas.outbox_evento (
     constraint ck_outbox_tipo check (tipo in ('pedido.pagado','pedido.anulado','pedido.entregado'))
 );
 
--- Notificaciones externas ya procesadas (idempotencia de 1.2 y 1.6)
+-- Avisos de estado de envío para Marketplace (api-ventas.md 1.10, acuerdo H-05): se guardan en la
+-- misma transacción del cambio de estado y EnvioNotificacionesScheduler los envía. Independiente de
+-- outbox_evento, que solo va a M2.
+create table ventas.notificacion_envio (
+    id_evento       uuid         primary key,   -- viaja como eventId; Marketplace deduplica con él
+    id_pedido       bigint       not null references ventas.pedido(id) on delete cascade,
+    estado_publico  varchar(20)  not null,
+    payload         jsonb        not null,
+    creado_en       timestamptz  not null default now(),
+    enviado_en      timestamptz,                -- null mientras Marketplace no lo acepte
+    intentos        integer      not null default 0
+);
+
+-- Solicitud de reembolso que M1 envía a M2 (F4) al anular un pedido ya cobrado (F2, ESP-06).
+-- ReintentoReembolsosScheduler reenvía las PENDIENTE si M2 no respondió.
+create table ventas.solicitud_reembolso (
+    id              bigint generated always as identity primary key,
+    id_anulacion    bigint        not null unique references ventas.anulacion(id) on delete cascade,
+    id_pedido       bigint        not null references ventas.pedido(id) on delete cascade,
+    monto           numeric(12,2) not null check (monto > 0),
+    moneda          char(3)       not null,
+    motivo          varchar(255)  not null,
+    estado          varchar(20)   not null default 'PENDIENTE',
+    reembolso_id    varchar(30),               -- REEM-NNNNN que devuelve M2
+    intentos        integer       not null default 0,
+    ultimo_error    varchar(255),
+    creado_en       timestamptz   not null default now(),
+    actualizado_en  timestamptz   not null default now(),
+    constraint ck_solicitud_reembolso_estado check (estado in ('PENDIENTE','ENVIADA','RECHAZADA'))
+);
+
+-- Notificaciones externas ya procesadas (idempotencia de 1.2, 1.5 y de los resultados de Productos)
 create table ventas.evento_recibido (
-    id_evento    varchar(100) primary key,  -- transaccionId de la pasarela o guiaRemision:evento
+    id_evento    varchar(100) primary key,  -- transaccionId de la pasarela, G2:idEvento de Despacho o id de Productos
     origen       varchar(30)  not null,
     recibido_en  timestamptz  not null default now(),
     constraint ck_evento_recibido_origen check (origen in ('PASARELA_PAGOS','SISTEMA_LOGISTICA','SISTEMA_PRODUCTOS'))
@@ -172,6 +210,10 @@ create index ix_detalle_pedido_id_pedido   on ventas.detalle_pedido(id_pedido);
 create index ix_pago_id_pedido             on ventas.pago(id_pedido);
 create index ix_historial_estado_id_pedido on ventas.historial_estado(id_pedido);
 create index ix_outbox_pendientes          on ventas.outbox_evento(creado_en) where enviado_en is null;
+create index ix_notificacion_envio_pendiente on ventas.notificacion_envio(creado_en) where enviado_en is null;
+create index ix_notificacion_envio_pedido  on ventas.notificacion_envio(id_pedido);
+create index ix_solicitud_reembolso_pendiente on ventas.solicitud_reembolso(creado_en) where estado = 'PENDIENTE';
+create index ix_solicitud_reembolso_pedido on ventas.solicitud_reembolso(id_pedido);
 -- Una devolución solo puede tener un reemplazo vigente (no ANULADO) a la vez (api-ventas.md 1.11, idempotencia).
 create unique index ux_pedido_reemplazo_vigente on ventas.pedido(devolucion_id) where estado <> 'ANULADO' and devolucion_id is not null;
 

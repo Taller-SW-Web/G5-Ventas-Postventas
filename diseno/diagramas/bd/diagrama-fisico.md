@@ -2,7 +2,7 @@
 
 Implementación del [modelo lógico](diagrama-logico.md) en PostgreSQL 17 sobre Supabase (proyecto `nsfrwxrjidyckgfriyhv`). Incluye los tipos reales, valores por defecto, restricciones, índices y la configuración de seguridad. El script que crea todo es [ventas_postventa_schema.sql](../../../infra/bd/ventas_postventa_schema.sql), aplicado como la migración `crear_esquemas_ventas_postventa`.
 
-> **Pendiente de aplicar en Supabase:** `pedido.tienda_id` y `pago.monto_efectivo`/`monto_tarjeta`/`fecha_venta` son columnas del acuerdo con Retail (G4, 2026-10-12 — ver `integraciones/ACUERDO_G4_RETAIL.md`): el pedido `RETAIL` nace `PAGADO` y transiciona a `ENTREGADO` en la misma operación, sin envío. Este documento y el script ya las reflejan; falta la migración real. **Ya aplicado en código (`Pedido.java`/`Pago.java`), falta confirmar si ya se aplicó sobre la Supabase real.**
+> **Verificado en Supabase el 2026-10-26** (consulta directa a `information_schema`): ya existen las columnas del acuerdo con Retail (`pedido.tienda_id`, `pago.monto_efectivo`/`monto_tarjeta`/`fecha_venta`, G4), las de la orden de reemplazo (`pedido.tipo`, `id_pedido_origen`, `devolucion_id`, F3), `pedido.fecha_estimada_entrega` (Despacho, G2), las tablas `ventas.notificacion_envio` (1.10) y `ventas.solicitud_reembolso` (F2), y `id_cliente`/`id_vendedor`/`id_solicitante`/`id_autorizador` ya son `uuid` en los dos esquemas.
 >
 > **Aplicado en Supabase el 2026-10-12** y en uso por la entidad `Devolucion` de F3: `devolucion.fecha_registro`, `fecha_resolucion` y `referencia_operacion` cierran el hueco entre lo que `ESP-07` (8.3) y `ESP-08` (8.3) ya prometen devolver (`fechaCreacion`, `fechaResolucion`, `referenciaOperacion`) y lo que la tabla física podía persistir hasta ahora.
 
@@ -17,6 +17,9 @@ erDiagram
     PEDIDO ||--|{ HISTORIAL_ESTADO : audita
     PEDIDO ||--o| ANULACION : "puede tener"
     PEDIDO ||--o{ OUTBOX_EVENTO : publica
+    PEDIDO ||--o{ NOTIFICACION_ENVIO : avisa
+    PEDIDO ||--o{ SOLICITUD_REEMBOLSO : origina
+    ANULACION ||--o| SOLICITUD_REEMBOLSO : "puede generar"
     PEDIDO {
         bigint id PK "identity, not null"
         varchar(30) codigo UK "not null"
@@ -48,6 +51,7 @@ erDiagram
         uuid id_vendedor "referencia sin FK, null"
         bigint id_direccion_entrega "referencia sin FK, null"
         varchar(40) tienda_id "null, solo RETAIL"
+        timestamptz fecha_estimada_entrega "null, la fija Despacho con DESPACHO_REPROGRAMADO (api-ventas.md 1.5)"
     }
     DETALLE_PEDIDO {
         bigint id PK "identity, not null"
@@ -104,7 +108,32 @@ erDiagram
         varchar(30) origen "not null"
         timestamptz recibido_en "not null, default now()"
     }
+    NOTIFICACION_ENVIO {
+        uuid id_evento PK "not null, viaja como eventId a Marketplace"
+        bigint id_pedido FK "not null"
+        varchar(20) estado_publico "not null, estado del pedido al momento del aviso"
+        jsonb payload "not null, evento pedidos.envio.estado_actualizado"
+        timestamptz creado_en "not null, default now()"
+        timestamptz enviado_en "null hasta que Marketplace lo acepta"
+        integer intentos "not null, default 0"
+    }
+    SOLICITUD_REEMBOLSO {
+        bigint id PK "identity, not null"
+        bigint id_anulacion FK,UK "not null"
+        bigint id_pedido FK "not null"
+        numeric(12-2) monto "not null, mayor que 0"
+        char(3) moneda "not null"
+        varchar(255) motivo "not null"
+        varchar(20) estado "not null, default PENDIENTE"
+        varchar(30) reembolso_id "null, REEM-NNNNN que devuelve M2"
+        integer intentos "not null, default 0"
+        varchar(255) ultimo_error "null"
+        timestamptz creado_en "not null, default now()"
+        timestamptz actualizado_en "not null, default now()"
+    }
 ```
+
+`notificacion_envio` es la cola de salida del aviso a Marketplace (api-ventas.md 1.10); es independiente de `outbox_evento`, que solo va a M2. `solicitud_reembolso` guarda la instrucción de reembolso que M1 envía a M2 (F4) al anular un pedido ya cobrado, y se reintenta sola si M2 no responde.
 
 Esquema postventa (M2):
 
@@ -257,8 +286,8 @@ Archivo editable: [diagrama-fisico.drawio](diagrama-fisico.drawio)
 
 | Esquema | Microservicio | Tablas |
 |---|---|---|
-| ventas | M1 | pedido, detalle_pedido, pago, historial_estado, anulacion, outbox_evento, evento_recibido |
-| postventa | M2 | devolucion, devolucion_item, evidencia_devolucion, reembolso, reembolso_intento, reclamo, calificacion, agregado_ventas, agregado_metricas, evento_recibido |
+| ventas | M1 | pedido, detalle_pedido, pago, historial_estado, anulacion, solicitud_reembolso, outbox_evento, notificacion_envio, evento_recibido |
+| postventa | M2 | devolucion, devolucion_item, devolucion_recepcion, historial_devolucion, evidencia_devolucion, reembolso, reembolso_intento, reclamo, calificacion, agregado_ventas, agregado_metricas, evento_recibido |
 
 No hay claves foráneas entre los dos esquemas.
 
@@ -275,8 +304,8 @@ No hay claves foráneas entre los dos esquemas.
 | TEXT | text | Textos largos: detalle, comentario, fundamento_rechazo, respuesta |
 | DATE | date | Fechas sin hora |
 | TIMESTAMP | timestamptz | Fecha y hora con zona horaria |
-| UUID | uuid | Identificador de evento de dominio (outbox_evento.id_evento, postventa.evento_recibido.id_evento) y de usuario: claim `sub` de Seguridad (id_cliente, id_vendedor, id_solicitante, id_autorizador) |
-| JSONB | jsonb | outbox_evento.payload: el cuerpo del evento tal como se envía a M2 |
+| UUID | uuid | Identificador de evento de dominio (outbox_evento.id_evento, notificacion_envio.id_evento, postventa.evento_recibido.id_evento) y de usuario: claim `sub` de Seguridad (id_cliente, id_vendedor, id_solicitante, id_autorizador) |
+| JSONB | jsonb | outbox_evento.payload y notificacion_envio.payload: el cuerpo del evento tal como se envía a M2 o a Marketplace |
 
 ## 4. Valores por defecto
 
@@ -298,6 +327,11 @@ No hay claves foráneas entre los dos esquemas.
 | agregado_ventas | actualizado_en | now() |
 | outbox_evento | creado_en | now() |
 | outbox_evento | intentos | 0 |
+| notificacion_envio | creado_en | now() |
+| notificacion_envio | intentos | 0 |
+| solicitud_reembolso | estado | 'PENDIENTE' |
+| solicitud_reembolso | intentos | 0 |
+| solicitud_reembolso | creado_en, actualizado_en | now() |
 | evento_recibido (ventas y postventa) | recibido_en | now() |
 | reembolso_intento | fecha_hora | now() |
 | agregado_metricas | todos los contadores y el monto | 0 |
@@ -305,7 +339,7 @@ No hay claves foráneas entre los dos esquemas.
 
 ## 5. Restricciones
 
-Claves primarias: todas las tablas usan `id`, salvo agregado_ventas (clave compuesta periodo, canal, id_vendedor, id_producto), agregado_metricas (clave compuesta fecha, canal) y las tablas de eventos (`ventas.outbox_evento`, `ventas.evento_recibido` y `postventa.evento_recibido`), cuya clave primaria es `id_evento`.
+Claves primarias: todas las tablas usan `id`, salvo agregado_ventas (clave compuesta periodo, canal, id_vendedor, id_producto), agregado_metricas (clave compuesta fecha, canal) y las tablas de eventos (`ventas.outbox_evento`, `ventas.notificacion_envio`, `ventas.evento_recibido` y `postventa.evento_recibido`), cuya clave primaria es `id_evento`.
 
 Claves foráneas (todas con `ON DELETE CASCADE`):
 
@@ -316,6 +350,9 @@ Claves foráneas (todas con `ON DELETE CASCADE`):
 | ventas.historial_estado | id_pedido | ventas.pedido(id) |
 | ventas.anulacion | id_pedido | ventas.pedido(id) |
 | ventas.outbox_evento | id_pedido | ventas.pedido(id) |
+| ventas.notificacion_envio | id_pedido | ventas.pedido(id) |
+| ventas.solicitud_reembolso | id_pedido | ventas.pedido(id) |
+| ventas.solicitud_reembolso | id_anulacion | ventas.anulacion(id) |
 | postventa.evidencia_devolucion | id_devolucion | postventa.devolucion(id) |
 | postventa.devolucion_item | id_devolucion | postventa.devolucion(id) |
 | postventa.reembolso_intento | id_reembolso | postventa.reembolso(id) |
@@ -327,6 +364,7 @@ Valores únicos:
 | pedido_codigo_key | ventas.pedido | codigo |
 | pedido_idempotency_key_key | ventas.pedido | idempotency_key (admite null) |
 | anulacion_id_pedido_key | ventas.anulacion | id_pedido |
+| solicitud_reembolso_id_anulacion_key | ventas.solicitud_reembolso | id_anulacion |
 | reclamo_codigo_key | postventa.reclamo | codigo |
 | reembolso_idempotency_key_key | postventa.reembolso | idempotency_key |
 | uq_reembolso_origen | postventa.reembolso | tipo_origen, id_origen |
@@ -348,6 +386,8 @@ CHECK:
 | ck_anulacion_estado | ventas.anulacion | estado IN (PENDIENTE_AUTORIZACION, EJECUTADA, RECHAZADA) |
 | ck_outbox_tipo | ventas.outbox_evento | tipo IN (pedido.pagado, pedido.anulado, pedido.entregado) |
 | ck_evento_recibido_origen | ventas.evento_recibido | origen IN (PASARELA_PAGOS, SISTEMA_LOGISTICA, SISTEMA_PRODUCTOS) |
+| ck_solicitud_reembolso_estado | ventas.solicitud_reembolso | estado IN (PENDIENTE, ENVIADA, RECHAZADA) |
+| solicitud_reembolso_monto_check | ventas.solicitud_reembolso | monto > 0 |
 | ck_devolucion_estado | postventa.devolucion | estado IN (SOLICITADA, EN_EVALUACION, APROBADA, RECHAZADA, COMPLETADA) |
 | ck_devolucion_item_cantidad | postventa.devolucion_item | cantidad > 0 |
 | ck_reembolso_tipo_origen | postventa.reembolso | tipo_origen IN (ANULACION, DEVOLUCION) |
@@ -378,12 +418,18 @@ Además de los que PostgreSQL crea para las claves primarias y únicas:
 | ix_devolucion_id_cliente | postventa.devolucion | id_cliente |
 | ix_reembolso_id_pedido | postventa.reembolso | id_pedido |
 | ix_devolucion_item_id_devolucion | postventa.devolucion_item | id_devolucion |
+| ix_notificacion_envio_pendiente | ventas.notificacion_envio | creado_en, solo filas con enviado_en null (índice parcial) |
+| ix_notificacion_envio_pedido | ventas.notificacion_envio | id_pedido |
+| ix_solicitud_reembolso_pendiente | ventas.solicitud_reembolso | creado_en, solo filas con estado PENDIENTE (índice parcial) |
+| ix_solicitud_reembolso_pedido | ventas.solicitud_reembolso | id_pedido |
+
+`ix_notificacion_envio_pendiente` y `ix_solicitud_reembolso_pendiente` sirven a los procesos programados que reenvían los avisos a Marketplace y las solicitudes de reembolso a M2, del más antiguo al más nuevo.
 
 Los tres primeros sirven para buscar por pedido en M2 aunque esas columnas no sean claves foráneas. `ix_outbox_pendientes` sirve al `EnvioEventosScheduler` para traer los eventos no enviados más antiguos. `ix_reembolso_id_pedido` sirve para calcular el saldo reembolsable de un pedido (ESP-09).
 
 ## 7. Seguridad
 
-- RLS (Row Level Security) activo en las 17 tablas (7 en `ventas`, 10 en `postventa`), sin políticas. La API pública de Supabase no puede leer ni escribir en ellas.
+- RLS (Row Level Security) activo en las 21 tablas (9 en `ventas`, 12 en `postventa`, verificado el 2026-10-26), sin políticas. La API pública de Supabase no puede leer ni escribir en ellas.
 - El backend se conecta directamente a PostgreSQL con su propia credencial.
 - Pendiente: crear un usuario de base de datos para M1 y otro para M2, cada uno con permisos solo sobre su esquema.
 
