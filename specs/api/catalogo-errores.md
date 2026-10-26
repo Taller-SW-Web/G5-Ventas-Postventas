@@ -21,7 +21,7 @@ Consolidar en un solo lugar los errores de los dos contratos de API ([api-ventas
 
 ## 3. Códigos de error de negocio ya formalizados
 
-Códigos que ya aparecen como valor literal de `codigo` en los contratos. Los de 1.1 y 1.2 son los que devuelve `servicio-ventas`. El resto de condiciones están descritas en texto, sin `codigo` propio (ver sección 6, Pendientes).
+Códigos que ya aparecen como valor literal de `codigo` en los contratos. Los de M1 son exactamente los que devuelve `servicio-ventas` (revisados contra el código el 2026-10-26). En M2 todavía quedan condiciones descritas solo en texto, sin `codigo` propio (ver sección 6, Pendientes).
 
 | Código | Significado | Dónde aparece |
 |---|---|---|
@@ -37,8 +37,24 @@ Códigos que ya aparecen como valor literal de `codigo` en los contratos. Los de
 | `PEDIDO_NO_ENCONTRADO` | El pedido indicado no existe. | api-ventas.md, 1.2 (`404`) |
 | `ESTADO_NO_PERMITE_PAGO` | La notificación de pago llega para un pedido que ya no está en `CREADO`. | api-ventas.md, 1.2 (`409`) |
 | `TRANSACCION_DE_OTRO_PEDIDO` | La `transaccionId` ya se registró en otro pedido. | api-ventas.md, 1.2 (`409`) |
-| `TRANSICION_NO_PERMITIDA` | El cambio de estado no está en la matriz de ESP-03. | ESP-03; 1.5 y 1.7 (`409`) |
+| `TRANSICION_NO_PERMITIDA` | El cambio de estado no está en la matriz de ESP-03. | ESP-03; 1.5 y 1.12 (`409`) |
 | `TOKEN_INVALIDO` / `ACCESO_DENEGADO` | Token ausente o inválido (`401`) / sin el rol o scope que exige el endpoint (`403`). | Todos los endpoints de M1 |
+| `CODIGO_INVALIDO` | Un código público (`PED-…`, `ANUL-…`) no termina en un número. | api-ventas.md, 1.2, 1.5, 1.9, 1.11, 1.12, 1.13 (`400`) |
+| `PAGINACION_INVALIDA` | Paginación fuera de rango: en 1.4, `pagina` negativa o `tamano` fuera de 1-50; en 1.4b, `page` menor que 1 o `pageSize` fuera de 1-50. | api-ventas.md, 1.4 y 1.4b (`400`) |
+| `PARAMETRO_INVALIDO` | Combinación de filtros inválida: `desde` posterior a `hasta`. | api-ventas.md, 1.4 (`400`) |
+| `MOTIVO_REQUERIDO` | Una transición a `ANULADO` llega sin motivo (regla 5 de ESP-03). Es una salvaguarda interna de la máquina de estados: los endpoints validan el motivo antes. | ESP-03 (`400`) |
+| `MOTIVO_INVALIDO` | Motivo de anulación ausente, fuera del catálogo de ESP-05 o que no aplica al estado del pedido. | api-ventas.md, 1.7 (`400`) |
+| `PEDIDO_NO_ANULABLE` | El pedido está `DESPACHADO`, `ENTREGADO` o ya `ANULADO`. | api-ventas.md, 1.7 (`409`) |
+| `SOLICITUD_DUPLICADA` | Ya hay una anulación `PENDIENTE_AUTORIZACION` para el pedido. | api-ventas.md, 1.7 (`409`) |
+| `ESTADO_NO_SOPORTADO` | Salvaguarda: el pedido está en un estado que la solicitud de anulación no contempla. No debería ocurrir con los estados actuales. | api-ventas.md, 1.7 (`409`) |
+| `DECISION_INVALIDA` | `decision` no es `APROBADA` ni `RECHAZADA`. | api-ventas.md, 1.9 (`400`) |
+| `DATOS_INCONSISTENTES` | La anulación indicada no pertenece al pedido de la ruta. | api-ventas.md, 1.9 (`400`) |
+| `ANULACION_NO_ENCONTRADA` | La anulación indicada no existe. | api-ventas.md, 1.9 (`404`) |
+| `ANULACION_NO_PENDIENTE` | La anulación no está en `PENDIENTE_AUTORIZACION`. | api-ventas.md, 1.9 (`409`) |
+| `PEDIDO_YA_NO_EN_PREPARACION` | Al aprobar, el pedido ya no está `EN_PREPARACION`; la anulación queda `RECHAZADA`. | api-ventas.md, 1.9 (`409`) |
+| `RUTA_NO_ENCONTRADA` / `METODO_NO_PERMITIDO` | La ruta no existe (`404`) / el método HTTP no está permitido en esa ruta (`405`). | Genéricos de M1 |
+| `NO_IMPLEMENTADO` | La operación todavía no está construida (`501`). | Genérico de M1 |
+| `ERROR_INTERNO` | Error no controlado (`500`). El detalle queda en el log, no en la respuesta. | Genérico de M1 |
 
 ---
 
@@ -57,14 +73,31 @@ Códigos que ya aparecen como valor literal de `codigo` en los contratos. Los de
 | `POST /api/v1/pedidos/{pedidoId}/pagos/notificacion` | `404` | El pedido indicado no existe. | `PEDIDO_NO_ENCONTRADO` |
 | `POST /api/v1/pedidos/{pedidoId}/pagos/notificacion` | `409` | El pedido no se encuentra en estado `CREADO`. | `ESTADO_NO_PERMITE_PAGO` |
 | `POST /api/v1/pedidos/{pedidoId}/pagos/notificacion` | `409` | La `transaccionId` ya pertenece a otro pedido. | `TRANSACCION_DE_OTRO_PEDIDO` |
+| `GET /api/v1/pedidos` | `400` | `pagina` negativa o `tamano` fuera de 1-50. | `PAGINACION_INVALIDA` |
+| `GET /api/v1/pedidos` | `400` | `desde` posterior a `hasta`. | `PARAMETRO_INVALIDO` |
+| `GET /api/v1/pedidos` | `400` | Filtro fuera de catálogo o fecha mal escrita. | `FORMATO_INVALIDO` |
+| `GET /api/v1/pedidos` | `403` | El token no tiene el rol `ADMIN_VENTAS`. | `ACCESO_DENEGADO` |
+| `GET /api/v1/pedidos/me` | `400` | `page` menor que 1 o `pageSize` fuera de 1-50. | `PAGINACION_INVALIDA` |
 | `GET /api/v1/pedidos/me` | `401` | Token ausente o inválido. | `TOKEN_INVALIDO` |
 | `GET /api/v1/pedidos/me` | `403` | El token no tiene el rol `CLIENTE`. | `ACCESO_DENEGADO` |
-| `GET /api/v1/pedidos/{pedidoId}` | `401` | Token ausente o inválido. | — |
-| `GET /api/v1/pedidos/{pedidoId}` | `403` | El cliente autenticado no es el titular de la orden. | — |
-| `GET /api/v1/pedidos/{pedidoId}` | `404` | El pedido solicitado no existe. | — |
-| `PATCH /api/v1/pedidos/{pedidoId}/estado` | `409` | Transición no permitida por la máquina de estados. | `TRANSICION_NO_PERMITIDA` |
-| `POST /api/v1/pedidos/{pedidoId}/anulaciones` | `400` | Motivo ausente o no tipificado. | — |
-| `POST /api/v1/pedidos/{pedidoId}/anulaciones` | `409` | Pedido ya en `DESPACHADO` o `ENTREGADO` (derivar al microservicio M2). | — |
+| `GET /api/v1/pedidos/{pedidoId}` | `401` | Token ausente o inválido. | `TOKEN_INVALIDO` |
+| `GET /api/v1/pedidos/{pedidoId}` | `403` | Sin rol ni scope permitido, o el cliente autenticado no es el titular de la orden. | `ACCESO_DENEGADO` |
+| `GET /api/v1/pedidos/{pedidoId}` | `404` | El pedido solicitado no existe. | `PEDIDO_NO_ENCONTRADO` |
+| `POST /api/v1/integraciones/despachos/eventos` | `400` | Falta `Idempotency-Key` o no es UUID v4. | `CABECERA_FALTANTE` |
+| `POST /api/v1/integraciones/despachos/eventos` | `400` | Falta un campo obligatorio, o `DESPACHO_REPROGRAMADO` sin `nuevaFechaProgramada` válida. | `DATOS_INVALIDOS` |
+| `POST /api/v1/integraciones/despachos/eventos` | `400` | JSON mal formado o `tipo` desconocido. | `FORMATO_INVALIDO` |
+| `POST /api/v1/integraciones/despachos/eventos` | `404` | `idPedido` no existe. | `PEDIDO_NO_ENCONTRADO` |
+| `POST /api/v1/integraciones/despachos/eventos` | `409` | El pedido no está en el estado que exige el evento. | `TRANSICION_NO_PERMITIDA` |
+| `POST /api/v1/pedidos/{pedidoId}/anulaciones` | `400` | Motivo ausente, no tipificado o que no aplica al estado del pedido. | `MOTIVO_INVALIDO` |
+| `POST /api/v1/pedidos/{pedidoId}/anulaciones` | `404` | El pedido no existe. | `PEDIDO_NO_ENCONTRADO` |
+| `POST /api/v1/pedidos/{pedidoId}/anulaciones` | `409` | Pedido ya en `DESPACHADO` o `ENTREGADO` (derivar al microservicio M2), o ya `ANULADO`. | `PEDIDO_NO_ANULABLE` |
+| `POST /api/v1/pedidos/{pedidoId}/anulaciones` | `409` | Ya existe una anulación pendiente de autorización para el pedido. | `SOLICITUD_DUPLICADA` |
+| `PATCH /api/v1/pedidos/{pedidoId}/anulaciones/{anulacionId}` | `400` | `decision` o `comentario` vacíos. | `DATOS_INVALIDOS` |
+| `PATCH /api/v1/pedidos/{pedidoId}/anulaciones/{anulacionId}` | `400` | `decision` distinta de `APROBADA`/`RECHAZADA`. | `DECISION_INVALIDA` |
+| `PATCH /api/v1/pedidos/{pedidoId}/anulaciones/{anulacionId}` | `400` | La anulación no pertenece a ese pedido. | `DATOS_INCONSISTENTES` |
+| `PATCH /api/v1/pedidos/{pedidoId}/anulaciones/{anulacionId}` | `404` | La anulación no existe. | `ANULACION_NO_ENCONTRADA` |
+| `PATCH /api/v1/pedidos/{pedidoId}/anulaciones/{anulacionId}` | `409` | La anulación no está en `PENDIENTE_AUTORIZACION`. | `ANULACION_NO_PENDIENTE` |
+| `PATCH /api/v1/pedidos/{pedidoId}/anulaciones/{anulacionId}` | `409` | Al aprobar, el pedido ya no está `EN_PREPARACION` — la anulación queda `RECHAZADA`. | `PEDIDO_YA_NO_EN_PREPARACION` |
 | `PATCH /api/v1/pedidos/{pedidoId}/anulaciones/{anulacionId}` | `409` | Al aprobar, Despacho (G2) respondió que el paquete ya salió (`EN_CAMINO`) — la anulación queda `RECHAZADA`, no se reintenta (ESP-06 CA-06). | `PEDIDO_EN_CAMINO` |
 | `POST /api/v1/pedidos/reemplazos` | `400` | Un `sku` no está en el pedido original. | `ITEM_NO_PERTENECE_AL_PEDIDO` |
 | `POST /api/v1/pedidos/reemplazos` | `400` | Se pide reponer más unidades de ese `sku` de las que se compraron. | `CANTIDAD_EXCEDE_COMPRADA` |
@@ -101,7 +134,6 @@ Códigos que ya aparecen como valor literal de `codigo` en los contratos. Los de
 | `POST /api/v2/devoluciones` | `409` | El pedido no se encuentra en estado `ENTREGADO`. | `PEDIDO_NO_ENTREGADO` |
 | `POST /api/v2/devoluciones` | `409` | Ya existe una devolución no rechazada sobre esas unidades. | `DEVOLUCION_EN_CURSO` |
 | `POST /api/v2/devoluciones` | `503` | M1 no responde la consulta del pedido (1.3). | `VENTAS_NO_DISPONIBLE` |
-| `GET /api/v2/devoluciones` (2.4) | `400` | Falta `clienteId`. | `PARAMETRO_FALTANTE` |
 | `GET /api/v2/devoluciones` / `/me` (2.4, 2.4b) | `400` | Paginación fuera de rango o no numérica. | `PAGINACION_INVALIDA` |
 | `GET /api/v2/devoluciones/{devolucionId}` | `404` | El expediente solicitado no existe. | `DEVOLUCION_NO_ENCONTRADA` |
 | `PATCH /api/v2/devoluciones/{devolucionId}/resolucion` | `400` | Rechazo sin fundamento explicativo. | `FUNDAMENTO_REQUERIDO` |
@@ -137,7 +169,7 @@ Códigos que ya aparecen como valor literal de `codigo` en los contratos. Los de
 
 ## 6. Pendientes
 
-- Varias condiciones de error de M1 (tabla 4, 1.3 y 1.7) todavía no tienen un `codigo` de negocio propio en el contrato — solo la descripción en texto asociada al código HTTP. Asignarlos es una decisión de quien construya esos endpoints (F1, F2), no corresponde inventarlos en este documento.
+- M1 (tabla 4) ya tiene todos sus códigos asignados (2026-10-26, contrato v1.6.0): se tomaron de los que devuelve `servicio-ventas`, no se inventaron. Se retiró la fila de `PATCH /api/v1/pedidos/{pedidoId}/estado` (reemplazado por el webhook 1.5) y, en la tabla 5, la de `GET /api/v2/devoluciones` sin `clienteId` (desde 2026-10-23 `clienteId` es opcional y sin él se listan todas).
 - F3 (tabla 5) ya tiene todos sus códigos asignados (2026-10-12, contrato v1.5.0) — faltan F4 a F6.
 
 ---
