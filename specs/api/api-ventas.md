@@ -1,12 +1,19 @@
 # Contrato de API (OpenAPI / REST) — Microservicio M1: Ventas y Pedidos
 
-**Versión:** 1.5.0
+**Versión:** 1.6.0
 
 **Fecha:** Octubre 2026
 
 **Servicio:** M1 (Ventas / Pedidos)
 
 **Audiencia:** `api-ventas`
+
+### Historial de cambios
+
+| Versión | Fecha | Cambio |
+|---|---|---|
+| 1.6.0 | 2026-10-26 | Revisión contra `servicio-ventas`: se cierran los bloques de código y JSON, los estados de los ejemplos van sin comillas invertidas, cada error de F1 lleva su `codigo` (1.3, 1.4, 1.4b, 1.5), se documenta la respuesta de 1.5, 1.3 aclara quién puede consultarla, 1.10 describe el mecanismo de entrega ya implementado y `fecha_estimada_entrega` deja de figurar como pendiente. Índice de endpoints al inicio. |
+| 1.5.0 | 2026-10-16 | 1.4 sin `clienteId` obligatorio y con filtros `canal`, `buscar`, `orden` y campo `nombreCliente` (bandeja del mockup 02). Nuevos 1.11 (orden de reemplazo), 1.12 (iniciar preparación) y 1.13 (paquete sellado). |
 
 ---
 
@@ -24,6 +31,10 @@
   "timestamp": "2026-09-23T00:05:00Z",
   "detalles": []
 }
+```
+
+Los `codigo` posibles están consolidados en [catalogo-errores.md](catalogo-errores.md). Además de los propios de cada endpoint, cualquier endpoint puede responder `401 TOKEN_INVALIDO` (token ausente, vencido o inválido), `403 ACCESO_DENEGADO` (sin el rol o scope requerido) y `500 ERROR_INTERNO`. Los endpoints que reciben un código público y lo convierten a id (1.2, 1.5, 1.9, 1.11, 1.12 y 1.13) responden `400 CODIGO_INVALIDO` si el código (`PED-…`, `ANUL-…`) no termina en un número.
+
 ## Catálogo de Scopes OAuth2 / JWT Expuestos por M1
 
 Según el acuerdo A10 con Seguridad (G7) hay dos tipos de token:
@@ -46,7 +57,27 @@ Según el acuerdo A10 con Seguridad (G7) hay dos tipos de token:
 | `ADMIN_VENTAS` | Consulta y listado global (1.3, 1.4), anulaciones pendientes y su autorización (1.8, 1.9), y también 1.7 |
 
 `ventas:pedidos:leer` y `ventas:admin` ya no son scopes: esos permisos los da el rol del token de usuario.
+
 # Endpoints de M1
+
+Índice (la numeración se conserva para no romper las referencias de otros documentos; 1.6 está retirado):
+
+| # | Método y ruta | Funcionalidad | Autorización |
+|---|---|---|---|
+| 1.1 | `POST /api/v1/pedidos` | F1 Crear pedido | scope `ventas:pedidos:crear` |
+| 1.2 | `POST /api/v1/pedidos/{pedidoId}/pagos/notificacion` | F1 Notificación de pago | scope `ventas:pagos:webhook` |
+| 1.3 | `GET /api/v1/pedidos/{pedidoId}` | F1 Consultar pedido | rol `CLIENTE` (solo los suyos) o `ADMIN_VENTAS`, o scope `ventas:pedidos:consultar` |
+| 1.4 | `GET /api/v1/pedidos` | F1 Bandeja del Gestor | rol `ADMIN_VENTAS` |
+| 1.4b | `GET /api/v1/pedidos/me` | F1 Mis pedidos | rol `CLIENTE` |
+| 1.5 | `POST /api/v1/integraciones/despachos/eventos` | F1 Webhook de Despacho | scope `ventas:pedidos:estado` |
+| 1.7 | `POST /api/v1/pedidos/{pedidoId}/anulaciones` | F2 Solicitar anulación | scope `ventas:pedidos:anular` o rol `ADMIN_VENTAS` |
+| 1.8 | `GET /api/v1/pedidos/anulaciones` | F2 Bandeja de anulaciones | rol `ADMIN_VENTAS` |
+| 1.9 | `PATCH /api/v1/pedidos/{pedidoId}/anulaciones/{anulacionId}` | F2 Resolver anulación | rol `ADMIN_VENTAS` |
+| 1.10 | Evento saliente `pedidos.envio.estado_actualizado` | F1 Aviso a Marketplace | — (M1 lo envía) |
+| 1.11 | `POST /api/v1/pedidos/reemplazos` | F3 Orden de reemplazo | scope `ventas:pedidos:reemplazar` |
+| 1.12 | `POST /api/v1/pedidos/{pedidoId}/preparacion` | F1 Iniciar preparación | rol `ADMIN_VENTAS` |
+| 1.13 | `POST /api/v1/pedidos/{pedidoId}/despacho` | F1 Paquete sellado | rol `ADMIN_VENTAS` |
+
 ## F1: Ciclo de Vida del Pedido (Responsable: Michael)
 ### 1.1 Crear Pedido
 - **Endpoint:** `POST /api/v1/pedidos`
@@ -89,6 +120,7 @@ Los campos tipoDocumento y numeroDocumento son estrictamente obligatorios.
 
 `contacto.clienteId` es el UUID del cliente en Seguridad (claim `sub`). Se exige `telefono` o `email` (al menos uno).
 
+```json
 {
   "canal": "CHATBOT",
   "contacto": {
@@ -132,6 +164,8 @@ Los campos tipoDocumento y numeroDocumento son estrictamente obligatorios.
     "total": 129.90
   }
 }
+```
+
 ### Campos adicionales de Retail (acuerdo G4)
 
 | Campo | Obligatorio | Regla |
@@ -170,7 +204,7 @@ También `200 OK` con el mismo cuerpo cuando es un reintento con la misma `Idemp
 ```json
 {
   "pedidoId": "PED-2026-00981",
-  "estado": "`CREADO`",
+  "estado": "CREADO",
   "total": 129.90,
   "moneda": "PEN",
   "canal": "CHATBOT",
@@ -215,6 +249,7 @@ Descripción: Recibe la confirmación o el rechazo de la transacción desde la p
   - `Authorization: Bearer <token_pasarela_o_servicio>`
   - `Content-Type: application/json`
 ### Request Body
+```json
 {
   "transaccionId": "TX-PASARELA-778120",
   "resultado": "APROBADO",
@@ -226,6 +261,7 @@ Descripción: Recibe la confirmación o el rechazo de la transacción desde la p
   "fechaPago": "2026-09-23T00:06:00Z",
   "codigoAutorizacion": "AUTH-99021"
 }
+```
 
 Valores de `resultado`:
 
@@ -242,7 +278,7 @@ Cualquier otro valor responde `400 Bad Request`. Si la misma `transaccionId` lle
 ```json
 {
   "pedidoId": "PED-2026-00981",
-  "nuevoEstado": "`PAGADO`",
+  "nuevoEstado": "PAGADO",
   "transaccionId": "TX-PASARELA-778120",
   "fechaTransicion": "2026-09-23T00:06:00Z"
 }
@@ -258,7 +294,17 @@ Si la notificación es un reintento, `nuevoEstado` y `fechaTransicion` son los y
 | `409` | `TRANSACCION_DE_OTRO_PEDIDO` | La `transaccionId` ya se registró en otro pedido |
 ### 1.3 Consultar Pedido por ID
 - **Endpoint:** `GET /api/v1/pedidos/{pedidoId}`
-Descripción: Permite a clientes, canales y administradores consultar el estado completo del pedido y su snapshot inmutable.
+Descripción: Devuelve el estado completo del pedido, su snapshot inmutable y su historial de estados.
+
+Quién puede llamarlo:
+
+| Token | Alcance |
+|---|---|
+| Usuario con rol `CLIENTE` | Solo sus propios pedidos (se compara `contacto.clienteId` con el claim `sub`) |
+| Usuario con rol `ADMIN_VENTAS` (Gestor) | Cualquier pedido |
+| Servicio con scope `ventas:pedidos:consultar` | Cualquier pedido. Uso módulo a módulo (`modulo-postventa`) |
+
+Un token de servicio de canal (Marketplace, Chatbot, Retail) **no** tiene acceso a 1.3: para mostrarle el estado al cliente, el canal usa su token de usuario (1.3 con rol `CLIENTE` o 1.4b).
 - **Headers:** `Authorization: Bearer <token>`
 - **Parámetros Path:** `pedidoId (string, ej. PED-2026-00981)`
 ### Respuestas
@@ -267,7 +313,7 @@ Descripción: Permite a clientes, canales y administradores consultar el estado 
 {
   "pedidoId": "PED-2026-00981",
   "canal": "CHATBOT",
-  "estado": "`EN_PREPARACION`",
+  "estado": "EN_PREPARACION",
   "contacto": {
     "clienteId": "3f9a2b7e-6c1d-4e2a-9b3f-7a1d2c4e5f6a",
     "nombreCompleto": "Juan Pérez Rodríguez",
@@ -284,7 +330,12 @@ Descripción: Permite a clientes, canales y administradores consultar el estado 
   "envio": {
     "modalidad": "DELIVERY",
     "direccion": "Av. La Marina 1234, Dpto 401",
-    "distrito": "San Miguel"
+    "distrito": "San Miguel",
+    "departamento": "Lima",
+    "provincia": "Lima",
+    "referencia": "Frente al centro comercial",
+    "tiendaId": null,
+    "fechaEstimadaEntrega": null
   },
   "items": [
     {
@@ -299,19 +350,19 @@ Descripción: Permite a clientes, canales y administradores consultar el estado 
   "ultimaActualizacion": "2026-09-23T00:08:15Z",
   "historialEstados": [
     {
-      "estado": "`CREADO`",
+      "estado": "CREADO",
       "fecha": "2026-09-23T00:05:00Z",
       "actor": "CANAL_CHATBOT",
       "motivo": "Registro inicial de compra"
     },
     {
-      "estado": "`PAGADO`",
+      "estado": "PAGADO",
       "fecha": "2026-09-23T00:06:00Z",
       "actor": "PASARELA_PAGOS",
       "motivo": "Confirmación de cobro exitoso"
     },
     {
-      "estado": "`EN_PREPARACION`",
+      "estado": "EN_PREPARACION",
       "fecha": "2026-09-23T00:08:15Z",
       "actor": "SISTEMA_LOGISTICA",
       "motivo": "Recepción en almacén central"
@@ -319,24 +370,29 @@ Descripción: Permite a clientes, canales y administradores consultar el estado 
   ]
 }
 ```
-- **`401 Unauthorized`**: Token ausente o inválido.
-- **`403 Forbidden`**: El cliente autenticado no es el titular de la orden.
-- **`404 Not Found`**: El pedido solicitado no existe.
+- `envio.tiendaId` solo viene en pedidos `RETAIL` (acuerdo G4).
+- `envio.fechaEstimadaEntrega` es `null` hasta que Despacho envía `DESPACHO_REPROGRAMADO` (ver 1.5).
+
+| HTTP | Código | Cuándo |
+|---|---|---|
+| `401` | `TOKEN_INVALIDO` | Token ausente, vencido o inválido |
+| `403` | `ACCESO_DENEGADO` | El token no tiene rol ni scope permitido, o el cliente autenticado no es el titular del pedido |
+| `404` | `PEDIDO_NO_ENCONTRADO` | No existe un pedido con ese código (incluye un `pedidoId` mal escrito) |
 ### 1.4 Listar Pedidos (bandeja del Gestor, mockup 02)
 
 - **Endpoint:** `GET /api/v1/pedidos`
-Descripción: Listado paginado de pedidos para el Gestor. Sin `clienteId` lista todos — ya **no** es obligatorio (corregido 2026-10-16, antes el contrato lo exigía). Para que un canal muestre "mis pedidos" al propio cliente autenticado, usar **1.4b** (`/pedidos/me`), no este endpoint.
+Descripción: Listado paginado de pedidos para el Gestor. Todos los filtros son opcionales; sin `clienteId` lista todos los pedidos. Para que un canal muestre "mis pedidos" al propio cliente autenticado, usar **1.4b** (`/pedidos/me`), no este endpoint.
 - **Headers:** `Authorization: Bearer <token_gestor>` (requiere rol `ADMIN_VENTAS`, claim `roles` del JWT — no es un scope, ver catálogo de scopes)
 ### Query Params
 clienteId (opcional): UUID del cliente en Seguridad (claim `sub`).
 estado (opcional): `CREADO` | `PAGADO` | `EN_PREPARACION` | `DESPACHADO` | `ENTREGADO` | `ANULADO`
-canal (opcional, **agregado 2026-10-16, no estaba en el contrato**): `MARKETPLACE` | `CHATBOT` | `RETAIL`.
-buscar (opcional, **agregado 2026-10-16**): un código `PED-AAAA-NNNNN` filtra por ese pedido exacto; cualquier otro texto busca por número de documento exacto o parte del nombre de contacto.
-orden (opcional, **agregado 2026-10-16**): `RECIENTES` (default) | `ANTIGUOS`, por fecha de creación.
-desde (opcional): Fecha inicial ISO (día de creación, UTC, inclusive).
-hasta (opcional): Fecha final ISO (inclusive).
-pagina (opcional, default: 0)
-tamano (opcional, default: 10)
+canal (opcional): `MARKETPLACE` | `CHATBOT` | `RETAIL`.
+buscar (opcional): un código `PED-AAAA-NNNNN` filtra por ese pedido exacto; cualquier otro texto busca por número de documento exacto o parte del nombre de contacto.
+orden (opcional): `RECIENTES` (default) | `ANTIGUOS`, por fecha de creación.
+desde (opcional): Fecha inicial ISO `AAAA-MM-DD` (día de creación, UTC, inclusive).
+hasta (opcional): Fecha final ISO `AAAA-MM-DD` (inclusive). No puede ser anterior a `desde`.
+pagina (opcional, default: 0, desde 0)
+tamano (opcional, default: 10, de 1 a 50)
 ### Respuestas
 #### `200 OK`
 ```json
@@ -346,7 +402,7 @@ tamano (opcional, default: 10)
     {
       "pedidoId": "PED-2026-00981",
       "canal": "CHATBOT",
-      "estado": "`EN_PREPARACION`",
+      "estado": "EN_PREPARACION",
       "total": 129.90,
       "moneda": "PEN",
       "fechaCreacion": "2026-09-23T00:05:00Z",
@@ -359,8 +415,16 @@ tamano (opcional, default: 10)
 }
 ```
 
-- `nombreCliente` (**agregado 2026-10-16, no está en el contrato**): nombre de contacto del pedido, para la columna "Cliente" de la bandeja (mockup 02).
+- `nombreCliente`: nombre de contacto del pedido, para la columna "Cliente" de la bandeja (mockup 02).
 - `clienteId` en la raíz de la respuesta queda `null` cuando no se filtró por un cliente puntual.
+
+| HTTP | Código | Cuándo |
+|---|---|---|
+| `400` | `PAGINACION_INVALIDA` | `pagina` negativa o `tamano` fuera de 1 a 50 |
+| `400` | `PARAMETRO_INVALIDO` | `desde` es posterior a `hasta` |
+| `400` | `FORMATO_INVALIDO` | Un filtro con valor fuera de catálogo (`estado`, `canal`, `orden`) o una fecha mal escrita |
+| `401` | `TOKEN_INVALIDO` | Token ausente o inválido |
+| `403` | `ACCESO_DENEGADO` | El token no tiene el rol `ADMIN_VENTAS` |
 ### 1.4b Listar Mis Pedidos (acuerdo H-03)
 - **Endpoint:** `GET /api/v1/pedidos/me`
 Descripción: Devuelve los pedidos del cliente autenticado. La identidad sale del claim `sub` del token; no se acepta `clienteId` en la URL.
@@ -390,8 +454,11 @@ Este endpoint usa `page` y `pageSize` desde 1 (excepción acordada con Marketpla
   "pageSize": 10
 }
 ```
-- **`401 Unauthorized`**: Token ausente o inválido.
-- **`403 Forbidden`**: El token no tiene el rol `CLIENTE` (por ejemplo, un token de servicio).
+| HTTP | Código | Cuándo |
+|---|---|---|
+| `400` | `PAGINACION_INVALIDA` | `page` menor que 1 o `pageSize` fuera de 1 a 50 |
+| `401` | `TOKEN_INVALIDO` | Token ausente o inválido |
+| `403` | `ACCESO_DENEGADO` | El token no tiene el rol `CLIENTE` (por ejemplo, un token de servicio) |
 ### 1.5 Webhook de Eventos de Despacho (acuerdo con G2, 2026-10-12)
 
 - **Endpoint:** `POST /api/v1/integraciones/despachos/eventos`
@@ -421,21 +488,43 @@ Este endpoint usa `page` y `pageSize` desde 1 (excepción acordada con Marketpla
 | `DESPACHO_ENTREGADO` | `DESPACHADO → ENTREGADO` | `SISTEMA_LOGISTICA` |
 | `DESPACHO_FALLIDO` | Ninguno — intento no definitivo (máx. 2, política de Despacho); queda solo registrado para auditoría | — |
 | `DESPACHO_DEVUELTO_A_ORIGEN` | `DESPACHADO → ANULADO` | `SISTEMA_LOGISTICA`, motivo `ENTREGA_FALLIDA_DEFINITIVA` — informa que el ciclo logístico terminó sin entrega; origina la solicitud de reembolso a M2 (ver ESP-06) |
-| `DESPACHO_REPROGRAMADO` | Ninguno en el estado del pedido — actualiza `pedido.fecha_estimada_entrega` con `datos.nuevaFechaProgramada` (columna nueva, confirmada necesaria por G2 el 2026-10-12; pendiente de agregar al modelo de datos) | — |
+| `DESPACHO_REPROGRAMADO` | Ninguno en el estado del pedido — actualiza `pedido.fecha_estimada_entrega` con `datos.nuevaFechaProgramada` (fecha ISO con hora, o solo fecha `AAAA-MM-DD`, que se toma a las 00:00 UTC). Se ve en 1.3 como `envio.fechaEstimadaEntrega` | — |
 | `DESPACHO_CANCELADO` | Ninguno — es el acuse de que una cancelación que nosotros solicitamos ya se aplicó en Despacho; idempotente, no reabre nada si ya estaba `ANULADO` | — |
 
 Ya **no se envía `guiaRemision`** (Despacho no emite ni gestiona guías de remisión) — el campo `datos.motivoCierre` de `DESPACHO_DEVUELTO_A_ORIGEN` (por ejemplo `MAXIMO_INTENTOS_ALCANZADO`, `ANULACION_SOLICITADA_POR_VENTAS`, `PAQUETE_DANADO`) es suficiente para la auditoría de la anulación y el reembolso — confirmado por G2.
 
+`DESPACHO_EN_CAMINO`, `DESPACHO_ENTREGADO` y `DESPACHO_REPROGRAMADO` además generan el aviso a Marketplace de 1.10 (solo pedidos `MARKETPLACE` que no son orden de reemplazo). Si el pedido ya está en el estado al que llevaría el evento (llegó repetido con otro `idEvento` o fuera de orden), se responde `200` sin cambiar nada.
+
 - **Respuestas:**
-    - **`200 OK`**: Evento procesado (o ya procesado antes, mismo `idEvento` — idempotente).
-    - **`409 Conflict`**: Transición no permitida por la máquina de estados.
+
+#### `200 OK`
+
+Evento procesado. Si ese `idEvento` ya se había procesado, `repetido` es `true` y no se cambia nada (idempotente).
+
+```json
+{
+  "idEvento": "evt-desp-001",
+  "pedidoId": "PED-2026-00981",
+  "estadoPedido": "DESPACHADO",
+  "repetido": false,
+  "mensaje": "Pedido DESPACHADO"
+}
+```
+
+| HTTP | Código | Cuándo |
+|---|---|---|
+| `400` | `CABECERA_FALTANTE` | Falta `Idempotency-Key` o no es UUID v4 |
+| `400` | `DATOS_INVALIDOS` | Falta un campo obligatorio del evento, o `DESPACHO_REPROGRAMADO` sin `datos.nuevaFechaProgramada` válida |
+| `400` | `FORMATO_INVALIDO` | JSON mal formado o `tipo` fuera de los 7 valores del mapeo |
+| `404` | `PEDIDO_NO_ENCONTRADO` | `idPedido` no existe |
+| `409` | `TRANSICION_NO_PERMITIDA` | El pedido no está en el estado que exige el evento (por ejemplo, `DESPACHO_ENTREGADO` sobre un pedido `EN_PREPARACION`) |
 
 **Scope del token (decisión nuestra, 2026-10-13):** reusamos `ventas:pedidos:estado`, ya concedido a `modulo-despacho`, en vez del `despachos:eventos:recibir` nuevo que propuso G2 — es semánticamente correcto, ya está concedido y evita pedirle otro registro a Seguridad. Ver `integraciones/ACUERDO_G2_DESPACHO.md`.
 
 **Pendientes de implementación (nuestros, ya no hay nada por preguntarle a Despacho — ver `integraciones/ACUERDO_G2_DESPACHO.md`):**
 1. ~~Señal interna que marca "paquete físicamente preparado y sellado"~~ — **resuelto 2026-10-16:** dos botones del Gestor, ver 1.12 (`POST /pedidos/{id}/preparacion`) y 1.13 (`POST /pedidos/{id}/despacho`).
-2. **Columna `pedido.fecha_estimada_entrega`** para `DESPACHO_REPROGRAMADO` — agregar al modelo de datos (`diagrama-fisico.md`, `diagrama-logico.md`, `ventas_postventa_schema.sql`) y aplicar en Supabase.
-3. **Manejo de `409 Conflict` al cancelar despacho por condición de carrera** (`EN_CAMINO` ya en curso cuando Ventas pide cancelar): G2 confirmó que no debemos reintentar y que la anulación debe marcarse como improcedente comercialmente, no como una falla técnica — ver ESP-06 CA-06 (nuevo, distinto del CA-05 existente que cubre timeout/5xx).
+2. **Columna `pedido.fecha_estimada_entrega`** para `DESPACHO_REPROGRAMADO` — **ya está en el código** (entidad `Pedido` y respuesta de 1.3). Falta reflejarla en el modelo de datos (`diagrama-fisico.md`, `diagrama-logico.md`, `ventas_postventa_schema.sql`) y confirmar que la columna existe en Supabase. Lo mismo vale para la tabla `ventas.notificacion_envio` de 1.10.
+3. ~~**Manejo de `409 Conflict` al cancelar despacho por condición de carrera**~~ — **implementado:** al aprobar una anulación (1.9), si Despacho responde que el paquete ya está `EN_CAMINO`, la anulación queda `RECHAZADA` sin reintentar y se responde `409 PEDIDO_EN_CAMINO` (ESP-06 CA-06).
 
 ### 1.6 — retirado (fusionado en 1.5)
 
@@ -444,12 +533,14 @@ La notificación de incidencias logísticas ahora es un caso más del webhook ge
 ### 1.7 Solicitar Anulación
 - **Endpoint:** `POST /api/v1/pedidos/{pedidoId}/anulaciones`
 Descripción: Cancela el pedido. Soporta cancelación automática e inmediata por el canal en estado `CREADO` por motivo `PAGO_NO_COMPLETADO` (A9) sin intervención del Gestor.
-- **Headers:** `Authorization: Bearer <token_canal>` — token de servicio del canal (`tipo: "servicio"`, scope `ventas:pedidos:anular`), no el token del cliente.
+- **Headers:** `Authorization: Bearer <token_canal>` — token de servicio del canal (`tipo: "servicio"`, scope `ventas:pedidos:anular`), no el token del cliente. El Gestor también puede iniciarla desde la bandeja con su token de usuario (rol `ADMIN_VENTAS`).
 ### Request Body
+```json
 {
-  "motivo": "`PAGO_NO_COMPLETADO`",
+  "motivo": "PAGO_NO_COMPLETADO",
   "comentario": "Tiempo límite de espera de pasarela agotado; cancelado por el canal"
 }
+```
 ### Respuestas
 #### `200 OK`
 
@@ -458,7 +549,7 @@ Anulación directa sin gestor — `CREADO` o `PAGADO`:
 ```json
 {
   "pedidoId": "PED-2026-00981",
-  "estadoPedido": "`ANULADO`",
+  "estadoPedido": "ANULADO",
   "autorizacionRequerida": false,
   "solicitudReembolsoGenerada": false,
   "timestamp": "2026-09-23T00:10:00Z"
@@ -471,15 +562,21 @@ Requiere autorización del Gestor si está en `EN_PREPARACION`:
 ```json
 {
   "pedidoId": "PED-2026-00981",
-  "estadoPedido": "`EN_PREPARACION`",
+  "estadoPedido": "EN_PREPARACION",
   "solicitudAnulacionId": "ANUL-0012",
   "autorizacionRequerida": true,
   "mensaje": "Pedido en preparación; requiere aprobación administrativa"
 }
 ```
+Si el pedido estaba `PAGADO`, `solicitudReembolsoGenerada` es `true`: M1 envía la solicitud de reembolso a M2 (F4) después de anular.
 ### Errores
-- **`400 Bad Request`**: Motivo ausente o no tipificado.
-- **`409 Conflict`**: Pedido ya en `DESPACHADO` o `ENTREGADO` (derivar al microservicio M2).
+
+| HTTP | Código | Cuándo |
+|---|---|---|
+| `400` | `MOTIVO_INVALIDO` | Motivo ausente, fuera del catálogo de ESP-05, o que no aplica al estado actual del pedido |
+| `404` | `PEDIDO_NO_ENCONTRADO` | El pedido no existe |
+| `409` | `PEDIDO_NO_ANULABLE` | El pedido está `DESPACHADO` o `ENTREGADO` (corresponde una devolución en M2) o ya está `ANULADO` |
+| `409` | `SOLICITUD_DUPLICADA` | Ya hay una anulación `PENDIENTE_AUTORIZACION` para ese pedido |
 
 ### 1.8 Listar Anulaciones (Bandeja de Anulaciones de F2)
 
@@ -540,10 +637,18 @@ Descripción: El Gestor resuelve una anulación en `PENDIENTE_AUTORIZACION`. Si 
   "estadoAnulacion": "EJECUTADA"
 }
 ```
-Si `decision` es `RECHAZADA`, `estadoPedido` vuelve a `EN_PREPARACION` y `estadoAnulacion` queda en `RECHAZADA`.
+Si `decision` es `RECHAZADA`, `estadoPedido` se mantiene en `EN_PREPARACION` y `estadoAnulacion` queda en `RECHAZADA`.
 ### Errores
-- **`400 Bad Request`**: `decision` o `comentario` vacíos/ausentes.
-- **`409 Conflict`**: La anulación no está en `PENDIENTE_AUTORIZACION`, o el pedido ya no está en `EN_PREPARACION` (por ejemplo, ya despachó) — en ese caso la anulación pasa a `RECHAZADA`.
+
+| HTTP | Código | Cuándo |
+|---|---|---|
+| `400` | `DATOS_INVALIDOS` | `decision` o `comentario` vacíos o ausentes |
+| `400` | `DECISION_INVALIDA` | `decision` no es `APROBADA` ni `RECHAZADA` |
+| `400` | `DATOS_INCONSISTENTES` | La anulación indicada no pertenece a ese `pedidoId` |
+| `404` | `ANULACION_NO_ENCONTRADA` | La anulación no existe |
+| `409` | `ANULACION_NO_PENDIENTE` | La anulación no está en `PENDIENTE_AUTORIZACION` |
+| `409` | `PEDIDO_YA_NO_EN_PREPARACION` | Al aprobar, el pedido ya no está `EN_PREPARACION`; la anulación pasa a `RECHAZADA` |
+| `409` | `PEDIDO_EN_CAMINO` | Al aprobar, Despacho responde que el paquete ya salió; la anulación pasa a `RECHAZADA` y no se reintenta (ESP-06 CA-06) |
 
 ---
 
@@ -586,7 +691,11 @@ No estaban en el contrato original. Resuelven la señal pendiente de "qué dispa
 
 - **Evento:** `pedidos.envio.estado_actualizado` (versión `1.0.0`)
 - **Descripción:** M1 actúa como intermediario entre Despacho (Módulo E) y Marketplace, para que Marketplace no se acople directamente a los eventos internos de Despacho. Cuando M1 recibe de Despacho una actualización pública de estado (`DESPACHADO`, `ENTREGADO`, u otra que el equipo defina como pública), M1 notifica a Marketplace con este webhook.
-- **Mecanismo de entrega:** pendiente de diseño técnico (reintentos, backoff, cola de salida). Es responsabilidad de quien implemente F1 definirlo; este documento solo fija el contrato que Marketplace ya aceptó.
+- **Cuándo se emite:** al procesar en 1.5 `DESPACHO_EN_CAMINO` (`publicStatus: DESPACHADO`), `DESPACHO_ENTREGADO` (`ENTREGADO`) o `DESPACHO_REPROGRAMADO` (nueva `estimatedDeliveryDate`). Solo para pedidos del canal `MARKETPLACE`; Chatbot consulta el estado bajo demanda (acuerdo G3) y las órdenes de reemplazo no se avisan. `trackingNumber` es el `idDespacho` de Despacho.
+- **Mecanismo de entrega (implementado):** el aviso se guarda en la tabla `ventas.notificacion_envio` en la misma transacción que el cambio de estado (patrón outbox), así nunca se avisa un cambio que no se guardó. Un proceso programado los envía cada 5 s, del más antiguo al más nuevo:
+    - respuesta `2xx`: se marca como enviado;
+    - `400`, `409` o `422` (Marketplace rechaza el aviso): no se reintenta y queda en el log para revisión;
+    - error de red, timeout, `5xx`, `401`, `403` o `404`: se suma un intento y se vuelve a probar en la siguiente vuelta, hasta un máximo de 10 intentos.
 
 **Cuerpo del evento:**
 
@@ -610,7 +719,7 @@ No estaban en el contrato original. Resuelven la señal pendiente de "qué dispa
 - **Deduplicación:** Marketplace almacena y valida el `eventId` recibido, para no duplicar notificaciones al usuario final si M1 reintenta.
 - **Privacidad:** el payload no expone datos sensibles ni direcciones detalladas — solo identificadores de tracking y estados públicos.
 
-> Este webhook es independiente de los eventos internos de dominio que M1 publica hacia M2 (`pedido.pagado`, `pedido.anulado`, `pedido.entregado`, ver [catalogo-eventos.md](catalogo-eventos.md)). Tiene su propio nombre, formato y destino — no reutiliza el mecanismo de `outbox_evento`/M2 tal cual; el mecanismo de entrega hacia Marketplace todavía está por diseñarse.
+> Este webhook es independiente de los eventos internos de dominio que M1 publica hacia M2 (`pedido.pagado`, `pedido.anulado`, `pedido.entregado`, ver [catalogo-eventos.md](catalogo-eventos.md)). Tiene su propio nombre, formato, destino y tabla de salida (`notificacion_envio`, no `outbox_evento`), aunque sigue el mismo criterio de reintentos.
 
 ### 1.11 Solicitar Orden de Reemplazo (F3, acuerdo con Productos — issue G6 #100, 2026-10-16)
 
@@ -637,7 +746,7 @@ No estaban en el contrato original. Resuelven la señal pendiente de "qué dispa
 ```json
 {
   "pedidoId": "PED-2026-01203",
-  "estado": "`CREADO`",
+  "estado": "CREADO",
   "devolucionId": "DEV-2026-0042",
   "pedidoOrigenId": "PED-2026-00981",
   "fechaCreacion": "2026-10-16T10:00:00Z"
