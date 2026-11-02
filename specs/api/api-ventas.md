@@ -12,6 +12,7 @@
 
 | Versión | Fecha | Cambio |
 |---|---|---|
+| 1.8.0 | 2026-11-02 | 1.4b `GET /api/v1/pedidos/me`: filtros opcionales `desde` y `hasta` (`YYYY-MM-DD`, días inclusivos sobre la fecha de creación, hora de Perú), combinables con `estado`, `page` y `pageSize`; nuevo error `400 RANGO_FECHAS_INVALIDO`. Acuerdo H-06 con Marketplace (G1). |
 | 1.7.0 | 2026-10-26 | Nuevo 1.14 `GET /api/v1/pedidos/kpis`: KPIs de ventas del Dashboard (monto vendido, ticket promedio, serie diaria y por canal) sumados en M1, para que el frontend deje de paginar toda la bandeja (1.4). |
 | 1.6.0 | 2026-10-26 | Revisión contra `servicio-ventas`: se cierran los bloques de código y JSON, los estados de los ejemplos van sin comillas invertidas, cada error de F1 lleva su `codigo` (1.3, 1.4, 1.4b, 1.5), se documenta la respuesta de 1.5, 1.3 aclara quién puede consultarla, 1.10 describe el mecanismo de entrega ya implementado y `fecha_estimada_entrega` deja de figurar como pendiente. Índice de endpoints al inicio. |
 | 1.5.0 | 2026-10-16 | 1.4 sin `clienteId` obligatorio y con filtros `canal`, `buscar`, `orden` y campo `nombreCliente` (bandeja del mockup 02). Nuevos 1.11 (orden de reemplazo), 1.12 (iniciar preparación) y 1.13 (paquete sellado). |
@@ -433,10 +434,16 @@ Descripción: Devuelve los pedidos del cliente autenticado. La identidad sale de
 - **Headers:** `Authorization: Bearer <token_de_usuario>` (rol `CLIENTE`)
 ### Query Params
 estado (opcional): `CREADO` | `PAGADO` | `EN_PREPARACION` | `DESPACHADO` | `ENTREGADO` | `ANULADO`
+desde (opcional): fecha `YYYY-MM-DD` (ISO-8601, sin hora). Incluye los pedidos creados desde las 00:00 de ese día.
+hasta (opcional): fecha `YYYY-MM-DD`. Incluye los pedidos creados hasta las 23:59:59.999 de ese día.
 page (opcional, default: 1, desde 1)
 pageSize (opcional, default: 10, de 1 a 50)
 
 Este endpoint usa `page` y `pageSize` desde 1 (excepción acordada con Marketplace), no `pagina` y `tamano`.
+
+**Zona horaria de `desde` y `hasta`:** los días se cuentan en **hora de Perú (`America/Lima`, UTC−5, sin horario de verano)**, el mismo día que ve el cliente en la pantalla del canal. Ejemplo: `desde=2026-10-10&hasta=2026-10-10` devuelve los pedidos con `fechaCreacion` entre `2026-10-10T05:00:00Z` (incluido) y `2026-10-11T05:00:00Z` (excluido). `fechaCreacion` se sigue devolviendo en UTC (`Z`).
+
+Ambos son opcionales e independientes: solo `desde` trae desde ese día en adelante; solo `hasta`, hasta ese día. Se combinan con `estado`, `page` y `pageSize`, y el formato de respuesta no cambia. La identidad del cliente sigue saliendo del JWT; no se acepta `clienteId`. El endpoint no limita la amplitud del rango (Marketplace valida el máximo de un año en su interfaz).
 ### Respuestas
 #### `200 OK`
 ```json
@@ -459,6 +466,8 @@ Este endpoint usa `page` y `pageSize` desde 1 (excepción acordada con Marketpla
 | HTTP | Código | Cuándo |
 |---|---|---|
 | `400` | `PAGINACION_INVALIDA` | `page` menor que 1 o `pageSize` fuera de 1 a 50 |
+| `400` | `RANGO_FECHAS_INVALIDO` | `desde` es posterior a `hasta` |
+| `400` | `FORMATO_INVALIDO` | `desde` o `hasta` no tienen el formato `YYYY-MM-DD`, o `estado` no es un valor del catálogo |
 | `401` | `TOKEN_INVALIDO` | Token ausente o inválido |
 | `403` | `ACCESO_DENEGADO` | El token no tiene el rol `CLIENTE` (por ejemplo, un token de servicio) |
 ### 1.5 Webhook de Eventos de Despacho (acuerdo con G2, 2026-10-12)
