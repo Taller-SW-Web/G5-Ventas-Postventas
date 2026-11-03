@@ -107,6 +107,27 @@ El panel del Gestor debe:
 - Presentar estados de carga y errores claros sin sustituirlos por valores ficticios.
 - Permitir iniciar la exportación de los indicadores actualmente mostrados.
 
+### 7.1. Bases de cálculo de las tasas (definidas 2026-11-02)
+
+El mockup 01 (§6 y §10.3) pide definir la base de cada indicador sin asumir que todos usan el mismo conjunto de pedidos. Hay dos bases de conteo y **cada tasa usa una sola**, con el mismo periodo y canal en numerador y denominador:
+
+| Base | Fuente | Qué cuenta |
+|---|---|---|
+| Cohorte del periodo | `api-ventas.md` 1.14 (`pedidosTotal`, `pedidosAnulados`, `pedidosEntregados`) | Pedidos de venta **creados** entre `desde` y `hasta`, con su estado actual (sin los que siguen en `CREADO`). |
+| Hechos del periodo | 2.12 (`pedidos.*`, `postventa.devolucionesAprobadas`) | Pagos, anulaciones, entregas y aprobaciones **ocurridos** entre `desde` y `hasta`, por la fecha del hecho (ESP-15 §6). |
+
+| Indicador | Cálculo | Base |
+|---|---|---|
+| Tasa de anulación | `pedidosAnulados / pedidosTotal` | Cohorte (1.14) |
+| Distribución de pedidos y conteos de pedidos de Reportes | `pedidosTotal`, `pedidosEntregados`, `pedidosAnulados` (también por canal, con 1.14 filtrado por canal) | Cohorte (1.14) |
+| Tasa de devolución | `postventa.devolucionesAprobadas / pedidos.entregados` | Hechos (2.12) |
+
+- La tasa de devolución **no** usa la cohorte: las devoluciones se aprueban días o semanas después de la entrega, así que una aprobación del periodo casi nunca pertenece a un pedido creado en el mismo periodo. Mezclar ambas bases daba tasas sin sentido (denominador vacío o un numerador de otra cohorte).
+- Es una **razón de actividad**, no una tasa de cohorte: si en el periodo se aprueban devoluciones de pedidos entregados antes, puede superar el 100%. Se muestra tal cual, junto con sus dos cifras ("3 aprobadas / 2 entregas del periodo"); no se recorta.
+- Una tasa de devolución por cohorte (aprobadas de los pedidos entregados en el periodo) exigiría que 2.12 informe la fecha de entrega del pedido de cada devolución; no está en el contrato y queda como mejora a acordar.
+- Las fechas `desde`/`hasta` son días UTC en ambas fuentes (1.14 y 2.12), conforme a la convención del contrato.
+- "Reclamos abiertos" del Dashboard cuenta los reclamos no `ATENDIDO` de hoy, de todos los canales (2.10 no filtra por canal); no es `reclamosPendientesSLA` de 2.12, que se limita a los que vencen dentro del periodo.
+
 ## 8. Exportación del reporte
 
 La exportación debe cumplir las siguientes reglas funcionales:
@@ -118,6 +139,8 @@ La exportación debe cumplir las siguientes reglas funcionales:
 5. Si la consulta visible cambia antes de iniciar una nueva exportación, el reporte debe corresponder al nuevo conjunto de filtros.
 6. La exportación debe estar disponible únicamente para el mismo perfil administrativo autorizado a consultar el dashboard.
 7. El formato y el mecanismo técnico de descarga permanecen pendientes de definición contractual; no se asume CSV, XLSX, PDF ni una ruta HTTP específica.
+
+> **Estado de la implementación (2026-11-02):** la pantalla de Reportes (mockup 09) ya ofrece una descarga **CSV generada en el navegador** a partir de la misma consulta visible (`reportes.ts`, `csvReporte`): no existe ni se usa un endpoint de exportación y no se recalcula nada. Contiene el periodo, `desde`, `hasta`, canal, `ultimaActualizacion` y los 7 indicadores con los mismos valores y decimales que la pantalla (separador `;`, UTF-8 con BOM). Los conteos de pedidos son los de la cohorte (§7.1), igual que en pantalla. Esto cumple las reglas 1 a 6, pero **no cierra la regla 7**: el formato sigue sin estar en el contrato y debe acordarse con el equipo antes de considerarlo definitivo; mientras tanto no se agregan otros formatos ni rutas.
 
 ## 9. Rendimiento y disponibilidad
 

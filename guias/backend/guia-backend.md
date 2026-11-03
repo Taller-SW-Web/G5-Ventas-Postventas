@@ -996,12 +996,12 @@ No considera feriados; se puede agregar una lista fija de feriados de Perú más
 - **Consultar por código**: 404 `RECLAMO_NO_ENCONTRADO` si no existe.
 - **Listar**: filtros `documento`, `clienteId`, `estado`, paginado.
 - **Responder**:
-  - `nuevoEstado` debe ser `ATENDIDO` o `DERIVADO`. Otro valor: 400.
-  - `respuestaVisibleCliente` obligatorio y no vacío tras `trim()` (400 `RESPUESTA_VACIA`, el reclamo no cambia).
-  - `atendidoPor` obligatorio.
+  - `nuevoEstado` debe ser `EN_PROCESO`, `ATENDIDO` o `DERIVADO`. `REGISTRADO`: 400 `ESTADO_INVALIDO`.
+  - `respuestaVisibleCliente` obligatorio y no vacío tras `trim()` para `ATENDIDO`/`DERIVADO` (400 `RESPUESTA_VACIA`, el reclamo no cambia).
+  - `atendido_por` = `sub` del token del Gestor (`Solicitante.gestor(sub)` en el controller). El `atendidoPor` del cuerpo se ignora si hay token (RNF-03, ajuste 2026-11-02); solo con `SEGURIDAD_HABILITADA=false` se usa el del cuerpo, y entonces es obligatorio (400 `DATOS_INVALIDOS`).
   - Si el reclamo ya está `ATENDIDO`: 409.
   - Guardar `respuesta_visible_cliente`, `atendido_por`, `fecha_atencion = ahora`, `estado`. Sumar `reclamos_atendidos` en el agregado si pasa a `ATENDIDO`.
-  - `EN_PROCESO`: se marca cuando el Gestor abre el reclamo. Opción simple: el `PATCH` acepta también `EN_PROCESO` sin respuesta (agregar al contrato) o se pasa de `REGISTRADO` a `ATENDIDO` directamente.
+  - `EN_PROCESO` ("Iniciar atención"): el `PATCH` lo acepta sin respuesta, solo desde `REGISTRADO` (ya documentado en `api-postventas.md` 2.11).
 
 ### 10.4. Proyecciones (`ProyeccionesService`, ESP-15)
 

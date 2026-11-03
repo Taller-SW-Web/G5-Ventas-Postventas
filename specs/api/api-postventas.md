@@ -671,6 +671,7 @@
 ```
 
 -   `consumidor`, `atendidoPor`, `estadoSla`, `diasHabilesRestantes` y `slaCumplido` (agregados al contrato, 2026-10-17): los usa la pantalla de Reclamos (mockup 07). `estadoSla` es el semáforo del plazo (`EN_PLAZO`\|`POR_VENCER`\|`CRITICO`\|`VENCIDO`\|`ATENDIDO`, ver 2.10), distinto de `estado`. `diasHabilesRestantes` es `null` cuando ya está `ATENDIDO` (0 = vence hoy, negativo = vencido). `slaCumplido` es `null` mientras no haya respuesta formal, y después indica si la respuesta llegó dentro del plazo (ESP-14 CA-04).
+-   `atendidoPor` (2026-11-02): identificador del Gestor que registró la atención, tomado del `sub` de su token (ver 2.11) — con seguridad activa es un UUID. Los reclamos atendidos antes de este cambio conservan el texto que se envió entonces (por ejemplo `GESTOR-02`).
 -   **`401 Unauthorized`**: Token ausente o inválido.
 -   **`404 Not Found`**: Reclamo no encontrado con ese código de
     seguimiento.
@@ -686,7 +687,7 @@
     -   `estado` (opcional):
         `REGISTRADO | EN_PROCESO | ATENDIDO | DERIVADO`
     -   `buscar` (opcional, **agregado 2026-10-16, no está en el contrato** — mockup 07): un código `PED-AAAA-NNNNN` filtra por ese pedido; cualquier otro texto busca por código de reclamo exacto, documento exacto o parte del nombre del consumidor.
-    -   `sla` (opcional, **agregado 2026-10-16**): `EN_PLAZO` (6+ días hábiles) \| `POR_VENCER` (3-5) \| `CRITICO` (0-2) \| `VENCIDO` (pasó la fecha límite sin respuesta) \| `ATENDIDO` (ya tiene respuesta formal) — semáforo del plazo legal, distinto de `estado`: un reclamo puede estar `EN_PROCESO` y `VENCIDO` a la vez.
+    -   `sla` (opcional, **agregado 2026-10-16**): `EN_PLAZO` (6+ días hábiles) \| `POR_VENCER` (0-5, **incluye** los `CRITICO`: el filtro "Por vencer" del mockup 07 no tiene opción "Crítico") \| `CRITICO` (0-2) \| `VENCIDO` (pasó la fecha límite sin respuesta) \| `ATENDIDO` (ya tiene respuesta formal) — semáforo del plazo legal, distinto de `estado`: un reclamo puede estar `EN_PROCESO` y `VENCIDO` a la vez. El campo `estadoSla` de cada fila sí distingue `POR_VENCER` (3-5) de `CRITICO` (0-2). Días hábiles = lunes a viernes, sin feriados, contados sobre fechas UTC (guía backend 10.2).
     -   `desde` / `hasta` (opcional, **agregado 2026-10-16**): fecha ISO, día de registro (UTC), ambos inclusivos.
     -   `orden` (opcional, **agregado 2026-10-16**): `RECIENTES` (default) \| `ANTIGUOS`, por fecha de registro.
     -   `pagina` (opcional, default: `0`)
@@ -749,6 +750,8 @@
 }
 ```
 
+-   `nuevoEstado`: `EN_PROCESO` ("Iniciar atención", solo desde `REGISTRADO`, sin respuesta; `fechaRespuesta` sale `null`) \| `ATENDIDO` \| `DERIVADO` (ambos exigen `respuestaVisibleCliente` y registran `fechaRespuesta` en UTC). Así lo implementa M2 para el recorrido del mockup 07 (guía backend 10.3).
+-   `atendidoPor` (**opcional desde 2026-11-02**, se acepta por compatibilidad): el autor que queda registrado es **el `sub` del token del Gestor**, nunca el texto del cuerpo (RNF-03: el actor debe ser verificable). Si el cuerpo trae otro valor se ignora y se deja constancia en el log del servicio. Solo cuando M2 corre con la seguridad deshabilitada (desarrollo local, sin token) se usa el valor del cuerpo, y entonces es obligatorio (`400 DATOS_INVALIDOS` si falta). Máximo 50 caracteres. El nombre visible del Gestor no se guarda aquí: resolverlo requeriría consultar a Seguridad (`usuarios:leer`).
 -   **Respuestas:**
     -   **`200 OK`**
 
@@ -762,7 +765,9 @@
 ```
 
 -   **`400 Bad Request`** (`RESPUESTA_VACIA`): Campo `respuestaVisibleCliente` vacío o nulo.
--   **`409 Conflict`**: El reclamo ya está `ATENDIDO`.
+-   **`400 Bad Request`** (`ESTADO_INVALIDO`): `nuevoEstado` es `REGISTRADO`.
+-   **`403 Forbidden`**: El token no tiene el rol `ADMIN_VENTAS`.
+-   **`409 Conflict`**: El reclamo ya está `ATENDIDO` (`RECLAMO_YA_ATENDIDO`), o la transición no sale de su estado actual — por ejemplo `EN_PROCESO` dos veces, o dos Gestores cerrando a la vez (`RECLAMO_NO_RESPONDIBLE`).
 
 #### 2.12 Consultar Métricas del Dashboard
 
