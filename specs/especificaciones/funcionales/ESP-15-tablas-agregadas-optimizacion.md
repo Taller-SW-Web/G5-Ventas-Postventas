@@ -26,8 +26,7 @@ No comprende la modificación directa de tablas pertenecientes a M1 ni el cálcu
 
 | Origen | Hecho consumido | Resultado analítico |
 |---|---|---|
-| F1 — Ciclo de vida del pedido | Pedido creado | Incrementa el total de pedidos del periodo y canal correspondientes. |
-| F1 — Ciclo de vida del pedido | `pedido pagado` | Actualiza los agregados de ventas del periodo y canal sin recorrer el historial transaccional. |
+| F1 — Ciclo de vida del pedido | `pedido pagado` | Incrementa los pedidos pagados (`pedidos.total` de 2.12) del día del pago y canal, y actualiza los agregados de ventas sin recorrer el historial transaccional. M1 no publica la creación del pedido: los pedidos creados (cohorte) los da `api-ventas.md` 1.14. |
 | F1 — Ciclo de vida del pedido | `pedido anulado` | Incrementa el total de pedidos anulados. |
 | F1 — Ciclo de vida del pedido | `pedido entregado` | Incrementa el total de pedidos entregados. |
 | F3 — Devoluciones y cambios | Devolución aprobada | Incrementa `devolucionesAprobadas`. |
@@ -47,12 +46,16 @@ Los nombres físicos de tablas no están definidos en el repositorio. La impleme
 |---|---|
 | Periodo | Intervalo temporal al que pertenece el hecho consolidado. |
 | Canal | Canal del pedido: `MARKETPLACE`, `CHATBOT` o `RETAIL`. |
-| Total de pedidos | Cantidad de pedidos únicos registrados en el periodo y canal. |
-| Pedidos anulados | Cantidad de pedidos únicos que alcanzaron el estado `ANULADO`. |
-| Pedidos entregados | Cantidad de pedidos únicos que alcanzaron el estado `ENTREGADO`. |
+| Total de pedidos | Cantidad de pedidos únicos **pagados** en el periodo y canal, por la fecha del pago (`pedido.pagado`). Por compatibilidad conserva el nombre `pedidos.total` en 2.12; no son los pedidos creados. |
+| Pedidos anulados | Cantidad de pedidos únicos que alcanzaron el estado `ANULADO` en el periodo, por la fecha de la anulación. |
+| Pedidos entregados | Cantidad de pedidos únicos que alcanzaron el estado `ENTREGADO` en el periodo, por la fecha de la entrega. |
 | Última actualización | Timestamp UTC del último evento incorporado a la proyección. |
 
 Esta proyección suministra los campos `pedidos.total`, `pedidos.anulados` y `pedidos.entregados` del contrato del dashboard.
+
+**Definición cerrada (2026-11-04):** estos tres valores son **contadores de hechos** por fecha del hecho (día UTC), no una distribución de estados: un pedido puede pagarse en un periodo y anularse en otro, o anularse sin haberse pagado nunca. Por eso `anulados / total` de 2.12 **no** debe usarse como tasa de anulación. Los conteos de pedidos que se muestran o se exportan, la distribución por estado y la tasa de anulación salen de la cohorte de `api-ventas.md` 1.14 (ESP-16 §7.1). Un cobro que la pasarela confirma después de anular el pedido no publica `pedido.pagado`, así que no suma a los pagados; su reembolso suma al monto reembolsado como cualquier otro.
+
+La columna `agregado_metricas.pedidos_anulados_sin_pago` existe en la base (Supabase y `ventas_postventa_schema.sql`) pero **no se usa**: el código no la escribe ni la lee y ningún indicador depende de ella. Queda en 0.
 
 ### 4.2. Agregado de postventa
 
@@ -103,6 +106,8 @@ El sistema debe conservar evidencia suficiente para reconocer un evento ya aplic
 ## 7. Consulta de los agregados
 
 Los agregados son la fuente de lectura de `GET /api/v2/dashboard/metricas`. La consulta combina las proyecciones del periodo solicitado y aplica opcionalmente el filtro de canal definido en el contrato.
+
+> **Montos de venta del Dashboard (decisión del equipo, 2026-10-26):** el dinero de las ventas (monto vendido, ticket promedio, tendencia diaria y ventas por canal) **no** sale de estos agregados, sino de `GET /api/v1/pedidos/kpis` de M1 (`api-ventas.md` 1.14). M1 es el dueño del pedido y lo calcula con una sola consulta, ya descontando los anulados; hacerlo aquí exigía una columna nueva en `agregado_metricas`, recalcular los pedidos históricos y depender de que lleguen todos los eventos. El Dashboard combina 2.12 (conteos y postventa) con 1.14 (montos de venta). Reemplaza la solución anterior, en la que el frontend paginaba toda la bandeja de pedidos (1.4) para sumar los montos.
 
 La interfaz administrativa debe poder identificar la última consolidación disponible a partir del timestamp de actualización de las proyecciones. Ese dato informa la vigencia de las métricas, pero no modifica los valores calculados ni sustituye el filtro de periodo y canal.
 

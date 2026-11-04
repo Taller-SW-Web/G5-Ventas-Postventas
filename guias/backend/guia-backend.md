@@ -496,11 +496,12 @@ Mapeo adicional para `RETAIL` — **corregido 2026-10-12** (ver H10, 4.1): `envi
 
 ### 5.4. 1.2 Notificación de pago (ESP-03)
 
-1. Si `transaccionId` ya está en `ventas.evento_recibido` con origen `PASARELA_PAGOS`: responder 200 con el estado actual del pedido, sin cambiar nada.
-2. Buscar el pedido por código. No existe: 404.
+1. Buscar el pedido por código **con bloqueo** (`PedidoRepository.bloquear`, `SELECT ... FOR UPDATE`; 1.7 y los mensajes de Productos hacen lo mismo). No existe: 404.
+2. Si `transaccionId` ya está en `ventas.evento_recibido` con origen `PASARELA_PAGOS`: si coincide con el pago guardado (resultado, monto y moneda), responder 200 con el estado actual del pedido, sin cambiar nada; si no, 409 `NOTIFICACION_INCOMPATIBLE`.
 3. Validar `resultado` (`ResultadoPasarela`), `monto = pedido.total` y `moneda = pedido.moneda`. Si no: 400.
-4. Si el pedido no está en `CREADO`: 409 (ESP-03 flujo C: notificación tardía).
-5. En una transacción:
+4. Si el pedido está `ANULADO` y el resultado es `APROBADO` (ESP-03 flujo D, 2026-11-04): con el pago ya `CONFIRMADO` por otra transacción, 409 `PAGO_YA_CONFIRMADO`; si no, en la misma transacción se guardan la clave, el pago `CONFIRMADO`, la anulación `EJECUTADA` (`AnulacionSistemaService.asegurarEjecutada`, con el motivo y la fecha del historial si faltaba la fila) y la solicitud de reembolso (`ReembolsoAnulacionService.registrar`); responde 200 con `ANULADO` y, después del commit, `ReembolsoAnulacionService.enviar`. Sin transición, sin eventos, sin stock.
+5. Si el pedido no está en `CREADO` en cualquier otro caso: 409 (ESP-03 flujo C: notificación tardía).
+6. En una transacción:
    - Actualizar `pago`: `estado = resultado.aEstadoPago()`, `referencia = transaccionId`, `fecha_proceso = fechaPago`.
    - `APROBADO`: `maquinaEstados.cambiar(pedido, PAGADO, PASARELA_PAGOS, "Confirmación de cobro exitoso")`.
    - `RECHAZADO`: `maquinaEstados.cambiar(pedido, ANULADO, PASARELA_PAGOS, "PAGO_NO_COMPLETADO")` y llamar a F2 para que registre la anulación y reponga stock (`AnulacionService.registrarPorPagoRechazado`).
@@ -837,7 +838,7 @@ Especificaciones: ESP-09, ESP-10. Contrato: `api-postventas.md` 2.6. Usa los cam
    - Existe con **datos distintos**: 409 `CLAVE_IDEMPOTENCIA_EN_CONFLICTO`.
 3. `origen` fuera de `ANULACION` o `DEVOLUCION` (por ejemplo `DESPACHO_FALLIDO`): 403 `ORIGEN_NO_PERMITIDO`.
 4. `monto <= 0`: 400.
-5. Validar el pago original con `VentasClient.consultarPedido(referenciaId)`: moneda igual a la del pedido y pedido con pago confirmado (en el historial hay `PAGADO`). Si no: 400.
+5. Validar el pago original con `VentasClient.consultarPedido(referenciaId)`: moneda igual a la del pedido y pago confirmado. Desde 2026-11-04 M1 envía `pago.estado` en 1.3 y manda ese valor (`CONFIRMADO`), porque un cobro confirmado después de anular nunca pasa por `PAGADO`; si M1 no lo envía, se deduce como antes (pedido `PAGADO`/`ENTREGADO` o un `PAGADO` en el historial). Si no: 400 `PAGO_INVALIDO`.
 6. **Saldo reembolsable**: suma de reembolsos `EXITOSO` y `PENDIENTE` del mismo pedido + monto nuevo ≤ total del pedido. Si se pasa: 409 `SALDO_INSUFICIENTE`.
 7. Guardar `reembolso` con `estado = PENDIENTE`, `tipo_origen`, `id_origen` (número de `origenId`), `id_pedido` (número de `referenciaId`), `idempotency_key`, `monto`, `moneda`.
 8. Llamar a `PasarelaClient.solicitarExtorno(clave, ...)` (extorno del simulador, 9.5) y guardar un `reembolso_intento`:
@@ -996,12 +997,12 @@ No considera feriados; se puede agregar una lista fija de feriados de Perú más
 - **Consultar por código**: 404 `RECLAMO_NO_ENCONTRADO` si no existe.
 - **Listar**: filtros `documento`, `clienteId`, `estado`, paginado.
 - **Responder**:
-  - `nuevoEstado` debe ser `ATENDIDO` o `DERIVADO`. Otro valor: 400.
-  - `respuestaVisibleCliente` obligatorio y no vacío tras `trim()` (400 `RESPUESTA_VACIA`, el reclamo no cambia).
-  - `atendidoPor` obligatorio.
+  - `nuevoEstado` debe ser `EN_PROCESO`, `ATENDIDO` o `DERIVADO`. `REGISTRADO`: 400 `ESTADO_INVALIDO`.
+  - `respuestaVisibleCliente` obligatorio y no vacío tras `trim()` para `ATENDIDO`/`DERIVADO` (400 `RESPUESTA_VACIA`, el reclamo no cambia).
+  - `atendido_por` = `sub` del token del Gestor (`Solicitante.gestor(sub)` en el controller). El `atendidoPor` del cuerpo se ignora si hay token (RNF-03, ajuste 2026-11-02); solo con `SEGURIDAD_HABILITADA=false` se usa el del cuerpo, y entonces es obligatorio (400 `DATOS_INVALIDOS`).
   - Si el reclamo ya está `ATENDIDO`: 409.
   - Guardar `respuesta_visible_cliente`, `atendido_por`, `fecha_atencion = ahora`, `estado`. Sumar `reclamos_atendidos` en el agregado si pasa a `ATENDIDO`.
-  - `EN_PROCESO`: se marca cuando el Gestor abre el reclamo. Opción simple: el `PATCH` acepta también `EN_PROCESO` sin respuesta (agregar al contrato) o se pasa de `REGISTRADO` a `ATENDIDO` directamente.
+  - `EN_PROCESO` ("Iniciar atención"): el `PATCH` lo acepta sin respuesta, solo desde `REGISTRADO` (ya documentado en `api-postventas.md` 2.11).
 
 ### 10.4. Proyecciones (`ProyeccionesService`, ESP-15)
 
@@ -1138,11 +1139,14 @@ Catálogo real (acuerdo A10, `integraciones/ACUERDO_G7_SEGURIDAD.md`, `api-venta
 
 | Ruta | Autorización |
 |---|---|
-| `POST /api/v2/devoluciones/**` | scope `postventa:devoluciones:escribir` |
+| `POST /api/v2/devoluciones/evidencias/upload` (2.1) | scope `postventa:devoluciones:escribir`, rol `CLIENTE` o rol `ADMIN_VENTAS` (foto de la recepción, 2.5b — 2026-11-03) |
+| `POST /api/v2/devoluciones/**` | scope `postventa:devoluciones:escribir` o rol `CLIENTE` |
+| `GET /uploads/evidencias/*` | pública, solo existe con `EVIDENCIAS_ALMACEN=local` (`EvidenciasLocalesConfig`): sirve en solo lectura los archivos del almacén local, como la URL pública del bucket de Supabase |
 | `GET /api/v2/devoluciones/me` | rol `CLIENTE` (2.4b, identidad por `sub`, sin `clienteId` en la URL) |
 | `GET /api/v2/devoluciones/**` (listado administrativo, 2.4) | rol `ADMIN_VENTAS` |
 | `PATCH /api/v2/devoluciones/*/resolucion` | rol `ADMIN_VENTAS` |
-| `POST /api/v2/reembolsos` | scope `postventa:reembolsos:procesar` |
+| `POST /api/v2/reembolsos` | scope `postventa:reembolsos:procesar` o rol `ADMIN_VENTAS`. Origen `ANULACION`: lo crea solo M1; el Gestor solo puede reintentar uno existente (misma `X-Idempotency-Key` y mismos datos, `ReembolsoService.esContinuacion`) |
+| `GET /api/v2/reembolsos` y `GET /api/v2/reembolsos/*` (2.6b, 2.6c) | rol `ADMIN_VENTAS` |
 | `POST /api/v2/csat` | rol `CLIENTE` (titularidad del `pedidoId` contra el `sub`, acuerdo H-04 — nunca scope de servicio) |
 | `POST /api/v2/reclamos` | scope `postventa:reclamos:escribir` |
 | `GET /api/v2/reclamos/me` | rol `CLIENTE` (2.10b) |
