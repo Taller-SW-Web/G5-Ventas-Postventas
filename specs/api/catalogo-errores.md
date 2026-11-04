@@ -147,6 +147,7 @@ Códigos que ya aparecen como valor literal de `codigo` en los contratos. Los de
 | `PATCH /api/v2/devoluciones/{devolucionId}/resolucion` | `409` | El pedido asociado ya no es compatible con la resolución. | `PEDIDO_INCONSISTENTE` |
 | `PATCH /api/v2/devoluciones/{devolucionId}/resolucion` | `409` | Cambio aprobado sin stock disponible en Productos (F). | `SIN_STOCK` |
 | `PATCH /api/v2/devoluciones/{devolucionId}/resolucion` | `503` | Productos (F) no responde la validación de disponibilidad. | `PRODUCTOS_NO_DISPONIBLE` |
+| `PATCH /api/v2/devoluciones/{devolucionId}/resolucion` | `503` | M1 no responde o no confirma la orden de reemplazo (1.11); el dictamen queda `APROBADA` y se puede repetir. | `VENTAS_NO_DISPONIBLE` |
 | `PATCH /api/v2/devoluciones/{devolucionId}/recepcion` | `400` | `cantidadApta` mayor que `cantidadRecibida`, o el SKU no pertenece al pedido original. | `CANTIDAD_INVALIDA` |
 | `PATCH /api/v2/devoluciones/{devolucionId}/recepcion` | `404` | Expediente no encontrado. | `DEVOLUCION_NO_ENCONTRADA` |
 | `PATCH /api/v2/devoluciones/{devolucionId}/recepcion` | `409` | El expediente no está `APROBADA`, o no requiere devolución física. | `RESOLUCION_NO_APROBADA` |

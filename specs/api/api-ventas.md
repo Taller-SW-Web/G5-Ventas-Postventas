@@ -1,6 +1,6 @@
 # Contrato de API (OpenAPI / REST) — Microservicio M1: Ventas y Pedidos
 
-**Versión:** 1.9.0
+**Versión:** 1.10.0
 
 **Fecha:** Octubre 2026
 
@@ -12,6 +12,7 @@
 
 | Versión | Fecha | Cambio |
 |---|---|---|
+| 1.10.0 | 2026-11-04 | 1.3: campo aditivo `tipo` (`VENTA` o `REEMPLAZO`, de `ventas.pedido.tipo`) para que el frontend distinga una orden de reemplazo (1.11) sin deducirlo del total. |
 | 1.9.0 | 2026-11-04 | 1.2: un cobro `APROBADO` de un pedido que ya está `ANULADO` se reconoce con `200`: el pedido sigue `ANULADO`, el pago queda `CONFIRMADO` y M1 guarda en la misma transacción la solicitud de reembolso a M2 (antes respondía `409` y solo quedaba en el log). Repetir una `transaccionId` con otro resultado, monto o moneda responde `409 NOTIFICACION_INCOMPATIBLE`; otro cobro sobre un pago ya confirmado, `409 PAGO_YA_CONFIRMADO`. 1.3: campo aditivo `pago.estado`. |
 | 1.8.0 | 2026-11-02 | 1.4b `GET /api/v1/pedidos/me`: filtros opcionales `desde` y `hasta` (`YYYY-MM-DD`, días inclusivos sobre la fecha de creación, hora de Perú), combinables con `estado`, `page` y `pageSize`; nuevo error `400 RANGO_FECHAS_INVALIDO`. Acuerdo H-06 con Marketplace (G1). |
 | 1.7.0 | 2026-10-26 | Nuevo 1.14 `GET /api/v1/pedidos/kpis`: KPIs de ventas del Dashboard (monto vendido, ticket promedio, serie diaria y por canal) sumados en M1, para que el frontend deje de paginar toda la bandeja (1.4). |
@@ -332,6 +333,7 @@ Un token de servicio de canal (Marketplace, Chatbot, Retail) **no** tiene acceso
   "pedidoId": "PED-2026-00981",
   "canal": "CHATBOT",
   "estado": "EN_PREPARACION",
+  "tipo": "VENTA",
   "contacto": {
     "clienteId": "3f9a2b7e-6c1d-4e2a-9b3f-7a1d2c4e5f6a",
     "nombreCompleto": "Juan Pérez Rodríguez",
@@ -390,6 +392,7 @@ Un token de servicio de canal (Marketplace, Chatbot, Retail) **no** tiene acceso
 }
 ```
 - `pago.estado` (agregado 2026-11-04, aditivo): estado real del cobro en `ventas.pago` — `PENDIENTE`, `CONFIRMADO` o `RECHAZADO`; `null` si el pedido no tiene registro de pago (orden de reemplazo). Es independiente de `estado`: un pedido `ANULADO` tiene `CONFIRMADO` si la pasarela confirmó el cobro después de la anulación (1.2), aunque su historial nunca pase por `PAGADO`. M2 lo usa para validar un reembolso (2.6); un consumidor que no lo lea sigue funcionando igual.
+- `tipo` (agregado 2026-11-04, aditivo): `VENTA` (pedido de 1.1) o `REEMPLAZO` (orden sin cobro de un `CAMBIO`, 1.11), tal como está en `ventas.pedido.tipo`. Un `REEMPLAZO` nunca pasa por `PAGADO`: su recorrido es `CREADO → EN_PREPARACION → DESPACHADO → ENTREGADO` (o `→ ANULADO`, ver ESP-03 7.2) y `pago.estado` es `null`. Un consumidor que no lo lea sigue funcionando igual; si falta (M1 anterior), no debe deducirse que un pedido es un reemplazo por tener total cero.
 - `envio.tiendaId` solo viene en pedidos `RETAIL` (acuerdo G4).
 - `envio.fechaEstimadaEntrega` es `null` hasta que Despacho envía `DESPACHO_REPROGRAMADO` (ver 1.5).
 

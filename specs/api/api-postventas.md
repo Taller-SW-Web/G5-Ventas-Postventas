@@ -1,6 +1,6 @@
 # Contrato de API (OpenAPI / REST) --- Microservicio M2: Postventa
 
-**Versión:** 1.6.0 (2026-11-04: 2.6 lee `pago.estado` de 1.3; 2.12 fija qué cuenta `pedidos`)
+**Versión:** 1.6.1 (2026-11-04: 2.5 documenta `503 VENTAS_NO_DISPONIBLE` y la consulta real de disponibilidad a Productos. 1.6.0: 2.6 lee `pago.estado` de 1.3; 2.12 fija qué cuenta `pedidos`)
 
 **Fecha:** Octubre 2026 (F3 cerrado contra implementación real, 2026-10-12)
 
@@ -351,6 +351,9 @@
     -   **`409 Conflict`** (`PEDIDO_INCONSISTENTE`): El pedido asociado ya no está en un estado compatible con la resolución.
     -   **`409 Conflict`** (`SIN_STOCK`): Aprobación con `tipo: CAMBIO` (o `tipoResolucion: CAMBIO`) sin stock disponible en Productos (F). El Gestor puede reintentar con `tipoResolucion: REEMBOLSO`, o rechazar.
     -   **`503 Service Unavailable`** (`PRODUCTOS_NO_DISPONIBLE`): Productos (F) no responde la validación de disponibilidad.
+    -   **`503 Service Unavailable`** (`VENTAS_NO_DISPONIBLE`): M1 no responde o no confirma la orden de reemplazo (1.11) de un `CAMBIO` — por ejemplo, porque Productos no admitió la reserva. El dictamen ya quedó `APROBADA` (sin `referenciaOperacion`) y M1 no guarda ningún reemplazo; repetir la misma aprobación reintenta la orden sin duplicar nada (idempotencia por `devolucionId`).
+
+La validación de disponibilidad de un `CAMBIO` consulta `GET /api/v1/inventario/disponibilidad?skus=...` de Productos (acuerdo G6 issue #100, scope `inventario:disponibilidad:leer`) con el `sku` de la línea del pedido original: hay stock si el `available` de cada `sku` cubre las unidades del expediente; un `sku` que Productos no devuelve cuenta como sin stock (`409 SIN_STOCK`). Es informativa: la reserva real la hace M1 al crear el reemplazo.
 
 #### 2.5b Confirmar Recepción Física (nuevo, 2026-10-13)
 
