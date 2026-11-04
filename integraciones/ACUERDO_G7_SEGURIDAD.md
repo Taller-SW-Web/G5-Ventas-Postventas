@@ -1,10 +1,23 @@
 # Acuerdo con G7 — Seguridad y Usuarios
 
-Confirmado con el equipo de Seguridad (contacto: Sergio Osorio, PO). Última actualización: 2026-10-11. Registrado en su repo como acuerdo **A10** (issue #42, `Taller-SW-Web/Modulo-de-Seguridad`) — **fuente oficial: su `kit-integracion.md` §5**; si algo de este documento no coincide con el suyo, manda el de ellos.
+Confirmado con el equipo de Seguridad (contacto: Sergio Osorio, PO). Última actualización: 2026-11-04. Registrado en su repo como acuerdo **A10** (issue #42, `Taller-SW-Web/Modulo-de-Seguridad`) — **fuente oficial: su `kit-integracion.md` §5**; si algo de este documento no coincide con el suyo, manda el de ellos.
 
 ## Qué consumimos de ellos
 
-Validación local de JWT (JWKS), emisión de tokens de servicio (`client_credentials`) para `modulo-ventas` y `modulo-postventa`, y consulta de estado de cuenta (`GET /usuarios/{clienteId}`) antes de operaciones sensibles.
+Validación local de JWT (JWKS), emisión de tokens de servicio (`client_credentials`) para `modulo-ventas` y `modulo-postventa`, consulta de estado de cuenta (`GET /usuarios/{clienteId}`) antes de operaciones sensibles, y **login de usuario directo** (ver sección siguiente, agregado 2026-11-04 — nunca estaba documentado, se construyó directo contra la API real de G7 sin pasar por una issue formal).
+
+## Login de usuario (frontend → G7 directo)
+
+**Hallazgo 2026-11-04 (revisión de código, nunca hubo acuerdo formal por issue):** la guía de frontend decía "el login lo resuelve Seguridad, fuera de este repo, entrega un JWT" — eso ya no es así. El frontend (`src/services/authG7.ts`, `src/pages/Ingresar/IngresarPage.tsx`) tiene su propio formulario nativo que llama **directo** a la API pública de G7:
+
+- **URL de producción:** `https://g7-auth-service.onrender.com/api/v1` (hardcodeada como default si `VITE_SEGURIDAD_LOGIN_URL` no está seteada).
+- **`POST /auth/login`** `{ correo, contrasena }`:
+  - Cuenta `CLIENTE`: responde `{ accessToken, refreshToken?, expiresIn? }` de inmediato.
+  - Cuenta `ADMIN_VENTAS`: responde `{ requiereMfa: true, desafioId, mensaje }` — Seguridad manda un código OTP de 6 dígitos al correo, no entrega el token todavía.
+- **`POST /auth/otp/verificar`** `{ desafioId, codigo }` → `{ accessToken, ... }`, solo para resolver el desafío MFA de cuentas `ADMIN_VENTAS`.
+- El token se guarda en `localStorage` (`g5.token`) y de ahí sale `roles`/`sub` por decodificación del JWT (sin validar firma en el cliente, la validación real la hace el backend).
+
+**Sin documentar/confirmar con G7 todavía:** el nombre y forma exacta de los campos (`correo`/`contrasena`, `desafioId`, `codigo`) salen de leer el código ya construido, no de una especificación o acuerdo explícito con ellos — nadie verificó esto contra su `kit-integracion.md` ni abrió una issue. Tampoco está claro si `ADMIN_VENTAS` es la única audiencia con MFA, o si `GESTOR_DESPACHO`/`GESTOR_COMERCIAL`/`ADMIN_SISTEMA` también lo requieren.
 
 ## Qué consumen ellos de nosotros
 
@@ -78,6 +91,7 @@ Nada — Seguridad no consume ninguna API de Ventas/Postventa. Es puramente un p
 - **Nuevo scope `inventario:disponibilidad:leer` para `modulo-postventa`:** Productos (G6) ya lo aprobó explícitamente (issue G6 #100, 2026-10-16) para `GET /api/v1/inventario/disponibilidad`. Falta mandarlo a Seguridad — se puede sumar como comentario a la misma issue #51 de Seguridad, junto con la precisión pendiente de `ventas:pedidos:consultar` y el scope nuevo de abajo.
 - **Nuevo scope `ventas:pedidos:reemplazar` para `modulo-postventa`:** detectado el 2026-10-16 al cerrar con Productos (issue G6 #100) el mecanismo de `CAMBIO` — M2 necesita llamar a `POST /api/v1/pedidos/reemplazos` (1.11) para pedirle a M1 la orden de reemplazo. Falta mandar la issue a Seguridad (nueva o como comentario en la #51 de Seguridad, etiqueta `integracion`).
 - **Nuevo scope `inventario:operaciones:leer` para `modulo-ventas`:** detectado 2026-10-21 (issue G6 #51, sección 4 de la respuesta de G6) — para que M1 pueda llamar a `GET /inventario/operaciones/{operationId}` si se le pierde el resultado de una reserva/confirmación. Falta mandarlo a Seguridad, junto con los otros dos de arriba.
+- **Formalizar el login directo (ver sección "Login de usuario" arriba):** el frontend ya construyó e integró `POST /auth/login` y `POST /auth/otp/verificar` contra la API real de G7, pero nadie abrió una issue para confirmar el contrato — ni los nombres de campo, ni qué roles requieren MFA, ni si la URL de producción (`g7-auth-service.onrender.com`) es estable. Falta mandarles una consulta formal citando lo ya construido, para no descubrir una discrepancia en producción.
 
 ## Historial
 
@@ -96,3 +110,4 @@ Nada — Seguridad no consume ninguna API de Ventas/Postventa. Es puramente un p
 - 2026-10-16: Al cerrar con Productos el mecanismo de `CAMBIO` (orden de reemplazo, issue G6 #100), se detecta un scope nuevo: `ventas:pedidos:reemplazar` para `modulo-postventa` (1.11). Falta mandarlo a Seguridad.
 - 2026-10-16: Productos aprueba explícitamente a `modulo-postventa` para `inventario:disponibilidad:leer` (issue G6 #100) — ya se puede pedir a Seguridad; falta mandarlo, junto con `ventas:pedidos:reemplazar` y la precisión pendiente de `ventas:pedidos:consultar`.
 - 2026-10-21: Al responder el issue G6 #51 (RabbitMQ/cupones), se detecta un scope pendiente de mandar a Seguridad: `inventario:operaciones:leer` para `modulo-ventas` (consulta de operaciones perdidas). Se verifica además, leyendo directo el PR #60 de Seguridad en GitHub, que `ventas:pedidos:consultar` **sí quedó registrado** (nunca lo confirmaron por comentario) — queda tachado arriba. Quedan 3 pendientes reales sin mandar a Seguridad: `inventario:disponibilidad:leer`, `ventas:pedidos:reemplazar`, `inventario:operaciones:leer`.
+- 2026-11-04: Revisión directa del código del frontend (no via issue/acuerdo) revela que el equipo ya construyó un login nativo contra la API real de G7 (`POST /auth/login`, `POST /auth/otp/verificar`, 2FA por OTP para `ADMIN_VENTAS`) — reemplaza lo que decía la guía de frontend ("login resuelto por Seguridad, fuera de este repo"). Nunca se abrió una issue para esto con G7; se documenta tal cual está en el código (`src/services/authG7.ts`) y queda pendiente confirmarlo formalmente con ellos.
