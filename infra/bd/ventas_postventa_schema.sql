@@ -71,6 +71,12 @@ create table ventas.pedido (
     destinatario          varchar(150),
     distrito              varchar(80),
     direccion             varchar(255),
+    -- Destino opcional para Despacho (G2 7.1, acuerdo D11); Pedido.java los mapea desde el commit 03e4215.
+    -- Faltaban aquí (detectado 2026-11-03 al validar M1 contra una base local creada con este archivo).
+    -- Tipos alineados con distrito/direccion: confirmar contra Supabase (information_schema) antes de migrar.
+    departamento          varchar(80),
+    provincia             varchar(80),
+    referencia_envio      varchar(255),
     codigo_cupon          varchar(40),
     idempotency_key       varchar(128)  unique,   -- cabecera Idempotency-Key de 1.1 (acuerdo H-02)
     reserva_id            varchar(100),           -- reservaId de Productos (G6); null pendiente o RETAIL
@@ -148,7 +154,7 @@ create table ventas.anulacion (
     motivo          varchar(255) not null,
     id_solicitante  uuid,
     id_autorizador  uuid,
-    estado          varchar(20)  not null,
+    estado          varchar(30)  not null,
     fecha           date         not null default current_date,
     constraint ck_anulacion_estado check (estado in ('PENDIENTE_AUTORIZACION','EJECUTADA','RECHAZADA'))
 );

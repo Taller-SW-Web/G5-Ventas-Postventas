@@ -52,8 +52,9 @@
     soporte antes de registrar la solicitud. Retorna la URL que debe
     incluirse en el arreglo `evidencias` del expediente.
 -   **Headers:**
-    -   `Authorization: Bearer <token_canal_o_cliente>`
+    -   `Authorization: Bearer <token_canal_o_cliente>`, o el token del Gestor (rol `ADMIN_VENTAS`) para la foto de la recepción física de 2.5b (corregido 2026-11-03: antes la regla general de `POST /devoluciones/**` lo rechazaba con 403). El Gestor solo puede subir el archivo; registrar una devolución (2.2) sigue siendo del canal o del cliente.
     -   `Content-Type: multipart/form-data`
+-   **URL devuelta en desarrollo:** con `EVIDENCIAS_ALMACEN=local` (por defecto), M2 guarda el archivo en su carpeta local y lo sirve en `GET /uploads/evidencias/{nombre}` (solo lectura, sin token, nombre UUID), para que la URL se pueda abrir igual que la pública del bucket de Supabase. Con `EVIDENCIAS_ALMACEN=supabase` esa ruta no existe.
 -   **Request Body (multipart/form-data):**
     -   `file`: Archivo binario adjunto (Formatos: `image/jpeg`,
         `image/png`, `image/webp`, `application/pdf`. Máximo 5 MB).
@@ -450,6 +451,7 @@
     `ANULACION` o `DEVOLUCION`).
 -   **`409 Conflict`** (`CLAVE_IDEMPOTENCIA_EN_CONFLICTO`): La `X-Idempotency-Key` ya existe para una solicitud con datos distintos (origen, monto, moneda), o la pasarela respondió con error.
 -   **`409 Conflict`** (`SALDO_INSUFICIENTE`): El monto, sumado a los reembolsos `EXITOSO`/`PENDIENTE` ya registrados para el mismo pedido, supera el total pagado.
+-   **`403 Forbidden`** (`ACCESO_DENEGADO`), origen `ANULACION`: el reembolso de una anulación **lo crea solo M1** (scope `postventa:reembolsos:procesar`). El Gestor (rol `ADMIN_VENTAS`) solo puede **continuar uno que ya existe** — el reintento de 2.6c punto 3: misma `X-Idempotency-Key` y mismos `origen`, `origenId`, `referenciaId`, `monto` y `moneda`. Cualquier otra combinación de un Gestor con origen `ANULACION` responde 403 sin procesar nada (aclarado 2026-11-03; antes también se rechazaba el reintento legítimo).
 
 #### 2.6b Listar Reembolsos (bandeja del Gestor, mockup 08 — nuevo, 2026-10-16, no está en el contrato)
 
@@ -519,6 +521,8 @@
 ```
 
 -   **`404 Not Found`**: `reembolsoId` no existe.
+-   **`403 Forbidden`**: el token no tiene el rol `ADMIN_VENTAS` (cliente o token de servicio). Hasta el 2026-11-03 M2 no tenía regla para esta ruta y respondía 403 también al Gestor; ya está corregido en `SecurityConfig`.
+-   **Presentación (mockup 08):** "Referencia de pago" muestra `transaccionPasarelaId` (punto 5 de abajo) e "Id de operación" el `transaccionPasarelaId` del último intento. El mockup muestra una referencia del pago original (`PAY-…`) distinta de la operación, pero ese dato no está en este contrato: queda pendiente si se quiere mostrar el pago original de M1.
 
 **Nota (2026-10-17): esta sección se corrigió para que coincida con `DetalleReembolsoResponse`/`ConsultaReembolsosService` ya construidos — manda el código, los nombres de campo y el punto 1 de abajo cambiaron frente a la primera versión de estas decisiones (2026-10-16).**
 

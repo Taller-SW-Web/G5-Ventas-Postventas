@@ -1138,11 +1138,14 @@ Catálogo real (acuerdo A10, `integraciones/ACUERDO_G7_SEGURIDAD.md`, `api-venta
 
 | Ruta | Autorización |
 |---|---|
-| `POST /api/v2/devoluciones/**` | scope `postventa:devoluciones:escribir` |
+| `POST /api/v2/devoluciones/evidencias/upload` (2.1) | scope `postventa:devoluciones:escribir`, rol `CLIENTE` o rol `ADMIN_VENTAS` (foto de la recepción, 2.5b — 2026-11-03) |
+| `POST /api/v2/devoluciones/**` | scope `postventa:devoluciones:escribir` o rol `CLIENTE` |
+| `GET /uploads/evidencias/*` | pública, solo existe con `EVIDENCIAS_ALMACEN=local` (`EvidenciasLocalesConfig`): sirve en solo lectura los archivos del almacén local, como la URL pública del bucket de Supabase |
 | `GET /api/v2/devoluciones/me` | rol `CLIENTE` (2.4b, identidad por `sub`, sin `clienteId` en la URL) |
 | `GET /api/v2/devoluciones/**` (listado administrativo, 2.4) | rol `ADMIN_VENTAS` |
 | `PATCH /api/v2/devoluciones/*/resolucion` | rol `ADMIN_VENTAS` |
-| `POST /api/v2/reembolsos` | scope `postventa:reembolsos:procesar` |
+| `POST /api/v2/reembolsos` | scope `postventa:reembolsos:procesar` o rol `ADMIN_VENTAS`. Origen `ANULACION`: lo crea solo M1; el Gestor solo puede reintentar uno existente (misma `X-Idempotency-Key` y mismos datos, `ReembolsoService.esContinuacion`) |
+| `GET /api/v2/reembolsos` y `GET /api/v2/reembolsos/*` (2.6b, 2.6c) | rol `ADMIN_VENTAS` |
 | `POST /api/v2/csat` | rol `CLIENTE` (titularidad del `pedidoId` contra el `sub`, acuerdo H-04 — nunca scope de servicio) |
 | `POST /api/v2/reclamos` | scope `postventa:reclamos:escribir` |
 | `GET /api/v2/reclamos/me` | rol `CLIENTE` (2.10b) |
