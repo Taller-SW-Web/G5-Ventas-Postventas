@@ -77,6 +77,12 @@ Content-Type: application/json
 
 **Resultado esperado:** `200 OK`, estado `ATENDIDO`, timestamp `fechaRespuesta` en UTC y respuesta disponible para consulta.
 
+### 4b. El autor de la atención sale del token (ESP-14 CA-01b)
+
+Repetir el caso 4 con `atendidoPor` de otra persona (por ejemplo `"OTRO-GESTOR"`) y luego consultar el reclamo con `GET {{baseUrl}}/api/v2/reclamos/{{reclamoId}}`.
+
+**Resultado esperado:** `200 OK` en ambas llamadas y `atendidoPor` igual al `sub` de `{{tokenGestor}}`, no `OTRO-GESTOR`. Solo se verifica con `SEGURIDAD_HABILITADA=true`; con la seguridad apagada M2 usa el valor del cuerpo.
+
 ## 5. Rechazar una atención sin respuesta
 
 **Precondición:** reemplazar `{{reclamoId}}` por un expediente válido.

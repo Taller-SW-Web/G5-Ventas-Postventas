@@ -24,7 +24,7 @@ Registrar la respuesta formal emitida por el Gestor para un reclamo, hacerla vis
 |---|---|---:|---|
 | `nuevoEstado` | string | Sí | Para registrar correctamente la respuesta y cerrar la atención debe ser `ATENDIDO`. |
 | `respuestaVisibleCliente` | string | Sí | Respuesta formal redactada por el Gestor. No puede ser nula ni vacía y será visible para el consumidor cuando consulte su reclamo. |
-| `atendidoPor` | string | Sí | Identificador del Gestor que emite y registra la respuesta, por ejemplo `GESTOR-02`; se conserva para la trazabilidad de la atención. |
+| `atendidoPor` | string | No (compatibilidad) | Ya no define al autor: M2 registra como responsable el `sub` del token del Gestor autenticado y un valor distinto en el cuerpo se ignora (ajuste del 2026-11-02, ver `api-postventas.md` 2.11). Solo con la seguridad deshabilitada (desarrollo local) se usa este valor y entonces es obligatorio. |
 
 El nombre del campo de respuesta debe mantenerse exactamente como `respuestaVisibleCliente` en el request, la persistencia y las respuestas expuestas por la API.
 
@@ -34,7 +34,7 @@ Cuando la operación se registra correctamente:
 
 1. El expediente pasa al estado `ATENDIDO`.
 2. Se almacena `respuestaVisibleCliente` como respuesta formal del Gestor que el consumidor podrá consultar posteriormente.
-3. Se conserva `atendidoPor` para identificar al Gestor responsable de la atención.
+3. Se conserva `atendidoPor` con el identificador (`sub`) del Gestor autenticado que realizó la atención, de modo que el actor de auditoría sea verificable (RNF-03) y no dependa de un dato que envía el cliente HTTP.
 4. Se registra la fecha y hora de la respuesta en UTC para auditar si la atención se realizó antes o después de `fechaLimiteSLA`.
 5. La respuesta del endpoint expone este timestamp mediante el campo `fechaRespuesta`, conforme a `specs/api-contract.md`.
 
@@ -44,7 +44,7 @@ Cuando la operación se registra correctamente:
 2. `reclamoId` debe identificar el expediente que se pretende responder.
 3. `nuevoEstado` es obligatorio y debe ser `ATENDIDO` para completar esta operación.
 4. `respuestaVisibleCliente` es obligatorio y no puede ser nulo, vacío ni contener únicamente una ausencia de contenido efectivo.
-5. `atendidoPor` es obligatorio y debe identificar al Gestor que realiza la atención.
+5. El Gestor responsable se obtiene del token validado por el servidor. Si el cuerpo declara otro `atendidoPor`, prevalece la identidad del token.
 6. La actualización debe respetar el ciclo de vida definido para el reclamo antes de establecer `ATENDIDO`.
 7. Si `respuestaVisibleCliente` está vacío o es nulo, la operación se rechaza con `400 Bad Request` y el reclamo no se marca como `ATENDIDO`.
 8. Solo después de superar las validaciones se persisten la respuesta formal, el Gestor responsable y el timestamp de atención.
@@ -96,8 +96,14 @@ Se devuelve cuando `respuestaVisibleCliente` está vacío o es nulo.
 ### CA-01. Atención correcta
 
 - **DADO** un reclamo que puede ser atendido y un Gestor autenticado.
-- **CUANDO** se invoca `PATCH /api/v2/reclamos/{reclamoId}/respuesta` con `nuevoEstado: ATENDIDO`, `respuestaVisibleCliente` no vacío y `atendidoPor` informado.
-- **ENTONCES** el sistema registra la respuesta formal, actualiza el estado a `ATENDIDO` y responde `200 OK`.
+- **CUANDO** se invoca `PATCH /api/v2/reclamos/{reclamoId}/respuesta` con `nuevoEstado: ATENDIDO` y `respuestaVisibleCliente` no vacío.
+- **ENTONCES** el sistema registra la respuesta formal y como responsable al Gestor del token, actualiza el estado a `ATENDIDO` y responde `200 OK`.
+
+### CA-01b. Autor no suplantable
+
+- **DADO** un Gestor autenticado cuyo token identifica al usuario A.
+- **CUANDO** responde un reclamo enviando en el cuerpo `atendidoPor` con el identificador de otra persona.
+- **ENTONCES** el expediente registra al usuario A como responsable de la atención.
 
 ### CA-02. Respuesta visible para el consumidor
 

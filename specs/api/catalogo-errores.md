@@ -35,8 +35,10 @@ Códigos que ya aparecen como valor literal de `codigo` en los contratos. Los de
 | `IDEMPOTENCY_KEY_REUSED` | La `Idempotency-Key` ya se usó con un pedido distinto. | api-ventas.md, 1.1 (`409`) |
 | `ITEM_SIN_DISPONIBILIDAD` | Productos (F) no confirma el stock de uno o más ítems. | api-ventas.md, 1.1 (`409`) |
 | `PEDIDO_NO_ENCONTRADO` | El pedido indicado no existe. | api-ventas.md, 1.2 (`404`) |
-| `ESTADO_NO_PERMITE_PAGO` | La notificación de pago llega para un pedido que ya no está en `CREADO`. | api-ventas.md, 1.2 (`409`) |
-| `TRANSACCION_DE_OTRO_PEDIDO` | La `transaccionId` ya se registró en otro pedido. | api-ventas.md, 1.2 (`409`) |
+| `ESTADO_NO_PERMITE_PAGO` | La notificación de pago llega para un pedido que ya no está en `CREADO` y no es un cobro aprobado de un pedido `ANULADO`. | api-ventas.md, 1.2 (`409`) |
+| `PAGO_YA_CONFIRMADO` | Cobro aprobado de un pedido `ANULADO` que ya tiene confirmado otro cobro; no se sobrescribe. | api-ventas.md, 1.2 (`409`) |
+| `NOTIFICACION_INCOMPATIBLE` | La `transaccionId` ya se registró en el pedido con otro resultado, monto o moneda. | api-ventas.md, 1.2 (`409`) |
+| `TRANSACCION_DE_OTRO_PEDIDO` | La `transaccionId` ya se procesó y no es el pago vigente del pedido. | api-ventas.md, 1.2 (`409`) |
 | `TRANSICION_NO_PERMITIDA` | El cambio de estado no está en la matriz de ESP-03. | ESP-03; 1.5 y 1.12 (`409`) |
 | `TOKEN_INVALIDO` / `ACCESO_DENEGADO` | Token ausente o inválido (`401`) / sin el rol o scope que exige el endpoint (`403`). | Todos los endpoints de M1 |
 | `CODIGO_INVALIDO` | Un código público (`PED-…`, `ANUL-…`) no termina en un número. | api-ventas.md, 1.2, 1.5, 1.9, 1.11, 1.12, 1.13 (`400`) |
@@ -50,7 +52,7 @@ Códigos que ya aparecen como valor literal de `codigo` en los contratos. Los de
 | `DECISION_INVALIDA` | `decision` no es `APROBADA` ni `RECHAZADA`. | api-ventas.md, 1.9 (`400`) |
 | `DATOS_INCONSISTENTES` | La anulación indicada no pertenece al pedido de la ruta. | api-ventas.md, 1.9 (`400`) |
 | `ANULACION_NO_ENCONTRADA` | La anulación indicada no existe. | api-ventas.md, 1.9 (`404`) |
-| `ANULACION_NO_PENDIENTE` | La anulación no está en `PENDIENTE_AUTORIZACION`. | api-ventas.md, 1.9 (`409`) |
+| `ANULACION_NO_PENDIENTE` | La anulación no está en `PENDIENTE_AUTORIZACION`, también cuando otra decisión simultánea ya la resolvió (no se modifica). | api-ventas.md, 1.9 (`409`) |
 | `PEDIDO_YA_NO_EN_PREPARACION` | Al aprobar, el pedido ya no está `EN_PREPARACION`; la anulación queda `RECHAZADA`. | api-ventas.md, 1.9 (`409`) |
 | `RUTA_NO_ENCONTRADA` / `METODO_NO_PERMITIDO` | La ruta no existe (`404`) / el método HTTP no está permitido en esa ruta (`405`). | Genéricos de M1 |
 | `NO_IMPLEMENTADO` | La operación todavía no está construida (`501`). | Genérico de M1 |
@@ -71,7 +73,9 @@ Códigos que ya aparecen como valor literal de `codigo` en los contratos. Los de
 | `POST /api/v1/pedidos` | `409` | `Idempotency-Key` repetida con otro cuerpo. | `IDEMPOTENCY_KEY_REUSED` |
 | `POST /api/v1/pedidos/{pedidoId}/pagos/notificacion` | `400` | Inconsistencia de montos o datos de transacción. | `MONTOS_INCONSISTENTES` / `DATOS_INVALIDOS` |
 | `POST /api/v1/pedidos/{pedidoId}/pagos/notificacion` | `404` | El pedido indicado no existe. | `PEDIDO_NO_ENCONTRADO` |
-| `POST /api/v1/pedidos/{pedidoId}/pagos/notificacion` | `409` | El pedido no se encuentra en estado `CREADO`. | `ESTADO_NO_PERMITE_PAGO` |
+| `POST /api/v1/pedidos/{pedidoId}/pagos/notificacion` | `409` | El pedido no se encuentra en estado `CREADO` (salvo un cobro aprobado de un pedido `ANULADO`, que se reconoce con `200`). | `ESTADO_NO_PERMITE_PAGO` |
+| `POST /api/v1/pedidos/{pedidoId}/pagos/notificacion` | `409` | Otro cobro sobre un pedido anulado que ya tiene un cobro confirmado. | `PAGO_YA_CONFIRMADO` |
+| `POST /api/v1/pedidos/{pedidoId}/pagos/notificacion` | `409` | La misma `transaccionId` con otro resultado, monto o moneda. | `NOTIFICACION_INCOMPATIBLE` |
 | `POST /api/v1/pedidos/{pedidoId}/pagos/notificacion` | `409` | La `transaccionId` ya pertenece a otro pedido. | `TRANSACCION_DE_OTRO_PEDIDO` |
 | `GET /api/v1/pedidos` | `400` | `pagina` negativa o `tamano` fuera de 1-50. | `PAGINACION_INVALIDA` |
 | `GET /api/v1/pedidos` | `400` | `desde` posterior a `hasta`. | `PARAMETRO_INVALIDO` |
