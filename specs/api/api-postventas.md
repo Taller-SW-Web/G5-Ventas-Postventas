@@ -1,6 +1,6 @@
 # Contrato de API (OpenAPI / REST) --- Microservicio M2: Postventa
 
-**Versión:** 1.5.0
+**Versión:** 1.6.0 (2026-11-04: 2.6 lee `pago.estado` de 1.3; 2.12 fija qué cuenta `pedidos`)
 
 **Fecha:** Octubre 2026 (F3 cerrado contra implementación real, 2026-10-12)
 
@@ -447,6 +447,7 @@
 ```
 
 -   **`400 Bad Request`**: Monto fuera de rango o estructura inválida.
+-   **`400 Bad Request`** (`PAGO_INVALIDO`): el pago del pedido (`referenciaId`) no está confirmado o su moneda no coincide. M2 lo consulta en M1 (1.3): manda `pago.estado` (`CONFIRMADO`), que cubre el cobro confirmado después de una anulación aunque el pedido nunca haya pasado por `PAGADO`; con un M1 que no envía ese campo se deduce como antes (pedido `PAGADO` o `ENTREGADO`, o un `PAGADO` en su historial).
 -   **`403 Forbidden`** (`ORIGEN_NO_PERMITIDO`): Solicitud con origen no permitido (distinto de
     `ANULACION` o `DEVOLUCION`).
 -   **`409 Conflict`** (`CLAVE_IDEMPOTENCIA_EN_CONFLICTO`): La `X-Idempotency-Key` ya existe para una solicitud con datos distintos (origen, monto, moneda), o la pasarela respondió con error.
@@ -806,6 +807,12 @@
 ```
 
 -   `ultimaActualizacion` (agregado al contrato, 2026-10-17): hasta cuándo están consolidados los agregados (ESP-15 §7); `null` si el periodo no tiene actividad.
+-   **Qué cuenta `pedidos` (definición cerrada, 2026-11-04):** 2.12 informa **actividad** del periodo por la fecha del hecho (día UTC), no una cohorte de pedidos.
+    -   `pedidos.total` son los pedidos **pagados** en el periodo, por la fecha del pago (evento `pedido.pagado`). Conserva ese significado por compatibilidad: no son los pedidos creados, porque M1 no publica la creación.
+    -   `pedidos.anulados` y `pedidos.entregados` son las anulaciones y entregas ocurridas en el periodo, por su fecha.
+    -   Son contadores de hechos independientes: **no forman una distribución de estados** (un pedido puede pagarse en un periodo y anularse en otro, o anularse sin haberse pagado), así que `anulados / total` de 2.12 **no es una tasa de anulación** y puede superar el 100 %.
+    -   Los conteos de pedidos de las pantallas, la distribución por estado, la tasa de anulación y los conteos exportados salen de la cohorte de `api-ventas.md` 1.14 (pedidos creados en el periodo, con su estado actual). Ver ESP-16 §7.1.
+    -   Un cobro confirmado después de la anulación (`api-ventas.md` 1.2) no es una venta: no suma a `pedidos.total`; su reembolso suma a `montoReembolsadoPEN` cuando M2 lo confirma.
 
 ---
 

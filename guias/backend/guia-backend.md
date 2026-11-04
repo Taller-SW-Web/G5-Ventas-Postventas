@@ -496,11 +496,12 @@ Mapeo adicional para `RETAIL` — **corregido 2026-10-12** (ver H10, 4.1): `envi
 
 ### 5.4. 1.2 Notificación de pago (ESP-03)
 
-1. Si `transaccionId` ya está en `ventas.evento_recibido` con origen `PASARELA_PAGOS`: responder 200 con el estado actual del pedido, sin cambiar nada.
-2. Buscar el pedido por código. No existe: 404.
+1. Buscar el pedido por código **con bloqueo** (`PedidoRepository.bloquear`, `SELECT ... FOR UPDATE`; 1.7 y los mensajes de Productos hacen lo mismo). No existe: 404.
+2. Si `transaccionId` ya está en `ventas.evento_recibido` con origen `PASARELA_PAGOS`: si coincide con el pago guardado (resultado, monto y moneda), responder 200 con el estado actual del pedido, sin cambiar nada; si no, 409 `NOTIFICACION_INCOMPATIBLE`.
 3. Validar `resultado` (`ResultadoPasarela`), `monto = pedido.total` y `moneda = pedido.moneda`. Si no: 400.
-4. Si el pedido no está en `CREADO`: 409 (ESP-03 flujo C: notificación tardía).
-5. En una transacción:
+4. Si el pedido está `ANULADO` y el resultado es `APROBADO` (ESP-03 flujo D, 2026-11-04): con el pago ya `CONFIRMADO` por otra transacción, 409 `PAGO_YA_CONFIRMADO`; si no, en la misma transacción se guardan la clave, el pago `CONFIRMADO`, la anulación `EJECUTADA` (`AnulacionSistemaService.asegurarEjecutada`, con el motivo y la fecha del historial si faltaba la fila) y la solicitud de reembolso (`ReembolsoAnulacionService.registrar`); responde 200 con `ANULADO` y, después del commit, `ReembolsoAnulacionService.enviar`. Sin transición, sin eventos, sin stock.
+5. Si el pedido no está en `CREADO` en cualquier otro caso: 409 (ESP-03 flujo C: notificación tardía).
+6. En una transacción:
    - Actualizar `pago`: `estado = resultado.aEstadoPago()`, `referencia = transaccionId`, `fecha_proceso = fechaPago`.
    - `APROBADO`: `maquinaEstados.cambiar(pedido, PAGADO, PASARELA_PAGOS, "Confirmación de cobro exitoso")`.
    - `RECHAZADO`: `maquinaEstados.cambiar(pedido, ANULADO, PASARELA_PAGOS, "PAGO_NO_COMPLETADO")` y llamar a F2 para que registre la anulación y reponga stock (`AnulacionService.registrarPorPagoRechazado`).
@@ -837,7 +838,7 @@ Especificaciones: ESP-09, ESP-10. Contrato: `api-postventas.md` 2.6. Usa los cam
    - Existe con **datos distintos**: 409 `CLAVE_IDEMPOTENCIA_EN_CONFLICTO`.
 3. `origen` fuera de `ANULACION` o `DEVOLUCION` (por ejemplo `DESPACHO_FALLIDO`): 403 `ORIGEN_NO_PERMITIDO`.
 4. `monto <= 0`: 400.
-5. Validar el pago original con `VentasClient.consultarPedido(referenciaId)`: moneda igual a la del pedido y pedido con pago confirmado (en el historial hay `PAGADO`). Si no: 400.
+5. Validar el pago original con `VentasClient.consultarPedido(referenciaId)`: moneda igual a la del pedido y pago confirmado. Desde 2026-11-04 M1 envía `pago.estado` en 1.3 y manda ese valor (`CONFIRMADO`), porque un cobro confirmado después de anular nunca pasa por `PAGADO`; si M1 no lo envía, se deduce como antes (pedido `PAGADO`/`ENTREGADO` o un `PAGADO` en el historial). Si no: 400 `PAGO_INVALIDO`.
 6. **Saldo reembolsable**: suma de reembolsos `EXITOSO` y `PENDIENTE` del mismo pedido + monto nuevo ≤ total del pedido. Si se pasa: 409 `SALDO_INSUFICIENTE`.
 7. Guardar `reembolso` con `estado = PENDIENTE`, `tipo_origen`, `id_origen` (número de `origenId`), `id_pedido` (número de `referenciaId`), `idempotency_key`, `monto`, `moneda`.
 8. Llamar a `PasarelaClient.solicitarExtorno(clave, ...)` (extorno del simulador, 9.5) y guardar un `reembolso_intento`:

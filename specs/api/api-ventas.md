@@ -1,6 +1,6 @@
 # Contrato de API (OpenAPI / REST) — Microservicio M1: Ventas y Pedidos
 
-**Versión:** 1.7.0
+**Versión:** 1.9.0
 
 **Fecha:** Octubre 2026
 
@@ -12,6 +12,7 @@
 
 | Versión | Fecha | Cambio |
 |---|---|---|
+| 1.9.0 | 2026-11-04 | 1.2: un cobro `APROBADO` de un pedido que ya está `ANULADO` se reconoce con `200`: el pedido sigue `ANULADO`, el pago queda `CONFIRMADO` y M1 guarda en la misma transacción la solicitud de reembolso a M2 (antes respondía `409` y solo quedaba en el log). Repetir una `transaccionId` con otro resultado, monto o moneda responde `409 NOTIFICACION_INCOMPATIBLE`; otro cobro sobre un pago ya confirmado, `409 PAGO_YA_CONFIRMADO`. 1.3: campo aditivo `pago.estado`. |
 | 1.8.0 | 2026-11-02 | 1.4b `GET /api/v1/pedidos/me`: filtros opcionales `desde` y `hasta` (`YYYY-MM-DD`, días inclusivos sobre la fecha de creación, hora de Perú), combinables con `estado`, `page` y `pageSize`; nuevo error `400 RANGO_FECHAS_INVALIDO`. Acuerdo H-06 con Marketplace (G1). |
 | 1.7.0 | 2026-10-26 | Nuevo 1.14 `GET /api/v1/pedidos/kpis`: KPIs de ventas del Dashboard (monto vendido, ticket promedio, serie diaria y por canal) sumados en M1, para que el frontend deje de paginar toda la bandeja (1.4). |
 | 1.6.0 | 2026-10-26 | Revisión contra `servicio-ventas`: se cierran los bloques de código y JSON, los estados de los ejemplos van sin comillas invertidas, cada error de F1 lleva su `codigo` (1.3, 1.4, 1.4b, 1.5), se documenta la respuesta de 1.5, 1.3 aclara quién puede consultarla, 1.10 describe el mecanismo de entrega ya implementado y `fecha_estimada_entrega` deja de figurar como pendiente. Índice de endpoints al inicio. |
@@ -272,10 +273,22 @@ Valores de `resultado`:
 |---|---|---|---|
 | `APROBADO` | `CONFIRMADO` | `CREADO` → `PAGADO` | `PASARELA_PAGOS` |
 | `RECHAZADO` | `RECHAZADO` | `CREADO` → `ANULADO`, motivo `PAGO_NO_COMPLETADO` | `PASARELA_PAGOS` |
+| `APROBADO` sobre un pedido ya `ANULADO` | `CONFIRMADO` | Sigue `ANULADO`: sin transición, sin historial nuevo y sin evento | — |
 
 La transición a `ANULADO` por rechazo libera la reserva de stock en Productos y, si había cupón aplicado, publica su restauración, automáticamente y sin intervención del Gestor, sin generar solicitud de reembolso hacia F4 — ver [F1-Ciclo de vida del pedido.md](../funcionalidades/F1-Ciclo%20de%20vida%20del%20pedido.md), CA-07b.
 
-Cualquier otro valor responde `400 Bad Request`. Si la misma `transaccionId` llega dos veces, se responde `200 OK` con el resultado ya registrado, sin repetir el cambio.
+**Cobro confirmado de un pedido ya anulado (decisión 2026-11-04, ESP-03 7.4 D).** El cliente pudo cancelar (1.7) o el pedido pudo anularse solo (pago rechazado, sin stock, cupón, reserva vencida) mientras la pasarela seguía cobrando. Si después llega un `APROBADO` auténtico (token con `ventas:pagos:webhook`) con el `monto` y la `moneda` del pedido:
+
+1. En una sola transacción se guardan la `transaccionId` (idempotencia), el pago `CONFIRMADO` con su referencia y una solicitud de reembolso en `ventas.solicitud_reembolso` por el total del pedido, colgada de la anulación del pedido (`ANUL-NNNN`). Si la anulación fue automática y no tenía fila en `ventas.anulacion`, se crea `EJECUTADA` con el motivo y la fecha de su historial.
+2. Se responde `200 OK` con `nuevoEstado: ANULADO` en cuanto eso queda guardado, sin esperar el extorno.
+3. Después del commit M1 envía la solicitud a M2 (2.6, origen `ANULACION`, clave fija por anulación). Si M2 no responde, la solicitud sigue `PENDIENTE` y la reenvía el reintento periódico de reembolsos.
+4. El pedido no vuelve a `PAGADO`, no se reserva ni confirma stock, no se envía a Despacho y no se publica `pedido.pagado` ni un segundo `pedido.anulado`. Para las métricas no es una venta: no suma a `pedidos.total` de 2.12 ni a los montos de 1.14; el reembolso, cuando M2 lo confirma, suma a `montoReembolsadoPEN` como cualquier otro.
+
+Si el pedido ya tenía un cobro `CONFIRMADO` con otra `transaccionId`, no se sobrescribe: `409 PAGO_YA_CONFIRMADO`, sin guardar nada, y queda en el log para revisión. Un `RECHAZADO` sobre un pedido que ya no está en `CREADO` (por ejemplo, ya `PAGADO` o `ANULADO`) conserva su tratamiento: `409 ESTADO_NO_PERMITE_PAGO`, sin cambios ni devolución de dinero.
+
+Cualquier otro valor responde `400 Bad Request`. Si la misma `transaccionId` llega otra vez con el mismo resultado, monto y moneda, se responde `200 OK` con lo ya registrado, sin repetir el cambio ni la solicitud de reembolso; con otro resultado, monto o moneda, `409 NOTIFICACION_INCOMPATIBLE` sin cambiar nada.
+
+**Concurrencia.** La notificación (1.2), la anulación (1.7 y 1.9) y los mensajes de Productos bloquean la fila del pedido mientras lo cambian, así que se aplican de a uno. Si gana el pago, la anulación posterior anula un pedido `PAGADO` y pide su reembolso; si gana la anulación, el cobro llega como cobro tardío. En ambos casos el pedido termina `ANULADO` con un solo reembolso.
 ### Respuestas
 #### `200 OK`
 ```json
@@ -286,15 +299,17 @@ Cualquier otro valor responde `400 Bad Request`. Si la misma `transaccionId` lle
   "fechaTransicion": "2026-09-23T00:06:00Z"
 }
 ```
-Si la notificación es un reintento, `nuevoEstado` y `fechaTransicion` son los ya registrados.
+Si la notificación es un reintento, `nuevoEstado` y `fechaTransicion` son los ya registrados. En un cobro sobre un pedido ya anulado, `nuevoEstado` es `ANULADO` y `fechaTransicion` es la fecha del cobro.
 
 | HTTP | Código | Cuándo |
 |---|---|---|
 | `400` | `DATOS_INVALIDOS` / `FORMATO_INVALIDO` | Falta `transaccionId`, `monto` o `moneda`, o `resultado` no es `APROBADO` ni `RECHAZADO` |
-| `400` | `MONTOS_INCONSISTENTES` | `monto` o `moneda` no coinciden con el total del pedido |
+| `400` | `MONTOS_INCONSISTENTES` | `monto` o `moneda` no coinciden con el total del pedido. No se guarda nada (tampoco en un pedido anulado) |
 | `404` | `PEDIDO_NO_ENCONTRADO` | El pedido indicado no existe |
-| `409` | `ESTADO_NO_PERMITE_PAGO` | El pedido no está en `CREADO` (por ejemplo, un rechazo tardío sobre un pedido ya `PAGADO`). No se modifica y queda en el log para revisión |
-| `409` | `TRANSACCION_DE_OTRO_PEDIDO` | La `transaccionId` ya se registró en otro pedido |
+| `409` | `ESTADO_NO_PERMITE_PAGO` | El pedido no está en `CREADO` y no es un cobro aprobado de un pedido `ANULADO` (por ejemplo, un rechazo tardío sobre un pedido `PAGADO` o `ANULADO`, o un aprobado sobre un pedido que ya avanzó). No se modifica y queda en el log para revisión |
+| `409` | `PAGO_YA_CONFIRMADO` | Cobro aprobado de un pedido `ANULADO` que ya tiene confirmado otro cobro: no se sobrescribe ni se reutiliza su reembolso. Queda en el log para revisión |
+| `409` | `NOTIFICACION_INCOMPATIBLE` | La `transaccionId` ya se registró en este pedido con otro resultado, monto o moneda |
+| `409` | `TRANSACCION_DE_OTRO_PEDIDO` | La `transaccionId` ya se procesó y no es el pago vigente de este pedido: se registró en otro pedido, o era un rechazo que el cobro confirmado posterior reemplazó |
 ### 1.3 Consultar Pedido por ID
 - **Endpoint:** `GET /api/v1/pedidos/{pedidoId}`
 Descripción: Devuelve el estado completo del pedido, su snapshot inmutable y su historial de estados.
@@ -328,7 +343,8 @@ Un token de servicio de canal (Marketplace, Chatbot, Retail) **no** tiene acceso
   "pago": {
     "total": 129.90,
     "moneda": "PEN",
-    "metodoPago": "TARJETA_CREDITO"
+    "metodoPago": "TARJETA_CREDITO",
+    "estado": "CONFIRMADO"
   },
   "envio": {
     "modalidad": "DELIVERY",
@@ -373,6 +389,7 @@ Un token de servicio de canal (Marketplace, Chatbot, Retail) **no** tiene acceso
   ]
 }
 ```
+- `pago.estado` (agregado 2026-11-04, aditivo): estado real del cobro en `ventas.pago` — `PENDIENTE`, `CONFIRMADO` o `RECHAZADO`; `null` si el pedido no tiene registro de pago (orden de reemplazo). Es independiente de `estado`: un pedido `ANULADO` tiene `CONFIRMADO` si la pasarela confirmó el cobro después de la anulación (1.2), aunque su historial nunca pase por `PAGADO`. M2 lo usa para validar un reembolso (2.6); un consumidor que no lo lea sigue funcionando igual.
 - `envio.tiendaId` solo viene en pedidos `RETAIL` (acuerdo G4).
 - `envio.fechaEstimadaEntrega` es `null` hasta que Despacho envía `DESPACHO_REPROGRAMADO` (ver 1.5).
 
@@ -657,7 +674,7 @@ Si `decision` es `RECHAZADA`, `estadoPedido` se mantiene en `EN_PREPARACION` y `
 | `400` | `DECISION_INVALIDA` | `decision` no es `APROBADA` ni `RECHAZADA` |
 | `400` | `DATOS_INCONSISTENTES` | La anulación indicada no pertenece a ese `pedidoId` |
 | `404` | `ANULACION_NO_ENCONTRADA` | La anulación no existe |
-| `409` | `ANULACION_NO_PENDIENTE` | La anulación no está en `PENDIENTE_AUTORIZACION` |
+| `409` | `ANULACION_NO_PENDIENTE` | La anulación no está en `PENDIENTE_AUTORIZACION`. También la recibe la decisión que llega mientras otra se está aplicando: se resuelven de una en una (bloqueo del pedido y después de la anulación) y la siguiente ve la decisión ya guardada; no cambia la decisión, el autorizador ni sus efectos |
 | `409` | `PEDIDO_YA_NO_EN_PREPARACION` | Al aprobar, el pedido ya no está `EN_PREPARACION`; la anulación pasa a `RECHAZADA` |
 | `409` | `PEDIDO_EN_CAMINO` | Al aprobar, Despacho responde que el paquete ya salió; la anulación pasa a `RECHAZADA` y no se reintenta (ESP-06 CA-06) |
 
