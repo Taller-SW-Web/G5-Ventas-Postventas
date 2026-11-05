@@ -8,6 +8,8 @@
 
 **Audiencia:** `api-ventas`
 
+**Diseño navegable (Swagger):** `/swagger-ui.html` de este servicio, generado desde `servicio-ventas/src/main/resources/static/openapi/ventas.yaml`.
+
 ### Historial de cambios
 
 | Versión | Fecha | Cambio |
@@ -243,8 +245,13 @@ Otros códigos `400` de 1.1:
 
 | Código | Cuándo |
 |---|---|
-| `ITEM_SIN_DISPONIBILIDAD` | Productos (F) no confirma el stock de uno o más ítems. El pedido no se registra |
 | `IDEMPOTENCY_KEY_REUSED` | La `Idempotency-Key` ya se usó con un pedido distinto |
+
+#### `503 Service Unavailable`
+
+`PRODUCTOS_NO_DISPONIBLE`: Productos no admitió la solicitud de reserva. El pedido no se guarda y la clave no se consume.
+
+**La reserva es asíncrona (corregido 2026-11-04; antes se documentaba `409 ITEM_SIN_DISPONIBILIDAD`, que el código no emite).** Responder `201` no garantiza el stock: si después Productos rechaza la reserva, el pedido pasa a `ANULADO` con motivo `STOCK_NO_DISPONIBLE`.
 
 ### 1.2 Notificación de Pago (Webhook de Pasarela)
 - **Endpoint:** `POST /api/v1/pedidos/{pedidoId}/pagos/notificacion`
@@ -835,5 +842,5 @@ canal (opcional): `MARKETPLACE` | `CHATBOT` | `RETAIL`.
 
 **Ciclo de vida del reemplazo** (ver `ESP-03` 7.2, nuevas transiciones exclusivas de `pedido.tipo: REEMPLAZO`):
 - Sin pago que esperar: si Productos confirma la reserva, `CREADO → EN_PREPARACION` (actor `SISTEMA_PRODUCTOS`), directo a preparación.
-- Si Productos rechaza o vence la reserva (en `CREADO` o, en un caso raro, ya en `EN_PREPARACION`): `→ ANULADO` (actor `SISTEMA_PRODUCTOS`, motivo `STOCK_NO_DISPONIBLE`). M1 publica `pedido.anulado` con `datos.devolucionId` — M2 reabre la devolución a `EN_EVALUACION` (no la cierra como fallida); al resolverla otra vez, se crea un reemplazo nuevo con una reserva nueva.
+- Si Productos rechaza o vence la reserva (en `CREADO` o, en un caso raro, ya en `EN_PREPARACION`): `→ ANULADO` (actor `SISTEMA_PRODUCTOS`, motivo `STOCK_NO_DISPONIBLE` si se rechaza o `RESERVA_EXPIRADA` si vence). M1 publica `pedido.anulado` con `datos.devolucionId` — M2 reabre la devolución a `EN_EVALUACION` (no la cierra como fallida); al resolverla otra vez, se crea un reemplazo nuevo con una reserva nueva.
 - Al entregarse (mismo flujo de Despacho que cualquier pedido): M1 publica `pedido.entregado` con `datos.devolucionId` — M2 cierra el lado logístico del cambio (ver `ESP-08` 8.2b y regla 11).

@@ -8,6 +8,8 @@
 
 **Audiencia:** `api-postventa`
 
+**Diseño navegable (Swagger):** `/swagger-ui.html` de este servicio, generado desde `servicio-postventa/src/main/resources/static/openapi/postventa.yaml`.
+
 **Convenciones generales:**
 
 -   Formato de datos: `application/json; charset=utf-8`
@@ -295,11 +297,14 @@
 -   **Endpoint:** `PATCH /api/v2/devoluciones/{devolucionId}/resolucion`
 -   **Descripción:** El Gestor aprueba o rechaza el expediente. Si es
     rechazo, exige fundamento no vacío. Si se aprueba con
-    `tipo: DEVOLUCION_DINERO`, deriva la instrucción de reembolso a F4.
+    `tipo: DEVOLUCION_DINERO`, deriva la instrucción de reembolso a F4. Si se
+    aprueba un `CAMBIO`, pide a M1 una orden de reemplazo sin cobro
+    (`api-ventas.md` 1.11) y `referenciaOperacion` es su `PED-…`.
     Reintentar la misma aprobación sobre un expediente que quedó
-    `APROBADA` (porque F4 o Despacho todavía no confirmaron) reintenta la
+    `APROBADA` (porque F4 o M1 todavía no confirmaron) reintenta la
     coordinación sin duplicar nada — el expediente solo pasa a
-    `COMPLETADA` cuando F4 o Despacho confirman, nunca antes.
+    `COMPLETADA` cuando F4 confirma el reembolso o M1 avisa que el reemplazo
+    se entregó, y la recepción física está completa, nunca antes.
 -   **Headers:** `Authorization: Bearer <token_gestor>` (requiere rol `ADMIN_VENTAS`)
 -   **Request Body:**
 
@@ -350,7 +355,9 @@
     -   **`409 Conflict`** (`DEVOLUCION_NO_RESOLUBLE`): El expediente ya está resuelto, o otro Gestor lo resolvió al mismo tiempo.
     -   **`409 Conflict`** (`PEDIDO_INCONSISTENTE`): El pedido asociado ya no está en un estado compatible con la resolución.
     -   **`409 Conflict`** (`SIN_STOCK`): Aprobación con `tipo: CAMBIO` (o `tipoResolucion: CAMBIO`) sin stock disponible en Productos (F). El Gestor puede reintentar con `tipoResolucion: REEMBOLSO`, o rechazar.
+    -   **`409 Conflict`** (`REEMPLAZO_RECHAZADO`): M1 rechazó la orden de reemplazo de un `CAMBIO`.
     -   **`503 Service Unavailable`** (`PRODUCTOS_NO_DISPONIBLE`): Productos (F) no responde la validación de disponibilidad.
+    -   **`503 Service Unavailable`** (`VENTAS_NO_DISPONIBLE`): M1 no responde la consulta del pedido o la orden de reemplazo; se puede repetir la misma aprobación.
 
 #### 2.5b Confirmar Recepción Física (nuevo, 2026-10-13)
 
@@ -446,7 +453,12 @@
 }
 ```
 
--   **`400 Bad Request`**: Monto fuera de rango o estructura inválida.
+-   **`400 Bad Request`** (`MONTO_INVALIDO`, `DATOS_INVALIDOS`): Monto no positivo o con más de dos decimales, o estructura inválida.
+-   **`400 Bad Request`** (`CABECERA_FALTANTE`, `CLAVE_IDEMPOTENCIA_REQUERIDA`, `CLAVE_IDEMPOTENCIA_INVALIDA`): Falta `X-Idempotency-Key`, está vacía o supera 100 caracteres.
+-   **`400 Bad Request`** (`ORIGEN_NO_ELEGIBLE`): El origen no existe o no permite reembolso.
+-   **`409 Conflict`** (`ORIGEN_YA_REEMBOLSADO`): Ese origen ya tiene un reembolso registrado.
+-   **`404 Not Found`** (`PEDIDO_NO_ENCONTRADO`): `referenciaId` no existe.
+-   **`503 Service Unavailable`** (`VENTAS_NO_DISPONIBLE`): M1 no responde.
 -   **`400 Bad Request`** (`PAGO_INVALIDO`): el pago del pedido (`referenciaId`) no está confirmado o su moneda no coincide. M2 lo consulta en M1 (1.3): manda `pago.estado` (`CONFIRMADO`), que cubre el cobro confirmado después de una anulación aunque el pedido nunca haya pasado por `PAGADO`; con un M1 que no envía ese campo se deduce como antes (pedido `PAGADO` o `ENTREGADO`, o un `PAGADO` en su historial).
 -   **`403 Forbidden`** (`ORIGEN_NO_PERMITIDO`): Solicitud con origen no permitido (distinto de
     `ANULACION` o `DEVOLUCION`).
@@ -558,7 +570,7 @@
 
 -   **Respuestas:**
     -   **`201 Created`**: Encuesta guardada.
-    -   **`400 Bad Request`**: Puntuación fuera de rango (1 al 5).
+    -   **`400 Bad Request`** (`PUNTUACION_INVALIDA`, `DATOS_INVALIDOS`): Puntuación fuera de rango (1 al 5).
     -   **`403 Forbidden`**: El `pedidoId` no pertenece al `sub` del usuario autenticado en el JWT (acuerdo H-04).
     -   **`422 Unprocessable Entity`** (`ORDER_NOT_DELIVERED`): El pedido no está en estado terminal `ENTREGADO`. *(Excepción al código `PEDIDO_NO_ENTREGADO`/`409` que usa el resto de este contrato — para este endpoint específico se usó literalmente el código y HTTP status acordados con Marketplace en H-04; ver nota en [catalogo-errores.md](catalogo-errores.md).)*
     -   **`409 Conflict`** (`CSAT_ALREADY_SUBMITTED`): Ya existe una encuesta registrada para ese pedido. *(Mismo caso que `CALIFICACION_DUPLICADA` en el resto del repo; aquí se usa el nombre acordado con Marketplace.)*
