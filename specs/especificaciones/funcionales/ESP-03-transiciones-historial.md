@@ -79,11 +79,13 @@ CREADO ──────► PAGADO ──────► EN_PREPARACION ──�
 │              │              │                      │
 │              │              │                      └──► ANULADO  (entrega fallida definitiva, por SISTEMA_LOGISTICA; sin autorización)
 │              │              │
-│              │              └──► ANULADO  (solicitud F2, requiere autorización del Gestor)
+│              │              ├──► ANULADO  (solicitud F2, requiere autorización del Gestor)
+│              │
+│              └──► ENTREGADO  (retiro en tienda confirmado / Pickup, modalidad RECOJO_TIENDA)
 │              │
 │              ├──► ANULADO  (solicitud F2 del Cliente o Gestor, sin autorización; o rechazo de stock de Productos, SISTEMA_PRODUCTOS, caso Chatbot)
 │              │
-│              └──► ENTREGADO  (venta de mostrador, canal RETAIL sin envío, misma operación de creación — Despacho no participa)
+│              └──► ENTREGADO  (venta de mostrador RETAIL; o retiro en tienda confirmado / Pickup, modalidad RECOJO_TIENDA)
 │
 └──► ANULADO  (pago rechazado por la pasarela, aviso del canal, solicitud F2, o rechazo de stock/cupón de Productos; sin autorización)
 ```
@@ -99,7 +101,8 @@ CREADO ──────► PAGADO ──────► EN_PREPARACION ──�
 | `CREADO`               | `ANULADO`         | Productos rechaza la reserva de stock o el consumo de cupón (async, RabbitMQ) — aprobado en equipo 2026-10-12 | `SISTEMA_PRODUCTOS` | `STOCK_NO_DISPONIBLE` o `CUPON_RECHAZADO` | No |
 | `CREADO`               | `EN_PREPARACION`  | Productos confirma la reserva de stock de una orden de reemplazo (F3, `api-ventas.md` 1.11) — **exclusiva de `pedido.tipo = REEMPLAZO`**, nunca una venta normal; no hay `PAGADO` que esperar (sin cobro) — acuerdo con Productos, issue G6 #100, 2026-10-16 | `SISTEMA_PRODUCTOS` | — | No |
 | `PAGADO`               | `EN_PREPARACION`  | Acción interna del flujo de preparación     | `SISTEMA_LOGISTICA`    | —                          | No                    |
-| `PAGADO`               | `ENTREGADO`       | Venta de mostrador (canal `RETAIL`, sin envío) — en la misma operación de creación, confirmado 2026-10-12 con G4 | `CLIENTE`   | `ENTREGA_INMEDIATA_EN_TIENDA` | No                    |
+| `PAGADO`               | `ENTREGADO`       | Venta de mostrador (canal `RETAIL`, sin envío) O retiro en tienda confirmado (Pickup, modalidad `RECOJO_TIENDA`, `api-ventas.md` 1.16) | `CLIENTE` o `GESTOR` | `ENTREGA_INMEDIATA_EN_TIENDA` o `RETIRO_EN_TIENDA_CONFIRMADO` | No |
+| `EN_PREPARACION`       | `ENTREGADO`       | Retiro en tienda confirmado (Pickup, modalidad `RECOJO_TIENDA`, `api-ventas.md` 1.16) | `CLIENTE` o `GESTOR` | `RETIRO_EN_TIENDA_CONFIRMADO` | No |
 | `PAGADO`               | `ANULADO`         | Solicitud de anulación (ver F2)             | `CLIENTE` o `GESTOR` | Catálogo de ESP-05, salvo `PAGO_NO_COMPLETADO` | No       |
 | `PAGADO`               | `ANULADO`         | Productos rechaza la reserva de stock después del pago (caso Chatbot: cobra antes de que Productos confirme) — origina reembolso automático a F4 | `SISTEMA_PRODUCTOS` | `STOCK_NO_DISPONIBLE` | No |
 | `EN_PREPARACION`       | `DESPACHADO`      | Confirmación de Despacho (E)                | `SISTEMA_LOGISTICA`   | —                          | No                    |

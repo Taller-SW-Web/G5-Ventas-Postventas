@@ -14,6 +14,7 @@
 
 | Versión | Fecha | Cambio |
 |---|---|---|
+| 1.10.0 | 2026-11-05 | Nuevos 1.15 (bandeja pickup) y 1.16 (confirmación entrega pickup) con scopes ventas:pedidos:consultar y ventas:pedidos:estado para Retail (acuerdo G4). 1.1: campo opcional comprobanteReferencia en pago.
 | 1.9.0 | 2026-11-04 | 1.2: un cobro `APROBADO` de un pedido que ya está `ANULADO` se reconoce con `200`: el pedido sigue `ANULADO`, el pago queda `CONFIRMADO` y M1 guarda en la misma transacción la solicitud de reembolso a M2 (antes respondía `409` y solo quedaba en el log). Repetir una `transaccionId` con otro resultado, monto o moneda responde `409 NOTIFICACION_INCOMPATIBLE`; otro cobro sobre un pago ya confirmado, `409 PAGO_YA_CONFIRMADO`. 1.3: campo aditivo `pago.estado`. |
 | 1.8.0 | 2026-11-02 | 1.4b `GET /api/v1/pedidos/me`: filtros opcionales `desde` y `hasta` (`YYYY-MM-DD`, días inclusivos sobre la fecha de creación, hora de Perú), combinables con `estado`, `page` y `pageSize`; nuevo error `400 RANGO_FECHAS_INVALIDO`. Acuerdo H-06 con Marketplace (G1). |
 | 1.7.0 | 2026-10-26 | Nuevo 1.14 `GET /api/v1/pedidos/kpis`: KPIs de ventas del Dashboard (monto vendido, ticket promedio, serie diaria y por canal) sumados en M1, para que el frontend deje de paginar toda la bandeja (1.4). |
@@ -83,6 +84,8 @@ Según el acuerdo A10 con Seguridad (G7) hay dos tipos de token:
 | 1.12 | `POST /api/v1/pedidos/{pedidoId}/preparacion` | F1 Iniciar preparación | rol `ADMIN_VENTAS` |
 | 1.13 | `POST /api/v1/pedidos/{pedidoId}/despacho` | F1 Paquete sellado | rol `ADMIN_VENTAS` |
 | 1.14 | `GET /api/v1/pedidos/kpis` | F1/F6 KPIs de ventas del Dashboard | rol `ADMIN_VENTAS` |
+| 1.15 | `GET /api/v1/pedidos/pickup` | F1 Bandeja de pedidos para retiro en tienda (Pickup) | rol `ADMIN_VENTAS` o scope `ventas:pedidos:consultar` |
+| 1.16 | `POST /api/v1/pedidos/{pedidoId}/entrega-pickup` | F1 Confirmación de entrega física en mostrador | rol `ADMIN_VENTAS` o scope `ventas:pedidos:estado` |
 
 ## F1: Ciclo de Vida del Pedido (Responsable: Michael)
 ### 1.1 Crear Pedido
@@ -179,6 +182,7 @@ Los campos tipoDocumento y numeroDocumento son estrictamente obligatorios.
 | `envio.tiendaId` | Sí | Código de la tienda donde se hizo la venta. El resto de `envio` se omite |
 | `pago.metodoPago` | Sí | `EFECTIVO`, `TARJETA_POS` o `MIXTO` |
 | `pago.referenciaOperacion` | Con `TARJETA_POS` o `MIXTO` | Número de voucher del POS |
+| `pago.comprobanteReferencia` | No | Correlativo de la boleta o factura térmica de mostrador (B001/F001) emitida por Retail (metadato informativo) |
 | `pago.montoEfectivo` y `pago.montoTarjeta` | Con `MIXTO` | Deben sumar `pago.total` |
 | `pago.fechaVenta` | No | Solo para ventas registradas sin conexión. UTC, no futura y como máximo 72 horas antes. Si no se envía, se usa la hora de registro |
 
@@ -761,6 +765,72 @@ canal (opcional): `MARKETPLACE` | `CHATBOT` | `RETAIL`.
 | `400` | `FORMATO_INVALIDO` | Fecha mal escrita o `canal` fuera de catálogo |
 | `401` | `TOKEN_INVALIDO` | Token ausente o inválido |
 | `403` | `ACCESO_DENEGADO` | El token no tiene el rol `ADMIN_VENTAS` |
+
+---
+
+
+### 1.15 Bandeja de Pedidos para Retiro en Tienda (Pickup, RF-18 de Retail)
+
+- **Endpoint:** `GET /api/v1/pedidos/pickup`
+- **Descripción:** Devuelve la lista de pedidos con modalidad de recojo en tienda asignados a la sede física indicada, que se encuentran en estado apto para entrega (`PAGADO` o `EN_PREPARACION`).
+- **Headers:** `Authorization: Bearer <token>` (rol `ADMIN_VENTAS` o token de servicio de Retail con scope `ventas:pedidos:consultar`)
+- **Query Params:**
+  - `tiendaId` (**obligatorio**): Identificador de la tienda física (ej. `TIENDA-MIRAFLORES`).
+
+#### Respuestas
+##### `200 OK`
+```json
+[
+  {
+    "pedidoId": "PED-2026-08910",
+    "clienteNombre": "María González",
+    "clienteDni": "45678912",
+    "anaquelUbicacion": "Anaquel B-04",
+    "fechaArriboTienda": "2026-11-05T10:00:00Z",
+    "estado": "LISTO_PARA_RECOJO",
+    "articulos": [
+      {
+        "sku": "ZAP-RUN-41-BLANC",
+        "nombre": "Zapatilla Running Pegasus 40",
+        "talla": "-",
+        "color": "-",
+        "cantidad": 1
+      }
+    ]
+  }
+]
+```
+
+### 1.16 Confirmación de Entrega Física en Mostrador (Pickup, RF-19 de Retail)
+
+- **Endpoint:** `POST /api/v1/pedidos/{pedidoId}/entrega-pickup`
+- **Descripción:** Registra la entrega presencial de la prenda al cliente y transiciona el pedido a `ENTREGADO` (actor `CLIENTE`, motivo `RETIRO_EN_TIENDA_CONFIRMADO`), publicando outbox `pedido.entregado`.
+- **Headers:** `Authorization: Bearer <token>` (rol `ADMIN_VENTAS` o token de servicio de Retail con scope `ventas:pedidos:estado`)
+- **Body:**
+```json
+{
+  "dniRecoge": "45678912",
+  "nombreRecoge": "María González",
+  "esTerceroAutorizado": false,
+  "codigoRetiro": "A7K2Q9"
+}
+```
+
+#### Respuestas
+##### `200 OK`
+```json
+{
+  "constanciaId": "CONST-PED-2026-08910",
+  "fechaHoraEntrega": "2026-11-05T14:30:00Z",
+  "estado": "ENTREGADO"
+}
+```
+
+| HTTP | Código | Cuándo |
+|---|---|---|
+| `400` | `DATOS_INVALIDOS` | DNI de receptor inválido o campos obligatorios vacíos |
+| `404` | `PEDIDO_NO_ENCONTRADO` | No existe el `pedidoId` |
+| `409` | `PEDIDO_NO_LISTO_PARA_RECOJO` | El paquete no figura en estado listo para entrega (`PAGADO` o `EN_PREPARACION`) |
 
 ---
 
