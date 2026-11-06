@@ -31,7 +31,7 @@ Nada — Seguridad no consume ninguna API de Ventas/Postventa. Es puramente un p
 |---|---|
 | `modulo-marketplace` | `ventas:pedidos:crear`, `ventas:pedidos:anular`, `postventa:devoluciones:escribir`, `postventa:reclamos:escribir` |
 | `modulo-chatbot` | lo mismo que `modulo-marketplace` + `ventas:pagos:webhook` |
-| `modulo-retail` | lo mismo que `modulo-marketplace` |
+| `modulo-retail` | lo mismo que `modulo-marketplace` + `ventas:pedidos:consultar` (1.15) y `ventas:pedidos:estado` (1.16) para retiro en tienda (Pickup, acuerdo 2026-11-05) |
 | `modulo-despacho` | `ventas:pedidos:estado` |
 | `simulador-pasarela` | `ventas:pagos:webhook` |
 | `modulo-ventas` | `postventa:reembolsos:procesar` |
