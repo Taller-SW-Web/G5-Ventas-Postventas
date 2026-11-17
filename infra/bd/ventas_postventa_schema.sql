@@ -94,6 +94,7 @@ create table ventas.pedido (
     id_pedido_origen      bigint references ventas.pedido(id),    -- solo REEMPLAZO: pedido original que se cambia
     devolucion_id         varchar(30),                             -- solo REEMPLAZO: devolución de M2 (DEV-AAAA-NNNN)
     fecha_estimada_entrega timestamptz,                            -- la fija Despacho con DESPACHO_REPROGRAMADO (api-ventas.md 1.5)
+    client_id_canal       varchar(64),                             -- client_id del token de servicio que creó el pedido (RNF-03, acuerdo G7 10-oct); null en pedidos anteriores
     constraint ck_pedido_canal check (canal in ('MARKETPLACE','CHATBOT','RETAIL')),
     constraint ck_pedido_estado check (estado in
         ('CREADO','PAGADO','EN_PREPARACION','DESPACHADO','ENTREGADO','ANULADO')),
@@ -104,6 +105,9 @@ create table ventas.pedido (
 
 comment on column ventas.pedido.id_cliente           is 'Referencia externa - módulo G (sin FK física). UUID del claim sub';
 comment on column ventas.pedido.id_vendedor          is 'Referencia externa - módulo G (sin FK física). UUID del claim sub';
+comment on column ventas.pedido.client_id_canal      is 'client_id del canal que creó el pedido (sub de su token de servicio). Trazabilidad RNF-03';
+-- Bases ya creadas antes de este cambio: ejecutar una vez (en Supabase se aplicó el 2026-11-16)
+-- alter table ventas.pedido add column if not exists client_id_canal varchar(64);
 comment on column ventas.pedido.id_direccion_entrega is 'Referencia externa - módulo E (sin FK física)';
 
 create table ventas.detalle_pedido (
@@ -161,8 +165,11 @@ create table ventas.anulacion (
     id_autorizador  uuid,
     estado          varchar(30)  not null,   -- 'PENDIENTE_AUTORIZACION' tiene 22 caracteres; varchar(30) verificado en Supabase el 2026-11-04
     fecha           date         not null default current_date,
+    client_id_canal varchar(64),             -- client_id del canal que pidió la anulación (RNF-03); null si la pidió un usuario
     constraint ck_anulacion_estado check (estado in ('PENDIENTE_AUTORIZACION','EJECUTADA','RECHAZADA'))
 );
+-- Bases ya creadas antes de este cambio: ejecutar una vez (en Supabase se aplicó el 2026-11-16)
+-- alter table ventas.anulacion add column if not exists client_id_canal varchar(64);
 
 -- Eventos de M1 (ESP-04): se guardan en la misma transacción del cambio de estado
 -- y EnvioEventosScheduler los envía a M2.
