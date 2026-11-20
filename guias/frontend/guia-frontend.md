@@ -78,14 +78,20 @@ npm install @mantine/core @mantine/hooks @mantine/form @mantine/notifications @m
 npm install react-router-dom axios
 ```
 
-`.env.example` (cada uno copia a `.env`, que nunca se sube):
+`.env.example` (cada uno copia a `.env`, que nunca se sube) — **real, 2026-11-04:**
 
 ```properties
 VITE_API_VENTAS_URL=http://localhost:8081
 VITE_API_POSTVENTA_URL=http://localhost:8082
 VITE_GATEWAY_URL=http://localhost:8080
-VITE_SEGURIDAD_LOGIN_URL=<lo da Seguridad, G7>
+VITE_SEGURIDAD_LOGIN_URL=
+
+# Solo desarrollo: salta la validacion de token/rol mientras G7 no entregue el login.
+# Se ignora en el build de produccion.
+VITE_AUTH_DESACTIVADA=false
 ```
+
+Si `VITE_SEGURIDAD_LOGIN_URL` queda vacía, el código usa por defecto `https://g7-auth-service.onrender.com/api/v1` (`src/services/authG7.ts`) — ya no hace falta que Seguridad "dé" la URL, ya se sabe cuál es. **Gap encontrado:** el código también lee `VITE_MODO_DEMO` (`src/services/auth.ts`, entra como Gestor sin token en cualquier build, no solo en `npm run dev`) pero esa variable **no está en `.env.example`** — falta agregarla ahí.
 
 En desarrollo, las llamadas van directo a cada microservicio (`8081`/`8082`) o por el Gateway (`8080`) según lo que el equipo decida — el Gateway rutea por recurso, ver `AGENTS.md` sección 2 punto 6. Mientras no haya decisión, usar el Gateway: es lo más parecido a producción.
 
@@ -115,9 +121,9 @@ Centralizado, no uno por pantalla (stack-frontend.md, sección 5.1):
 
 **`specs/stack-frontend.md` sección 7 ya corregida (2026-10-13):** decía que el acceso administrativo era para rol `GESTOR` o `ADMIN` — eso era el nombre viejo. El catálogo cerrado de Seguridad (G7) solo tiene `ADMIN_VENTAS` para el Gestor (ver `AGENTS.md`, sección 2, punto 9). El portal valida contra `ADMIN_VENTAS`, no contra `GESTOR` ni `ADMIN` — ya implementado así en `src/services/auth.ts` (`ROL_GESTOR = 'ADMIN_VENTAS'`) y `src/components/RutaProtegida/`.
 
-- El login lo resuelve Seguridad (G7, fuera de este repo) y entrega un JWT de usuario con el claim `roles`.
+- **Actualizado 2026-11-04 — ya no es "login resuelto por Seguridad, fuera de este repo":** `/ingresar` (`IngresarPage.tsx`) es un formulario nativo que llama **directo** a la API real de G7 (`src/services/authG7.ts`): `POST {VITE_SEGURIDAD_LOGIN_URL}/auth/login` con `{ correo, contrasena }`. Una cuenta `CLIENTE` recibe el `accessToken` de inmediato; una cuenta `ADMIN_VENTAS` recibe `{ requiereMfa: true, desafioId }` y debe resolver un segundo paso con `POST .../auth/otp/verificar` (`{ desafioId, codigo }`, código de 6 dígitos enviado por correo) antes de recibir el token. El token se guarda en `localStorage` y de ahí sale `roles`/`sub` (JWT decodificado sin validar firma, la validación real la hace el backend). **Este contrato nunca se confirmó formalmente con G7** — se construyó leyendo su comportamiento real, no una especificación acordada; ver `integraciones/ACUERDO_G7_SEGURIDAD.md`.
 - El portal del Gestor (todas las pantallas de esta guía) exige el rol `ADMIN_VENTAS`. Si el token no lo tiene: pantalla de acceso denegado, nunca ocultar solo visualmente las rutas `/admin/*` (stack-frontend.md, sección 7).
-- El rol `CLIENTE` **no** se usa en el portal del Gestor — es para las vistas de integración que menciona `stack-frontend.md` sección 1 (encuesta CSAT, consulta pública de reclamo), que son pantallas aparte, sin layout administrativo, y pueden vivir en rutas públicas (`/encuesta/:pedidoId`, `/reclamos/consultar`) fuera de `/admin/*`.
+- El rol `CLIENTE` **no** se usa en el portal del Gestor. Ya existe una vista propia para él: **`/mis-pedidos`** (`MisPedidosPage.tsx`, construida 2026-11-04) — consulta `GET /api/v1/pedidos/me` (1.4b) y muestra el historial de compras del comprador autenticado, sin layout administrativo. `rutaInicialSegunRol` manda a `ADMIN_VENTAS` a `/admin/pedidos` y a `CLIENTE` a `/mis-pedidos` justo después del login. `CLIENTE` también se usa para las vistas de integración que menciona `stack-frontend.md` sección 1 (encuesta CSAT, consulta pública de reclamo), pantallas aparte en `/encuesta/:pedidoId`, `/reclamos/consultar`.
 - Los **scopes** (`ventas:pedidos:crear`, `postventa:csat:escribir`, etc.) son para tokens de servicio de otros módulos (canales, Despacho) — el frontend del Gestor nunca los usa ni los ve, porque siempre manda un token de usuario. No hay que replicar la tabla de scopes de la guía de backend aquí.
 - El backend vuelve a validar todo esto — la protección de rutas en el frontend es solo para UX, no es la medida de seguridad real (stack-frontend.md, sección 7).
 
