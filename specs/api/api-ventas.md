@@ -1,6 +1,6 @@
 # Contrato de API (OpenAPI / REST) — Microservicio M1: Ventas y Pedidos
 
-**Versión:** 1.7.0
+**Versión:** 1.9.0
 
 **Fecha:** Octubre 2026
 
@@ -8,10 +8,15 @@
 
 **Audiencia:** `api-ventas`
 
+**Diseño navegable (Swagger):** `/swagger-ui.html` de este servicio, generado desde `servicio-ventas/src/main/resources/static/openapi/ventas.yaml`.
+
 ### Historial de cambios
 
 | Versión | Fecha | Cambio |
 |---|---|---|
+| 1.11.0 | 2026-11-20 | 1.3: Retail (`modulo-retail`) puede consultar con su scope `ventas:pedidos:consultar`, pero solo sus pedidos (canal `RETAIL` o con retiro en tienda); los demás responden `404 PEDIDO_NO_ENCONTRADO` (aclaración pedida por G7). |
+| 1.10.0 | 2026-11-05 | Nuevos 1.15 (bandeja pickup) y 1.16 (confirmación entrega pickup) con scopes ventas:pedidos:consultar y ventas:pedidos:estado para Retail (acuerdo G4). 1.1: campo opcional comprobanteReferencia en pago.
+| 1.9.0 | 2026-11-04 | 1.2: un cobro `APROBADO` de un pedido que ya está `ANULADO` se reconoce con `200`: el pedido sigue `ANULADO`, el pago queda `CONFIRMADO` y M1 guarda en la misma transacción la solicitud de reembolso a M2 (antes respondía `409` y solo quedaba en el log). Repetir una `transaccionId` con otro resultado, monto o moneda responde `409 NOTIFICACION_INCOMPATIBLE`; otro cobro sobre un pago ya confirmado, `409 PAGO_YA_CONFIRMADO`. 1.3: campo aditivo `pago.estado`. |
 | 1.8.0 | 2026-11-02 | 1.4b `GET /api/v1/pedidos/me`: filtros opcionales `desde` y `hasta` (`YYYY-MM-DD`, días inclusivos sobre la fecha de creación, hora de Perú), combinables con `estado`, `page` y `pageSize`; nuevo error `400 RANGO_FECHAS_INVALIDO`. Acuerdo H-06 con Marketplace (G1). |
 | 1.7.0 | 2026-10-26 | Nuevo 1.14 `GET /api/v1/pedidos/kpis`: KPIs de ventas del Dashboard (monto vendido, ticket promedio, serie diaria y por canal) sumados en M1, para que el frontend deje de paginar toda la bandeja (1.4). |
 | 1.6.0 | 2026-10-26 | Revisión contra `servicio-ventas`: se cierran los bloques de código y JSON, los estados de los ejemplos van sin comillas invertidas, cada error de F1 lleva su `codigo` (1.3, 1.4, 1.4b, 1.5), se documenta la respuesta de 1.5, 1.3 aclara quién puede consultarla, 1.10 describe el mecanismo de entrega ya implementado y `fecha_estimada_entrega` deja de figurar como pendiente. Índice de endpoints al inicio. |
@@ -50,7 +55,7 @@ Según el acuerdo A10 con Seguridad (G7) hay dos tipos de token:
 | `ventas:pedidos:anular` | `POST /api/v1/pedidos/{id}/anulaciones` (1.7) | Marketplace, Chatbot y Retail |
 | `ventas:pedidos:estado` | `POST /api/v1/integraciones/despachos/eventos` (1.5 — reemplaza el `PATCH .../estado` y `POST .../eventos-logistica` anteriores) | Despacho (E) — reusamos este scope ya concedido a `modulo-despacho`, decisión nuestra (2026-10-13); no se pide el `despachos:eventos:recibir` que propuso G2, ver `integraciones/ACUERDO_G2_DESPACHO.md` |
 | `ventas:pagos:webhook` | `POST /api/v1/pedidos/{id}/pagos/notificacion` (1.2) | Simulador de pasarela y Chatbot |
-| `ventas:pedidos:consultar` | `GET /api/v1/pedidos/{id}` (1.3), uso exclusivo módulo-a-módulo | `modulo-postventa` (F3 valida `ENTREGADO`; F5 valida `ENTREGADO` para CSAT) — **registrado** (Seguridad, PR #60, verificado 2026-10-21), ver `integraciones/ACUERDO_G7_SEGURIDAD.md` |
+| `ventas:pedidos:consultar` | `GET /api/v1/pedidos/{id}` (1.3) y `GET /api/v1/pedidos/pickup` (1.15). `modulo-retail` en 1.3 solo ve sus pedidos | `modulo-retail` (1.15 y sus pedidos en 1.3); `modulo-postventa` (F3 valida `ENTREGADO`; F5 valida `ENTREGADO` para CSAT) — **registrado** (Seguridad, PR #60, verificado 2026-10-21), ver `integraciones/ACUERDO_G7_SEGURIDAD.md` |
 | `ventas:pedidos:reemplazar` | `POST /api/v1/pedidos/reemplazos` (1.11) | `modulo-postventa` (F3, orden de reemplazo de un `CAMBIO`) — **propuesto 2026-10-16, pendiente de que Seguridad lo registre**, ver `integraciones/ACUERDO_G7_SEGURIDAD.md` |
 
 | Rol (token de usuario) | Endpoints |
@@ -80,6 +85,8 @@ Según el acuerdo A10 con Seguridad (G7) hay dos tipos de token:
 | 1.12 | `POST /api/v1/pedidos/{pedidoId}/preparacion` | F1 Iniciar preparación | rol `ADMIN_VENTAS` |
 | 1.13 | `POST /api/v1/pedidos/{pedidoId}/despacho` | F1 Paquete sellado | rol `ADMIN_VENTAS` |
 | 1.14 | `GET /api/v1/pedidos/kpis` | F1/F6 KPIs de ventas del Dashboard | rol `ADMIN_VENTAS` |
+| 1.15 | `GET /api/v1/pedidos/pickup` | F1 Bandeja de pedidos para retiro en tienda (Pickup) | rol `ADMIN_VENTAS` o scope `ventas:pedidos:consultar` |
+| 1.16 | `POST /api/v1/pedidos/{pedidoId}/entrega-pickup` | F1 Confirmación de entrega física en mostrador | rol `ADMIN_VENTAS` o scope `ventas:pedidos:estado` |
 
 ## F1: Ciclo de Vida del Pedido (Responsable: Michael)
 ### 1.1 Crear Pedido
@@ -176,6 +183,7 @@ Los campos tipoDocumento y numeroDocumento son estrictamente obligatorios.
 | `envio.tiendaId` | Sí | Código de la tienda donde se hizo la venta. El resto de `envio` se omite |
 | `pago.metodoPago` | Sí | `EFECTIVO`, `TARJETA_POS` o `MIXTO` |
 | `pago.referenciaOperacion` | Con `TARJETA_POS` o `MIXTO` | Número de voucher del POS |
+| `pago.comprobanteReferencia` | No | Correlativo de la boleta o factura térmica de mostrador (B001/F001) emitida por Retail (metadato informativo) |
 | `pago.montoEfectivo` y `pago.montoTarjeta` | Con `MIXTO` | Deben sumar `pago.total` |
 | `pago.fechaVenta` | No | Solo para ventas registradas sin conexión. UTC, no futura y como máximo 72 horas antes. Si no se envía, se usa la hora de registro |
 
@@ -242,8 +250,13 @@ Otros códigos `400` de 1.1:
 
 | Código | Cuándo |
 |---|---|
-| `ITEM_SIN_DISPONIBILIDAD` | Productos (F) no confirma el stock de uno o más ítems. El pedido no se registra |
 | `IDEMPOTENCY_KEY_REUSED` | La `Idempotency-Key` ya se usó con un pedido distinto |
+
+#### `503 Service Unavailable`
+
+`PRODUCTOS_NO_DISPONIBLE`: Productos no admitió la solicitud de reserva. El pedido no se guarda y la clave no se consume.
+
+**La reserva es asíncrona (corregido 2026-11-04; antes se documentaba `409 ITEM_SIN_DISPONIBILIDAD`, que el código no emite).** Responder `201` no garantiza el stock: si después Productos rechaza la reserva, el pedido pasa a `ANULADO` con motivo `STOCK_NO_DISPONIBLE`.
 
 ### 1.2 Notificación de Pago (Webhook de Pasarela)
 - **Endpoint:** `POST /api/v1/pedidos/{pedidoId}/pagos/notificacion`
@@ -272,10 +285,22 @@ Valores de `resultado`:
 |---|---|---|---|
 | `APROBADO` | `CONFIRMADO` | `CREADO` → `PAGADO` | `PASARELA_PAGOS` |
 | `RECHAZADO` | `RECHAZADO` | `CREADO` → `ANULADO`, motivo `PAGO_NO_COMPLETADO` | `PASARELA_PAGOS` |
+| `APROBADO` sobre un pedido ya `ANULADO` | `CONFIRMADO` | Sigue `ANULADO`: sin transición, sin historial nuevo y sin evento | — |
 
 La transición a `ANULADO` por rechazo libera la reserva de stock en Productos y, si había cupón aplicado, publica su restauración, automáticamente y sin intervención del Gestor, sin generar solicitud de reembolso hacia F4 — ver [F1-Ciclo de vida del pedido.md](../funcionalidades/F1-Ciclo%20de%20vida%20del%20pedido.md), CA-07b.
 
-Cualquier otro valor responde `400 Bad Request`. Si la misma `transaccionId` llega dos veces, se responde `200 OK` con el resultado ya registrado, sin repetir el cambio.
+**Cobro confirmado de un pedido ya anulado (decisión 2026-11-04, ESP-03 7.4 D).** El cliente pudo cancelar (1.7) o el pedido pudo anularse solo (pago rechazado, sin stock, cupón, reserva vencida) mientras la pasarela seguía cobrando. Si después llega un `APROBADO` auténtico (token con `ventas:pagos:webhook`) con el `monto` y la `moneda` del pedido:
+
+1. En una sola transacción se guardan la `transaccionId` (idempotencia), el pago `CONFIRMADO` con su referencia y una solicitud de reembolso en `ventas.solicitud_reembolso` por el total del pedido, colgada de la anulación del pedido (`ANUL-NNNN`). Si la anulación fue automática y no tenía fila en `ventas.anulacion`, se crea `EJECUTADA` con el motivo y la fecha de su historial.
+2. Se responde `200 OK` con `nuevoEstado: ANULADO` en cuanto eso queda guardado, sin esperar el extorno.
+3. Después del commit M1 envía la solicitud a M2 (2.6, origen `ANULACION`, clave fija por anulación). Si M2 no responde, la solicitud sigue `PENDIENTE` y la reenvía el reintento periódico de reembolsos.
+4. El pedido no vuelve a `PAGADO`, no se reserva ni confirma stock, no se envía a Despacho y no se publica `pedido.pagado` ni un segundo `pedido.anulado`. Para las métricas no es una venta: no suma a `pedidos.total` de 2.12 ni a los montos de 1.14; el reembolso, cuando M2 lo confirma, suma a `montoReembolsadoPEN` como cualquier otro.
+
+Si el pedido ya tenía un cobro `CONFIRMADO` con otra `transaccionId`, no se sobrescribe: `409 PAGO_YA_CONFIRMADO`, sin guardar nada, y queda en el log para revisión. Un `RECHAZADO` sobre un pedido que ya no está en `CREADO` (por ejemplo, ya `PAGADO` o `ANULADO`) conserva su tratamiento: `409 ESTADO_NO_PERMITE_PAGO`, sin cambios ni devolución de dinero.
+
+Cualquier otro valor responde `400 Bad Request`. Si la misma `transaccionId` llega otra vez con el mismo resultado, monto y moneda, se responde `200 OK` con lo ya registrado, sin repetir el cambio ni la solicitud de reembolso; con otro resultado, monto o moneda, `409 NOTIFICACION_INCOMPATIBLE` sin cambiar nada.
+
+**Concurrencia.** La notificación (1.2), la anulación (1.7 y 1.9) y los mensajes de Productos bloquean la fila del pedido mientras lo cambian, así que se aplican de a uno. Si gana el pago, la anulación posterior anula un pedido `PAGADO` y pide su reembolso; si gana la anulación, el cobro llega como cobro tardío. En ambos casos el pedido termina `ANULADO` con un solo reembolso.
 ### Respuestas
 #### `200 OK`
 ```json
@@ -286,15 +311,17 @@ Cualquier otro valor responde `400 Bad Request`. Si la misma `transaccionId` lle
   "fechaTransicion": "2026-09-23T00:06:00Z"
 }
 ```
-Si la notificación es un reintento, `nuevoEstado` y `fechaTransicion` son los ya registrados.
+Si la notificación es un reintento, `nuevoEstado` y `fechaTransicion` son los ya registrados. En un cobro sobre un pedido ya anulado, `nuevoEstado` es `ANULADO` y `fechaTransicion` es la fecha del cobro.
 
 | HTTP | Código | Cuándo |
 |---|---|---|
 | `400` | `DATOS_INVALIDOS` / `FORMATO_INVALIDO` | Falta `transaccionId`, `monto` o `moneda`, o `resultado` no es `APROBADO` ni `RECHAZADO` |
-| `400` | `MONTOS_INCONSISTENTES` | `monto` o `moneda` no coinciden con el total del pedido |
+| `400` | `MONTOS_INCONSISTENTES` | `monto` o `moneda` no coinciden con el total del pedido. No se guarda nada (tampoco en un pedido anulado) |
 | `404` | `PEDIDO_NO_ENCONTRADO` | El pedido indicado no existe |
-| `409` | `ESTADO_NO_PERMITE_PAGO` | El pedido no está en `CREADO` (por ejemplo, un rechazo tardío sobre un pedido ya `PAGADO`). No se modifica y queda en el log para revisión |
-| `409` | `TRANSACCION_DE_OTRO_PEDIDO` | La `transaccionId` ya se registró en otro pedido |
+| `409` | `ESTADO_NO_PERMITE_PAGO` | El pedido no está en `CREADO` y no es un cobro aprobado de un pedido `ANULADO` (por ejemplo, un rechazo tardío sobre un pedido `PAGADO` o `ANULADO`, o un aprobado sobre un pedido que ya avanzó). No se modifica y queda en el log para revisión |
+| `409` | `PAGO_YA_CONFIRMADO` | Cobro aprobado de un pedido `ANULADO` que ya tiene confirmado otro cobro: no se sobrescribe ni se reutiliza su reembolso. Queda en el log para revisión |
+| `409` | `NOTIFICACION_INCOMPATIBLE` | La `transaccionId` ya se registró en este pedido con otro resultado, monto o moneda |
+| `409` | `TRANSACCION_DE_OTRO_PEDIDO` | La `transaccionId` ya se procesó y no es el pago vigente de este pedido: se registró en otro pedido, o era un rechazo que el cobro confirmado posterior reemplazó |
 ### 1.3 Consultar Pedido por ID
 - **Endpoint:** `GET /api/v1/pedidos/{pedidoId}`
 Descripción: Devuelve el estado completo del pedido, su snapshot inmutable y su historial de estados.
@@ -305,9 +332,10 @@ Quién puede llamarlo:
 |---|---|
 | Usuario con rol `CLIENTE` | Solo sus propios pedidos (se compara `contacto.clienteId` con el claim `sub`) |
 | Usuario con rol `ADMIN_VENTAS` (Gestor) | Cualquier pedido |
-| Servicio con scope `ventas:pedidos:consultar` | Cualquier pedido. Uso módulo a módulo (`modulo-postventa`) |
+| Servicio `modulo-postventa` con scope `ventas:pedidos:consultar` | Cualquier pedido (módulo a módulo) |
+| Servicio `modulo-retail` con scope `ventas:pedidos:consultar` | Solo sus pedidos: canal `RETAIL` (venta en tienda) o con retiro en tienda (`envio.modalidad` `RECOJO_TIENDA`). Cualquier otro pedido responde `404 PEDIDO_NO_ENCONTRADO`, para no revelar datos de clientes de otros canales (acuerdo G4 R12, aclarado con G7 el 2026-11-20) |
 
-Un token de servicio de canal (Marketplace, Chatbot, Retail) **no** tiene acceso a 1.3: para mostrarle el estado al cliente, el canal usa su token de usuario (1.3 con rol `CLIENTE` o 1.4b).
+Marketplace y Chatbot no tienen el scope `ventas:pedidos:consultar`: para mostrarle el estado al cliente usan su token de usuario (1.3 con rol `CLIENTE` o 1.4b).
 - **Headers:** `Authorization: Bearer <token>`
 - **Parámetros Path:** `pedidoId (string, ej. PED-2026-00981)`
 ### Respuestas
@@ -328,7 +356,8 @@ Un token de servicio de canal (Marketplace, Chatbot, Retail) **no** tiene acceso
   "pago": {
     "total": 129.90,
     "moneda": "PEN",
-    "metodoPago": "TARJETA_CREDITO"
+    "metodoPago": "TARJETA_CREDITO",
+    "estado": "CONFIRMADO"
   },
   "envio": {
     "modalidad": "DELIVERY",
@@ -373,6 +402,7 @@ Un token de servicio de canal (Marketplace, Chatbot, Retail) **no** tiene acceso
   ]
 }
 ```
+- `pago.estado` (agregado 2026-11-04, aditivo): estado real del cobro en `ventas.pago` — `PENDIENTE`, `CONFIRMADO` o `RECHAZADO`; `null` si el pedido no tiene registro de pago (orden de reemplazo). Es independiente de `estado`: un pedido `ANULADO` tiene `CONFIRMADO` si la pasarela confirmó el cobro después de la anulación (1.2), aunque su historial nunca pase por `PAGADO`. M2 lo usa para validar un reembolso (2.6); un consumidor que no lo lea sigue funcionando igual.
 - `envio.tiendaId` solo viene en pedidos `RETAIL` (acuerdo G4).
 - `envio.fechaEstimadaEntrega` es `null` hasta que Despacho envía `DESPACHO_REPROGRAMADO` (ver 1.5).
 
@@ -657,7 +687,7 @@ Si `decision` es `RECHAZADA`, `estadoPedido` se mantiene en `EN_PREPARACION` y `
 | `400` | `DECISION_INVALIDA` | `decision` no es `APROBADA` ni `RECHAZADA` |
 | `400` | `DATOS_INCONSISTENTES` | La anulación indicada no pertenece a ese `pedidoId` |
 | `404` | `ANULACION_NO_ENCONTRADA` | La anulación no existe |
-| `409` | `ANULACION_NO_PENDIENTE` | La anulación no está en `PENDIENTE_AUTORIZACION` |
+| `409` | `ANULACION_NO_PENDIENTE` | La anulación no está en `PENDIENTE_AUTORIZACION`. También la recibe la decisión que llega mientras otra se está aplicando: se resuelven de una en una (bloqueo del pedido y después de la anulación) y la siguiente ve la decisión ya guardada; no cambia la decisión, el autorizador ni sus efectos |
 | `409` | `PEDIDO_YA_NO_EN_PREPARACION` | Al aprobar, el pedido ya no está `EN_PREPARACION`; la anulación pasa a `RECHAZADA` |
 | `409` | `PEDIDO_EN_CAMINO` | Al aprobar, Despacho responde que el paquete ya salió; la anulación pasa a `RECHAZADA` y no se reintenta (ESP-06 CA-06) |
 
@@ -740,6 +770,72 @@ canal (opcional): `MARKETPLACE` | `CHATBOT` | `RETAIL`.
 
 ---
 
+
+### 1.15 Bandeja de Pedidos para Retiro en Tienda (Pickup, RF-18 de Retail)
+
+- **Endpoint:** `GET /api/v1/pedidos/pickup`
+- **Descripción:** Devuelve la lista de pedidos con modalidad de recojo en tienda asignados a la sede física indicada, que se encuentran en estado apto para entrega (`PAGADO` o `EN_PREPARACION`).
+- **Headers:** `Authorization: Bearer <token>` (rol `ADMIN_VENTAS` o token de servicio de Retail con scope `ventas:pedidos:consultar`)
+- **Query Params:**
+  - `tiendaId` (**obligatorio**): Identificador de la tienda física (ej. `TIENDA-MIRAFLORES`).
+
+#### Respuestas
+##### `200 OK`
+```json
+[
+  {
+    "pedidoId": "PED-2026-08910",
+    "clienteNombre": "María González",
+    "clienteDni": "45678912",
+    "anaquelUbicacion": "Anaquel B-04",
+    "fechaArriboTienda": "2026-11-05T10:00:00Z",
+    "estado": "LISTO_PARA_RECOJO",
+    "articulos": [
+      {
+        "sku": "ZAP-RUN-41-BLANC",
+        "nombre": "Zapatilla Running Pegasus 40",
+        "talla": "-",
+        "color": "-",
+        "cantidad": 1
+      }
+    ]
+  }
+]
+```
+
+### 1.16 Confirmación de Entrega Física en Mostrador (Pickup, RF-19 de Retail)
+
+- **Endpoint:** `POST /api/v1/pedidos/{pedidoId}/entrega-pickup`
+- **Descripción:** Registra la entrega presencial de la prenda al cliente y transiciona el pedido a `ENTREGADO` (actor `CLIENTE`, motivo `RETIRO_EN_TIENDA_CONFIRMADO`), publicando outbox `pedido.entregado`.
+- **Headers:** `Authorization: Bearer <token>` (rol `ADMIN_VENTAS` o token de servicio de Retail con scope `ventas:pedidos:estado`)
+- **Body:**
+```json
+{
+  "dniRecoge": "45678912",
+  "nombreRecoge": "María González",
+  "esTerceroAutorizado": false,
+  "codigoRetiro": "A7K2Q9"
+}
+```
+
+#### Respuestas
+##### `200 OK`
+```json
+{
+  "constanciaId": "CONST-PED-2026-08910",
+  "fechaHoraEntrega": "2026-11-05T14:30:00Z",
+  "estado": "ENTREGADO"
+}
+```
+
+| HTTP | Código | Cuándo |
+|---|---|---|
+| `400` | `DATOS_INVALIDOS` | DNI de receptor inválido o campos obligatorios vacíos |
+| `404` | `PEDIDO_NO_ENCONTRADO` | No existe el `pedidoId` |
+| `409` | `PEDIDO_NO_LISTO_PARA_RECOJO` | El paquete no figura en estado listo para entrega (`PAGADO` o `EN_PREPARACION`) |
+
+---
+
 ## Eventos salientes de M1 hacia Marketplace
 
 ### 1.10 Webhook de Estado de Envío (acuerdo H-05 con Marketplace)
@@ -818,5 +914,5 @@ canal (opcional): `MARKETPLACE` | `CHATBOT` | `RETAIL`.
 
 **Ciclo de vida del reemplazo** (ver `ESP-03` 7.2, nuevas transiciones exclusivas de `pedido.tipo: REEMPLAZO`):
 - Sin pago que esperar: si Productos confirma la reserva, `CREADO → EN_PREPARACION` (actor `SISTEMA_PRODUCTOS`), directo a preparación.
-- Si Productos rechaza o vence la reserva (en `CREADO` o, en un caso raro, ya en `EN_PREPARACION`): `→ ANULADO` (actor `SISTEMA_PRODUCTOS`, motivo `STOCK_NO_DISPONIBLE`). M1 publica `pedido.anulado` con `datos.devolucionId` — M2 reabre la devolución a `EN_EVALUACION` (no la cierra como fallida); al resolverla otra vez, se crea un reemplazo nuevo con una reserva nueva.
+- Si Productos rechaza o vence la reserva (en `CREADO` o, en un caso raro, ya en `EN_PREPARACION`): `→ ANULADO` (actor `SISTEMA_PRODUCTOS`, motivo `STOCK_NO_DISPONIBLE` si se rechaza o `RESERVA_EXPIRADA` si vence). M1 publica `pedido.anulado` con `datos.devolucionId` — M2 reabre la devolución a `EN_EVALUACION` (no la cierra como fallida); al resolverla otra vez, se crea un reemplazo nuevo con una reserva nueva.
 - Al entregarse (mismo flujo de Despacho que cualquier pedido): M1 publica `pedido.entregado` con `datos.devolucionId` — M2 cierra el lado logístico del cambio (ver `ESP-08` 8.2b y regla 11).
