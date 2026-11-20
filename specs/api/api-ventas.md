@@ -14,6 +14,7 @@
 
 | Versión | Fecha | Cambio |
 |---|---|---|
+| 1.11.0 | 2026-11-20 | 1.3: Retail (`modulo-retail`) puede consultar con su scope `ventas:pedidos:consultar`, pero solo sus pedidos (canal `RETAIL` o con retiro en tienda); los demás responden `404 PEDIDO_NO_ENCONTRADO` (aclaración pedida por G7). |
 | 1.10.0 | 2026-11-05 | Nuevos 1.15 (bandeja pickup) y 1.16 (confirmación entrega pickup) con scopes ventas:pedidos:consultar y ventas:pedidos:estado para Retail (acuerdo G4). 1.1: campo opcional comprobanteReferencia en pago.
 | 1.9.0 | 2026-11-04 | 1.2: un cobro `APROBADO` de un pedido que ya está `ANULADO` se reconoce con `200`: el pedido sigue `ANULADO`, el pago queda `CONFIRMADO` y M1 guarda en la misma transacción la solicitud de reembolso a M2 (antes respondía `409` y solo quedaba en el log). Repetir una `transaccionId` con otro resultado, monto o moneda responde `409 NOTIFICACION_INCOMPATIBLE`; otro cobro sobre un pago ya confirmado, `409 PAGO_YA_CONFIRMADO`. 1.3: campo aditivo `pago.estado`. |
 | 1.8.0 | 2026-11-02 | 1.4b `GET /api/v1/pedidos/me`: filtros opcionales `desde` y `hasta` (`YYYY-MM-DD`, días inclusivos sobre la fecha de creación, hora de Perú), combinables con `estado`, `page` y `pageSize`; nuevo error `400 RANGO_FECHAS_INVALIDO`. Acuerdo H-06 con Marketplace (G1). |
@@ -54,7 +55,7 @@ Según el acuerdo A10 con Seguridad (G7) hay dos tipos de token:
 | `ventas:pedidos:anular` | `POST /api/v1/pedidos/{id}/anulaciones` (1.7) | Marketplace, Chatbot y Retail |
 | `ventas:pedidos:estado` | `POST /api/v1/integraciones/despachos/eventos` (1.5 — reemplaza el `PATCH .../estado` y `POST .../eventos-logistica` anteriores) | Despacho (E) — reusamos este scope ya concedido a `modulo-despacho`, decisión nuestra (2026-10-13); no se pide el `despachos:eventos:recibir` que propuso G2, ver `integraciones/ACUERDO_G2_DESPACHO.md` |
 | `ventas:pagos:webhook` | `POST /api/v1/pedidos/{id}/pagos/notificacion` (1.2) | Simulador de pasarela y Chatbot |
-| `ventas:pedidos:consultar` | `GET /api/v1/pedidos/{id}` (1.3), uso exclusivo módulo-a-módulo | `modulo-postventa` (F3 valida `ENTREGADO`; F5 valida `ENTREGADO` para CSAT) — **registrado** (Seguridad, PR #60, verificado 2026-10-21), ver `integraciones/ACUERDO_G7_SEGURIDAD.md` |
+| `ventas:pedidos:consultar` | `GET /api/v1/pedidos/{id}` (1.3) y `GET /api/v1/pedidos/pickup` (1.15). `modulo-retail` en 1.3 solo ve sus pedidos | `modulo-retail` (1.15 y sus pedidos en 1.3); `modulo-postventa` (F3 valida `ENTREGADO`; F5 valida `ENTREGADO` para CSAT) — **registrado** (Seguridad, PR #60, verificado 2026-10-21), ver `integraciones/ACUERDO_G7_SEGURIDAD.md` |
 | `ventas:pedidos:reemplazar` | `POST /api/v1/pedidos/reemplazos` (1.11) | `modulo-postventa` (F3, orden de reemplazo de un `CAMBIO`) — **propuesto 2026-10-16, pendiente de que Seguridad lo registre**, ver `integraciones/ACUERDO_G7_SEGURIDAD.md` |
 
 | Rol (token de usuario) | Endpoints |
@@ -331,9 +332,10 @@ Quién puede llamarlo:
 |---|---|
 | Usuario con rol `CLIENTE` | Solo sus propios pedidos (se compara `contacto.clienteId` con el claim `sub`) |
 | Usuario con rol `ADMIN_VENTAS` (Gestor) | Cualquier pedido |
-| Servicio con scope `ventas:pedidos:consultar` | Cualquier pedido. Uso módulo a módulo (`modulo-postventa`) |
+| Servicio `modulo-postventa` con scope `ventas:pedidos:consultar` | Cualquier pedido (módulo a módulo) |
+| Servicio `modulo-retail` con scope `ventas:pedidos:consultar` | Solo sus pedidos: canal `RETAIL` (venta en tienda) o con retiro en tienda (`envio.modalidad` `RECOJO_TIENDA`). Cualquier otro pedido responde `404 PEDIDO_NO_ENCONTRADO`, para no revelar datos de clientes de otros canales (acuerdo G4 R12, aclarado con G7 el 2026-11-20) |
 
-Un token de servicio de canal (Marketplace, Chatbot, Retail) **no** tiene acceso a 1.3: para mostrarle el estado al cliente, el canal usa su token de usuario (1.3 con rol `CLIENTE` o 1.4b).
+Marketplace y Chatbot no tienen el scope `ventas:pedidos:consultar`: para mostrarle el estado al cliente usan su token de usuario (1.3 con rol `CLIENTE` o 1.4b).
 - **Headers:** `Authorization: Bearer <token>`
 - **Parámetros Path:** `pedidoId (string, ej. PED-2026-00981)`
 ### Respuestas
