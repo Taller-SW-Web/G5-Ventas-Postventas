@@ -1,6 +1,6 @@
 # Acuerdo con G3 — Chatbot
 
-Confirmado con el equipo de Chatbot (contacto: Nikol). Última actualización: 2026-10-12. Registrado en su repo como acuerdo **A15** (issue #9, `Taller-SW-Web/G3-Chatbot-specs`) — PR de sus specs: [#12](https://github.com/Taller-SW-Web/G3-Chatbot-specs/pull/12).
+Confirmado con el equipo de Chatbot (contacto: Nikol). Última actualización: 2026-11-22. Registrado en su repo como acuerdo **A15** (issue #9, `Taller-SW-Web/G3-Chatbot-specs`) — PR de sus specs: [#12](https://github.com/Taller-SW-Web/G3-Chatbot-specs/pull/12).
 
 ## Qué consumimos de ellos
 
@@ -14,7 +14,7 @@ Nada — Chatbot es quien consume nuestras APIs (M1 y M2).
 
 | # | Qué se acordó | Dónde quedó documentado |
 |---|---|---|
-| G3-1 | **Notificación de pago (1.2) con su propio simulador:** Chatbot procesa el cobro con su `PaymentSimulator` propio y notifica `1.2` directo, `client_id` `modulo-chatbot` (mismo que usan para otras llamadas), scope `ventas:pagos:webhook` — **ya concedido** desde el registro inicial de A10, no hizo falta pedir nada nuevo. | `AGENTS.md` sección 2, punto 8; `api-ventas.md` 1.1/1.2 |
+| G3-1 | **Notificación de pago (1.2) con su propio simulador:** Chatbot procesa el cobro con su `PaymentSimulator` propio y notifica `1.2` directo, `client_id` `modulo-chatbot` (mismo que usan para otras llamadas), scope `ventas:pagos:webhook` — acordado en A10; **aprobado por Seguridad (G7) junto con `ventas:pedidos:anular`, pendiente de confirmación final de aplicación en producción** (ver issue #67). | `AGENTS.md` sección 2, punto 8; `api-ventas.md` 1.1/1.2 |
 | G3-2 | **`/pedidos/me` en vez del listado administrativo:** cambiaron su proxy de `GET /pedidos?clienteId=` a `GET /pedidos/me`, reenviando el token del cliente (rol `CLIENTE`), no el de servicio del canal — es la única excepción a "el canal usa su propio token" en todo el contrato. | `api-ventas.md` 1.4b |
 | G3-3 | **CSAT:** `POST /api/v2/csat` con token del cliente (rol `CLIENTE`), `sub` validado contra el `clienteId` dueño del pedido → `403` si no coincide. Escala `1`/`3`/`5` (mismo acuerdo H-04 que Marketplace) — mapean tres caritas a esos tres valores. Se ofrece en el detalle de un pedido ya `ENTREGADO` (no proactiva, no reciben aviso de entrega). Tienen además una valoración propia de la experiencia del chat que no nos envían. | `api-postventas.md` 2.7; `integraciones/ACUERDO_G1_MARKETPLACE.md` H-04 |
 | G3-4 | **`/devoluciones/me` y `/reclamos/me`** en vez de los listados administrativos, mismo patrón que `/pedidos/me` — token del cliente, sin `clienteId` en la URL. | `api-postventas.md` 2.4b, 2.10b |
@@ -25,7 +25,7 @@ Nada — Chatbot es quien consume nuestras APIs (M1 y M2).
 
 ## Pendiente de confirmar / resolver
 
-Ninguno — acuerdo cerrado por completo (2026-10-12).
+Confirmación operativa de Seguridad (G7) sobre la aplicación en producción de los grants `ventas:pagos:webhook` y `ventas:pedidos:anular` para `modulo-chatbot` (ya aprobados por el PO de G7).
 
 ## Historial
 
@@ -33,3 +33,4 @@ Ninguno — acuerdo cerrado por completo (2026-10-12).
 - 2026-10-12: Chatbot responde los 5 puntos; se detecta que el `client_id` ya tenía `ventas:pagos:webhook` concedido (no hacía falta pedir nada), se confirma el token del cliente para los `/me` y CSAT, y se corrige la escala de CSAT a tres caritas → `1`/`3`/`5`.
 - 2026-10-12: Chatbot pregunta por el token de dos endpoints de detalle por ID y por los campos del listado de pedidos. Se confirma el mismo patrón `/me` para los tres detalles, y se recomienda pedir el detalle en vez de ampliar `/pedidos/me` (para no afectar el acuerdo H-03 con Marketplace).
 - 2026-10-12: Chatbot confirma que aplicó todos los cambios (PR #12) y registra todo como acuerdo A15 de su lado. Acuerdo cerrado.
+- 2026-11-22: A pedido de G3 (issue #67), se actualiza G3-1 para retirar "ya concedido desde el registro inicial de A10" y reflejar que `ventas:pagos:webhook` y `ventas:pedidos:anular` fueron aprobados por Seguridad (G7), pendientes de confirmación final en producción. Se confirma además la Opción A (token del cliente `ROLE_CLIENTE`) para F3/F6 (`POST /devoluciones`, `POST /reclamos` y `evidencias/upload`), sin requerir scopes `postventa:*:escribir` para `modulo-chatbot`.
