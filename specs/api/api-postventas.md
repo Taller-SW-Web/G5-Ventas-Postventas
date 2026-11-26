@@ -1,12 +1,14 @@
 # Contrato de API (OpenAPI / REST) --- Microservicio M2: Postventa
 
-**Versión:** 1.5.0
+**Versión:** 1.6.0 (2026-11-04: 2.6 lee `pago.estado` de 1.3; 2.12 fija qué cuenta `pedidos`)
 
 **Fecha:** Octubre 2026 (F3 cerrado contra implementación real, 2026-10-12)
 
 **Servicio:** M2 (Postventa)
 
 **Audiencia:** `api-postventa`
+
+**Diseño navegable (Swagger):** `/swagger-ui.html` de este servicio, generado desde `servicio-postventa/src/main/resources/static/openapi/postventa.yaml`.
 
 **Convenciones generales:**
 
@@ -52,8 +54,9 @@
     soporte antes de registrar la solicitud. Retorna la URL que debe
     incluirse en el arreglo `evidencias` del expediente.
 -   **Headers:**
-    -   `Authorization: Bearer <token_canal_o_cliente>`
+    -   `Authorization: Bearer <token_canal_o_cliente>`, o el token del Gestor (rol `ADMIN_VENTAS`) para la foto de la recepción física de 2.5b (corregido 2026-11-03: antes la regla general de `POST /devoluciones/**` lo rechazaba con 403). El Gestor solo puede subir el archivo; registrar una devolución (2.2) sigue siendo del canal o del cliente.
     -   `Content-Type: multipart/form-data`
+-   **URL devuelta en desarrollo:** con `EVIDENCIAS_ALMACEN=local` (por defecto), M2 guarda el archivo en su carpeta local y lo sirve en `GET /uploads/evidencias/{nombre}` (solo lectura, sin token, nombre UUID), para que la URL se pueda abrir igual que la pública del bucket de Supabase. Con `EVIDENCIAS_ALMACEN=supabase` esa ruta no existe.
 -   **Request Body (multipart/form-data):**
     -   `file`: Archivo binario adjunto (Formatos: `image/jpeg`,
         `image/png`, `image/webp`, `application/pdf`. Máximo 5 MB).
@@ -294,11 +297,14 @@
 -   **Endpoint:** `PATCH /api/v2/devoluciones/{devolucionId}/resolucion`
 -   **Descripción:** El Gestor aprueba o rechaza el expediente. Si es
     rechazo, exige fundamento no vacío. Si se aprueba con
-    `tipo: DEVOLUCION_DINERO`, deriva la instrucción de reembolso a F4.
+    `tipo: DEVOLUCION_DINERO`, deriva la instrucción de reembolso a F4. Si se
+    aprueba un `CAMBIO`, pide a M1 una orden de reemplazo sin cobro
+    (`api-ventas.md` 1.11) y `referenciaOperacion` es su `PED-…`.
     Reintentar la misma aprobación sobre un expediente que quedó
-    `APROBADA` (porque F4 o Despacho todavía no confirmaron) reintenta la
+    `APROBADA` (porque F4 o M1 todavía no confirmaron) reintenta la
     coordinación sin duplicar nada — el expediente solo pasa a
-    `COMPLETADA` cuando F4 o Despacho confirman, nunca antes.
+    `COMPLETADA` cuando F4 confirma el reembolso o M1 avisa que el reemplazo
+    se entregó, y la recepción física está completa, nunca antes.
 -   **Headers:** `Authorization: Bearer <token_gestor>` (requiere rol `ADMIN_VENTAS`)
 -   **Request Body:**
 
@@ -349,7 +355,9 @@
     -   **`409 Conflict`** (`DEVOLUCION_NO_RESOLUBLE`): El expediente ya está resuelto, o otro Gestor lo resolvió al mismo tiempo.
     -   **`409 Conflict`** (`PEDIDO_INCONSISTENTE`): El pedido asociado ya no está en un estado compatible con la resolución.
     -   **`409 Conflict`** (`SIN_STOCK`): Aprobación con `tipo: CAMBIO` (o `tipoResolucion: CAMBIO`) sin stock disponible en Productos (F). El Gestor puede reintentar con `tipoResolucion: REEMBOLSO`, o rechazar.
+    -   **`409 Conflict`** (`REEMPLAZO_RECHAZADO`): M1 rechazó la orden de reemplazo de un `CAMBIO`.
     -   **`503 Service Unavailable`** (`PRODUCTOS_NO_DISPONIBLE`): Productos (F) no responde la validación de disponibilidad.
+    -   **`503 Service Unavailable`** (`VENTAS_NO_DISPONIBLE`): M1 no responde la consulta del pedido o la orden de reemplazo; se puede repetir la misma aprobación.
 
 #### 2.5b Confirmar Recepción Física (nuevo, 2026-10-13)
 
@@ -445,11 +453,18 @@
 }
 ```
 
--   **`400 Bad Request`**: Monto fuera de rango o estructura inválida.
+-   **`400 Bad Request`** (`MONTO_INVALIDO`, `DATOS_INVALIDOS`): Monto no positivo o con más de dos decimales, o estructura inválida.
+-   **`400 Bad Request`** (`CABECERA_FALTANTE`, `CLAVE_IDEMPOTENCIA_REQUERIDA`, `CLAVE_IDEMPOTENCIA_INVALIDA`): Falta `X-Idempotency-Key`, está vacía o supera 100 caracteres.
+-   **`400 Bad Request`** (`ORIGEN_NO_ELEGIBLE`): El origen no existe o no permite reembolso.
+-   **`409 Conflict`** (`ORIGEN_YA_REEMBOLSADO`): Ese origen ya tiene un reembolso registrado.
+-   **`404 Not Found`** (`PEDIDO_NO_ENCONTRADO`): `referenciaId` no existe.
+-   **`503 Service Unavailable`** (`VENTAS_NO_DISPONIBLE`): M1 no responde.
+-   **`400 Bad Request`** (`PAGO_INVALIDO`): el pago del pedido (`referenciaId`) no está confirmado o su moneda no coincide. M2 lo consulta en M1 (1.3): manda `pago.estado` (`CONFIRMADO`), que cubre el cobro confirmado después de una anulación aunque el pedido nunca haya pasado por `PAGADO`; con un M1 que no envía ese campo se deduce como antes (pedido `PAGADO` o `ENTREGADO`, o un `PAGADO` en su historial).
 -   **`403 Forbidden`** (`ORIGEN_NO_PERMITIDO`): Solicitud con origen no permitido (distinto de
     `ANULACION` o `DEVOLUCION`).
 -   **`409 Conflict`** (`CLAVE_IDEMPOTENCIA_EN_CONFLICTO`): La `X-Idempotency-Key` ya existe para una solicitud con datos distintos (origen, monto, moneda), o la pasarela respondió con error.
 -   **`409 Conflict`** (`SALDO_INSUFICIENTE`): El monto, sumado a los reembolsos `EXITOSO`/`PENDIENTE` ya registrados para el mismo pedido, supera el total pagado.
+-   **`403 Forbidden`** (`ACCESO_DENEGADO`), origen `ANULACION`: el reembolso de una anulación **lo crea solo M1** (scope `postventa:reembolsos:procesar`). El Gestor (rol `ADMIN_VENTAS`) solo puede **continuar uno que ya existe** — el reintento de 2.6c punto 3: misma `X-Idempotency-Key` y mismos `origen`, `origenId`, `referenciaId`, `monto` y `moneda`. Cualquier otra combinación de un Gestor con origen `ANULACION` responde 403 sin procesar nada (aclarado 2026-11-03; antes también se rechazaba el reintento legítimo).
 
 #### 2.6b Listar Reembolsos (bandeja del Gestor, mockup 08 — nuevo, 2026-10-16, no está en el contrato)
 
@@ -519,6 +534,8 @@
 ```
 
 -   **`404 Not Found`**: `reembolsoId` no existe.
+-   **`403 Forbidden`**: el token no tiene el rol `ADMIN_VENTAS` (cliente o token de servicio). Hasta el 2026-11-03 M2 no tenía regla para esta ruta y respondía 403 también al Gestor; ya está corregido en `SecurityConfig`.
+-   **Presentación (mockup 08):** "Referencia de pago" muestra `transaccionPasarelaId` (punto 5 de abajo) e "Id de operación" el `transaccionPasarelaId` del último intento. El mockup muestra una referencia del pago original (`PAY-…`) distinta de la operación, pero ese dato no está en este contrato: queda pendiente si se quiere mostrar el pago original de M1.
 
 **Nota (2026-10-17): esta sección se corrigió para que coincida con `DetalleReembolsoResponse`/`ConsultaReembolsosService` ya construidos — manda el código, los nombres de campo y el punto 1 de abajo cambiaron frente a la primera versión de estas decisiones (2026-10-16).**
 
@@ -553,7 +570,7 @@
 
 -   **Respuestas:**
     -   **`201 Created`**: Encuesta guardada.
-    -   **`400 Bad Request`**: Puntuación fuera de rango (1 al 5).
+    -   **`400 Bad Request`** (`PUNTUACION_INVALIDA`, `DATOS_INVALIDOS`): Puntuación fuera de rango (1 al 5).
     -   **`403 Forbidden`**: El `pedidoId` no pertenece al `sub` del usuario autenticado en el JWT (acuerdo H-04).
     -   **`422 Unprocessable Entity`** (`ORDER_NOT_DELIVERED`): El pedido no está en estado terminal `ENTREGADO`. *(Excepción al código `PEDIDO_NO_ENTREGADO`/`409` que usa el resto de este contrato — para este endpoint específico se usó literalmente el código y HTTP status acordados con Marketplace en H-04; ver nota en [catalogo-errores.md](catalogo-errores.md).)*
     -   **`409 Conflict`** (`CSAT_ALREADY_SUBMITTED`): Ya existe una encuesta registrada para ese pedido. *(Mismo caso que `CALIFICACION_DUPLICADA` en el resto del repo; aquí se usa el nombre acordado con Marketplace.)*
@@ -671,6 +688,7 @@
 ```
 
 -   `consumidor`, `atendidoPor`, `estadoSla`, `diasHabilesRestantes` y `slaCumplido` (agregados al contrato, 2026-10-17): los usa la pantalla de Reclamos (mockup 07). `estadoSla` es el semáforo del plazo (`EN_PLAZO`\|`POR_VENCER`\|`CRITICO`\|`VENCIDO`\|`ATENDIDO`, ver 2.10), distinto de `estado`. `diasHabilesRestantes` es `null` cuando ya está `ATENDIDO` (0 = vence hoy, negativo = vencido). `slaCumplido` es `null` mientras no haya respuesta formal, y después indica si la respuesta llegó dentro del plazo (ESP-14 CA-04).
+-   `atendidoPor` (2026-11-02): identificador del Gestor que registró la atención, tomado del `sub` de su token (ver 2.11) — con seguridad activa es un UUID. Los reclamos atendidos antes de este cambio conservan el texto que se envió entonces (por ejemplo `GESTOR-02`).
 -   **`401 Unauthorized`**: Token ausente o inválido.
 -   **`404 Not Found`**: Reclamo no encontrado con ese código de
     seguimiento.
@@ -686,7 +704,7 @@
     -   `estado` (opcional):
         `REGISTRADO | EN_PROCESO | ATENDIDO | DERIVADO`
     -   `buscar` (opcional, **agregado 2026-10-16, no está en el contrato** — mockup 07): un código `PED-AAAA-NNNNN` filtra por ese pedido; cualquier otro texto busca por código de reclamo exacto, documento exacto o parte del nombre del consumidor.
-    -   `sla` (opcional, **agregado 2026-10-16**): `EN_PLAZO` (6+ días hábiles) \| `POR_VENCER` (3-5) \| `CRITICO` (0-2) \| `VENCIDO` (pasó la fecha límite sin respuesta) \| `ATENDIDO` (ya tiene respuesta formal) — semáforo del plazo legal, distinto de `estado`: un reclamo puede estar `EN_PROCESO` y `VENCIDO` a la vez.
+    -   `sla` (opcional, **agregado 2026-10-16**): `EN_PLAZO` (6+ días hábiles) \| `POR_VENCER` (0-5, **incluye** los `CRITICO`: el filtro "Por vencer" del mockup 07 no tiene opción "Crítico") \| `CRITICO` (0-2) \| `VENCIDO` (pasó la fecha límite sin respuesta) \| `ATENDIDO` (ya tiene respuesta formal) — semáforo del plazo legal, distinto de `estado`: un reclamo puede estar `EN_PROCESO` y `VENCIDO` a la vez. El campo `estadoSla` de cada fila sí distingue `POR_VENCER` (3-5) de `CRITICO` (0-2). Días hábiles = lunes a viernes, sin feriados, contados sobre fechas UTC (guía backend 10.2).
     -   `desde` / `hasta` (opcional, **agregado 2026-10-16**): fecha ISO, día de registro (UTC), ambos inclusivos.
     -   `orden` (opcional, **agregado 2026-10-16**): `RECIENTES` (default) \| `ANTIGUOS`, por fecha de registro.
     -   `pagina` (opcional, default: `0`)
@@ -749,6 +767,8 @@
 }
 ```
 
+-   `nuevoEstado`: `EN_PROCESO` ("Iniciar atención", solo desde `REGISTRADO`, sin respuesta; `fechaRespuesta` sale `null`) \| `ATENDIDO` \| `DERIVADO` (ambos exigen `respuestaVisibleCliente` y registran `fechaRespuesta` en UTC). Así lo implementa M2 para el recorrido del mockup 07 (guía backend 10.3).
+-   `atendidoPor` (**opcional desde 2026-11-02**, se acepta por compatibilidad): el autor que queda registrado es **el `sub` del token del Gestor**, nunca el texto del cuerpo (RNF-03: el actor debe ser verificable). Si el cuerpo trae otro valor se ignora y se deja constancia en el log del servicio. Solo cuando M2 corre con la seguridad deshabilitada (desarrollo local, sin token) se usa el valor del cuerpo, y entonces es obligatorio (`400 DATOS_INVALIDOS` si falta). Máximo 50 caracteres. El nombre visible del Gestor no se guarda aquí: resolverlo requeriría consultar a Seguridad (`usuarios:leer`).
 -   **Respuestas:**
     -   **`200 OK`**
 
@@ -762,7 +782,9 @@
 ```
 
 -   **`400 Bad Request`** (`RESPUESTA_VACIA`): Campo `respuestaVisibleCliente` vacío o nulo.
--   **`409 Conflict`**: El reclamo ya está `ATENDIDO`.
+-   **`400 Bad Request`** (`ESTADO_INVALIDO`): `nuevoEstado` es `REGISTRADO`.
+-   **`403 Forbidden`**: El token no tiene el rol `ADMIN_VENTAS`.
+-   **`409 Conflict`**: El reclamo ya está `ATENDIDO` (`RECLAMO_YA_ATENDIDO`), o la transición no sale de su estado actual — por ejemplo `EN_PROCESO` dos veces, o dos Gestores cerrando a la vez (`RECLAMO_NO_RESPONDIBLE`).
 
 #### 2.12 Consultar Métricas del Dashboard
 
@@ -797,6 +819,12 @@
 ```
 
 -   `ultimaActualizacion` (agregado al contrato, 2026-10-17): hasta cuándo están consolidados los agregados (ESP-15 §7); `null` si el periodo no tiene actividad.
+-   **Qué cuenta `pedidos` (definición cerrada, 2026-11-04):** 2.12 informa **actividad** del periodo por la fecha del hecho (día UTC), no una cohorte de pedidos.
+    -   `pedidos.total` son los pedidos **pagados** en el periodo, por la fecha del pago (evento `pedido.pagado`). Conserva ese significado por compatibilidad: no son los pedidos creados, porque M1 no publica la creación.
+    -   `pedidos.anulados` y `pedidos.entregados` son las anulaciones y entregas ocurridas en el periodo, por su fecha.
+    -   Son contadores de hechos independientes: **no forman una distribución de estados** (un pedido puede pagarse en un periodo y anularse en otro, o anularse sin haberse pagado), así que `anulados / total` de 2.12 **no es una tasa de anulación** y puede superar el 100 %.
+    -   Los conteos de pedidos de las pantallas, la distribución por estado, la tasa de anulación y los conteos exportados salen de la cohorte de `api-ventas.md` 1.14 (pedidos creados en el periodo, con su estado actual). Ver ESP-16 §7.1.
+    -   Un cobro confirmado después de la anulación (`api-ventas.md` 1.2) no es una venta: no suma a `pedidos.total`; su reembolso suma a `montoReembolsadoPEN` cuando M2 lo confirma.
 
 ---
 
@@ -839,6 +867,7 @@
 
 -   `datos.vendedorId` y `datos.items` solo vienen en `pedido.pagado` (se usan para `agregado_ventas`); en `pedido.anulado` y `pedido.entregado` pueden omitirse. `datos.motivo` es obligatorio solo en `pedido.anulado`.
 -   `datos.devolucionId` solo viene cuando el pedido es una orden de reemplazo de un `CAMBIO` (`pedido.tipo: REEMPLAZO`, `api-ventas.md` 1.11, acuerdo con Productos issue G6 #100) — identifica la devolución de M2 que originó el reemplazo. `EventoPedidoService` usa `pedido.anulado` con este campo para reabrir la devolución a `EN_EVALUACION` (`DevolucionService.reemplazoAnulado`) y `pedido.entregado` para cerrar su lado logístico (`reemplazoEntregado`). Nunca viene en una venta normal.
+-   `datos.cambioTienda` solo viene en `pedido.entregado` de un cambio de prenda en tienda (`RETAIL` con `metodoPago: CREDITO_CAMBIO`, `api-ventas.md` 1.1, acuerdo G4 + G6 del 2026-11-26): `{ "pedidoOrigenId": "PED-AAAA-NNNNN", "itemsDevueltos": [{ "sku", "cantidad" }] }`. `EventoPedidoService` reintegra esas unidades en Productos (`POST /api/v1/inventario/reintegros`, `order_id` = pedido origen, `source_ref` = pedido nuevo, `operation_id` fijo por pedido nuevo). Si Productos no responde, el evento falla con `503` y M1 lo reintenta; el `operation_id` evita reintegrar dos veces.
 -   `tipo`: `pedido.pagado | pedido.anulado | pedido.entregado`.
 -   `idEvento`: UUID generado por M1. Si M1 reintenta, envía el mismo
     valor.

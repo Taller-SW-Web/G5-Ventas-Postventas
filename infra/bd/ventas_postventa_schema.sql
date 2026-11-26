@@ -33,7 +33,12 @@
 -- issue G6 #51 P-02 y ESP-08 8.2b): postventa.devolucion.requiere_devolucion_fisica,
 -- y las tablas nuevas postventa.devolucion_recepcion y postventa.historial_devolucion.
 -- Ya implementado en el código (RecepcionService, HistorialDevolucion); este archivo
--- ya las refleja, falta confirmar que la migración real se aplicó en Supabase.
+-- ya las refleja y existen en Supabase (verificado el 2026-10-26 y otra vez el 2026-11-04).
+--
+-- 2026-11-04: alineado con una exportación de information_schema/pg_constraint de Supabase
+-- (solo lectura): direcciones de pedido, anulacion.estado varchar(30), default y reglas de
+-- devolucion_recepcion, estados de historial_devolucion y agregado_metricas.pedidos_anulados_sin_pago.
+-- Este archivo crea la estructura desde cero: no es una migración ni debe ejecutarse sobre una base existente.
 --
 -- Esquema ventas    = M1 (Ventas)
 -- Esquema postventa = M2 (Postventa)
@@ -71,6 +76,12 @@ create table ventas.pedido (
     destinatario          varchar(150),
     distrito              varchar(80),
     direccion             varchar(255),
+    -- Destino opcional para Despacho (G2 7.1, acuerdo D11); Pedido.java los mapea desde el commit 03e4215.
+    -- Faltaban aquí (detectado 2026-11-03 al validar M1 contra una base local creada con este archivo).
+    -- Verificado en Supabase el 2026-11-04 (exportación de information_schema): existen con estos tipos.
+    departamento          varchar(80),
+    provincia             varchar(80),
+    referencia_envio      varchar(255),
     codigo_cupon          varchar(40),
     idempotency_key       varchar(128)  unique,   -- cabecera Idempotency-Key de 1.1 (acuerdo H-02)
     reserva_id            varchar(100),           -- reservaId de Productos (G6); null pendiente o RETAIL
@@ -82,6 +93,8 @@ create table ventas.pedido (
     tipo                  varchar(20)   not null default 'VENTA',  -- VENTA o REEMPLAZO (F3, api-ventas.md 1.11, acuerdo G6 #100)
     id_pedido_origen      bigint references ventas.pedido(id),    -- solo REEMPLAZO: pedido original que se cambia
     devolucion_id         varchar(30),                             -- solo REEMPLAZO: devolución de M2 (DEV-AAAA-NNNN)
+    cambio_pedido_origen  varchar(20),                             -- solo RETAIL con CREDITO_CAMBIO: pedido de la prenda devuelta
+    cambio_items_devueltos varchar(1000),                          -- solo RETAIL con CREDITO_CAMBIO: "SKU:cantidad,..."
     fecha_estimada_entrega timestamptz,                            -- la fija Despacho con DESPACHO_REPROGRAMADO (api-ventas.md 1.5)
     constraint ck_pedido_canal check (canal in ('MARKETPLACE','CHATBOT','RETAIL')),
     constraint ck_pedido_estado check (estado in
@@ -122,10 +135,12 @@ create table ventas.pago (
     monto_efectivo  numeric(12,2),   -- solo RETAIL con metodo MIXTO
     monto_tarjeta   numeric(12,2),   -- solo RETAIL con metodo MIXTO
     fecha_venta     timestamptz,     -- solo RETAIL: fecha real de una venta sin conexión, hasta 72h atrás
+    monto_credito_cambio numeric(12,2), -- solo RETAIL con CREDITO_CAMBIO: parte cubierta por la prenda devuelta
     constraint ck_pago_monto  check (monto >= 0),
     constraint ck_pago_estado check (estado in ('PENDIENTE','CONFIRMADO','RECHAZADO')),
     constraint ck_pago_montos_mixto check (monto_efectivo is null or monto_efectivo >= 0),
-    constraint ck_pago_montos_mixto2 check (monto_tarjeta is null or monto_tarjeta >= 0)
+    constraint ck_pago_montos_mixto2 check (monto_tarjeta is null or monto_tarjeta >= 0),
+    constraint ck_pago_credito_cambio check (monto_credito_cambio is null or monto_credito_cambio > 0)
 );
 
 create table ventas.historial_estado (
@@ -148,7 +163,7 @@ create table ventas.anulacion (
     motivo          varchar(255) not null,
     id_solicitante  uuid,
     id_autorizador  uuid,
-    estado          varchar(20)  not null,
+    estado          varchar(30)  not null,   -- 'PENDIENTE_AUTORIZACION' tiene 22 caracteres; varchar(30) verificado en Supabase el 2026-11-04
     fecha           date         not null default current_date,
     constraint ck_anulacion_estado check (estado in ('PENDIENTE_AUTORIZACION','EJECUTADA','RECHAZADA'))
 );
@@ -275,12 +290,14 @@ create table postventa.devolucion_recepcion (
     id_producto       varchar(64)  not null,  -- referencia externa: módulo F
     cantidad_recibida integer      not null,
     cantidad_apta     integer      not null,  -- solo esto se reintegra (ESP-08 regla 15)
-    reintegro_estado  varchar(20)  not null,
+    reintegro_estado  varchar(20)  not null default 'PENDIENTE',
     evidencia         varchar(500),
     id_actor          varchar(60),            -- sub de quien recibió (Gestor o almacén, rol ADMIN_VENTAS)
     fecha_hora        timestamptz  not null default now(),
-    constraint ck_devolucion_recepcion_cantidad check (cantidad_apta >= 0 and cantidad_apta <= cantidad_recibida),
-    constraint ck_devolucion_recepcion_estado check (reintegro_estado in ('PENDIENTE','COMPLETADO'))
+    -- Reglas con los nombres que tienen en Supabase (verificado el 2026-11-04)
+    constraint ck_recepcion_cantidades check (cantidad_recibida > 0 and cantidad_apta >= 0 and cantidad_apta <= cantidad_recibida),
+    constraint ck_devolucion_recepcion_estado check (reintegro_estado in ('PENDIENTE','COMPLETADO')),
+    constraint uq_recepcion_operacion_sku unique (operation_id, sku)  -- un SKU aparece una sola vez por confirmación
 );
 
 create index ix_devolucion_recepcion_id_devolucion on postventa.devolucion_recepcion(id_devolucion);
@@ -296,7 +313,9 @@ create table postventa.historial_devolucion (
     id_actor         varchar(60),            -- sub del cliente/Gestor, o módulo del canal
     detalle          text,
     fecha_hora       timestamptz not null default now(),
-    constraint ck_historial_devolucion_actor check (actor in ('CLIENTE','CANAL','GESTOR','SISTEMA'))
+    constraint ck_historial_devolucion_actor check (actor in ('CLIENTE','CANAL','GESTOR','SISTEMA')),
+    -- Estados del expediente (ESP-07/ESP-08); regla presente en Supabase (verificado el 2026-11-04)
+    constraint ck_historial_devolucion_estado check (estado_nuevo in ('SOLICITADA','EN_EVALUACION','APROBADA','RECHAZADA','COMPLETADA'))
 );
 
 create index ix_historial_devolucion_id_devolucion on postventa.historial_devolucion(id_devolucion);
@@ -399,8 +418,12 @@ create table postventa.agregado_metricas (
     reclamos_registrados    integer       not null default 0,
     reclamos_atendidos      integer       not null default 0,
     actualizado_en          timestamptz   not null default now(),
+    -- Existe en Supabase (verificado el 2026-11-04). No se usa (decisión 2026-11-04, ESP-15 §4.1): el código
+    -- de M2 no la lee ni la escribe (Contador en ProyeccionesService no la incluye) y queda en 0.
+    pedidos_anulados_sin_pago integer     not null default 0,
     primary key (fecha, canal),
-    constraint ck_agregado_metricas_canal check (canal in ('MARKETPLACE','CHATBOT','RETAIL'))
+    constraint ck_agregado_metricas_canal check (canal in ('MARKETPLACE','CHATBOT','RETAIL')),
+    constraint agregado_metricas_pedidos_anulados_sin_pago_check check (pedidos_anulados_sin_pago >= 0)
 );
 
 -- Eventos de M1 ya aplicados a los agregados (idempotencia del receptor 2.13)
