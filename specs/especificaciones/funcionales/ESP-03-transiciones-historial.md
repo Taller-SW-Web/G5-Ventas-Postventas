@@ -79,11 +79,13 @@ CREADO ──────► PAGADO ──────► EN_PREPARACION ──�
 │              │              │                      │
 │              │              │                      └──► ANULADO  (entrega fallida definitiva, por SISTEMA_LOGISTICA; sin autorización)
 │              │              │
-│              │              └──► ANULADO  (solicitud F2, requiere autorización del Gestor)
+│              │              ├──► ANULADO  (solicitud F2, requiere autorización del Gestor)
+│              │
+│              └──► ENTREGADO  (retiro en tienda confirmado / Pickup, modalidad RECOJO_TIENDA)
 │              │
 │              ├──► ANULADO  (solicitud F2 del Cliente o Gestor, sin autorización; o rechazo de stock de Productos, SISTEMA_PRODUCTOS, caso Chatbot)
 │              │
-│              └──► ENTREGADO  (venta de mostrador, canal RETAIL sin envío, misma operación de creación — Despacho no participa)
+│              └──► ENTREGADO  (venta de mostrador RETAIL; o retiro en tienda confirmado / Pickup, modalidad RECOJO_TIENDA)
 │
 └──► ANULADO  (pago rechazado por la pasarela, aviso del canal, solicitud F2, o rechazo de stock/cupón de Productos; sin autorización)
 ```
@@ -99,7 +101,8 @@ CREADO ──────► PAGADO ──────► EN_PREPARACION ──�
 | `CREADO`               | `ANULADO`         | Productos rechaza la reserva de stock o el consumo de cupón (async, RabbitMQ) — aprobado en equipo 2026-10-12 | `SISTEMA_PRODUCTOS` | `STOCK_NO_DISPONIBLE` o `CUPON_RECHAZADO` | No |
 | `CREADO`               | `EN_PREPARACION`  | Productos confirma la reserva de stock de una orden de reemplazo (F3, `api-ventas.md` 1.11) — **exclusiva de `pedido.tipo = REEMPLAZO`**, nunca una venta normal; no hay `PAGADO` que esperar (sin cobro) — acuerdo con Productos, issue G6 #100, 2026-10-16 | `SISTEMA_PRODUCTOS` | — | No |
 | `PAGADO`               | `EN_PREPARACION`  | Acción interna del flujo de preparación     | `SISTEMA_LOGISTICA`    | —                          | No                    |
-| `PAGADO`               | `ENTREGADO`       | Venta de mostrador (canal `RETAIL`, sin envío) — en la misma operación de creación, confirmado 2026-10-12 con G4 | `CLIENTE`   | `ENTREGA_INMEDIATA_EN_TIENDA` | No                    |
+| `PAGADO`               | `ENTREGADO`       | Venta de mostrador (canal `RETAIL`, sin envío) O retiro en tienda confirmado (Pickup, modalidad `RECOJO_TIENDA`, `api-ventas.md` 1.16) | `CLIENTE` o `GESTOR` | `ENTREGA_INMEDIATA_EN_TIENDA` o `RETIRO_EN_TIENDA_CONFIRMADO` | No |
+| `EN_PREPARACION`       | `ENTREGADO`       | Retiro en tienda confirmado (Pickup, modalidad `RECOJO_TIENDA`, `api-ventas.md` 1.16) | `CLIENTE` o `GESTOR` | `RETIRO_EN_TIENDA_CONFIRMADO` | No |
 | `PAGADO`               | `ANULADO`         | Solicitud de anulación (ver F2)             | `CLIENTE` o `GESTOR` | Catálogo de ESP-05, salvo `PAGO_NO_COMPLETADO` | No       |
 | `PAGADO`               | `ANULADO`         | Productos rechaza la reserva de stock después del pago (caso Chatbot: cobra antes de que Productos confirme) — origina reembolso automático a F4 | `SISTEMA_PRODUCTOS` | `STOCK_NO_DISPONIBLE` | No |
 | `EN_PREPARACION`       | `DESPACHADO`      | Confirmación de Despacho (E)                | `SISTEMA_LOGISTICA`   | —                          | No                    |
@@ -136,6 +139,7 @@ Cualquier transición fuera de esta tabla se rechaza, incluso con permisos de `A
 1. Una notificación (pasarela o Despacho) ya fue procesada para un pedido, con una clave de idempotencia específica.
 2. La misma notificación se reintenta.
 3. El sistema reconoce el reintento y no duplica la transición ni el historial.
+4. Si llega la misma clave con otro resultado, monto o moneda, la rechaza con `409 Conflict` (`NOTIFICACION_INCOMPATIBLE`) sin cambiar nada.
 
 </details>
 
@@ -145,6 +149,29 @@ Cualquier transición fuera de esta tabla se rechaza, incluso con permisos de `A
 1. La pasarela notifica un fallo de pago para un pedido que ya está en `PAGADO`.
 2. El sistema detecta que la transición `CREADO → ANULADO` no aplica desde `PAGADO`.
 3. Rechaza la notificación tardía con `409 Conflict` y la deja registrada para revisión manual, sin modificar el pedido.
+4. Lo mismo vale para un rechazo que llega cuando el pedido ya está `ANULADO`: no se cambia nada y no hay devolución de dinero, porque no hubo cobro.
+
+</details>
+
+<details>
+<summary><strong>D. Cobro confirmado de un pedido ya anulado (decisión 2026-11-04)</strong></summary>
+
+1. El pedido se anuló (por el cliente o el canal con 1.7, o de forma automática: pago rechazado, sin stock, cupón, reserva vencida) mientras la pasarela seguía procesando el cobro.
+2. Llega una notificación auténtica y válida con resultado `APROBADO`, el `monto` y la `moneda` del pedido.
+3. El pedido **conserva** `ANULADO`: no hay transición, ni historial nuevo, ni evento `pedido.pagado` o un segundo `pedido.anulado`; no se reserva ni confirma stock y no se envía a Despacho.
+4. En una sola transacción se registran la clave de idempotencia, el pago `CONFIRMADO` (el hecho financiero, una sola vez) y una solicitud durable de reembolso por el total del pedido, asociada a la anulación existente. Si la anulación automática no tenía fila en `ventas.anulacion`, se crea `EJECUTADA` con el motivo y la fecha de su historial. La solicitud lleva como motivo `COBRO_TRAS_ANULACION`, la transacción y el motivo original (auditoría).
+5. Se responde `200 OK` (`nuevoEstado: ANULADO`) en cuanto esa responsabilidad queda guardada; el reembolso se envía a M2 después del commit y, si M2 no está disponible, lo recupera el reintento periódico.
+6. Si el pedido ya tenía otro cobro `CONFIRMADO`, la notificación se rechaza con `409` (`PAGO_YA_CONFIRMADO`) sin sobrescribirlo ni reutilizar su reembolso.
+
+</details>
+
+<details>
+<summary><strong>E. Notificación de pago y anulación simultáneas</strong></summary>
+
+1. La notificación (1.2) y la anulación (1.7, 1.9 o un mensaje de Productos) bloquean la fila del pedido mientras lo cambian; la segunda espera y ve el estado que dejó la primera.
+2. Si gana el pago, el pedido pasa a `PAGADO` y la anulación posterior es la de un pedido pagado, con su reembolso (F2).
+3. Si gana la anulación, el cobro llega como en el flujo D.
+4. En los dos órdenes el resultado es un pedido `ANULADO`, con un solo pago confirmado y un solo reembolso.
 
 </details>
 
@@ -317,6 +344,26 @@ Ejemplo — notificación de pago no completado:
 **CUANDO** la misma notificación se reintenta.
 
 **ENTONCES** el sistema reconoce el reintento y no duplica la transición ni el historial.
+
+---
+
+### CA-05.2 — Cobro confirmado de un pedido ya anulado
+
+**DADO** un pedido `ANULADO` sin cobro confirmado.
+
+**CUANDO** la pasarela notifica un cobro `APROBADO` con el monto y la moneda del pedido.
+
+**ENTONCES** el pedido sigue `ANULADO`, el pago queda `CONFIRMADO`, se guarda una sola solicitud de reembolso por el total, se responde `200` aunque M2 no esté disponible y el reembolso se envía cuando M2 responde; repetir la notificación, o enviarla varias veces a la vez, no duplica pago, solicitud, reembolso, extorno ni métricas.
+
+---
+
+### CA-05.3 — Pago y anulación simultáneos
+
+**DADO** un pedido `CREADO`.
+
+**CUANDO** llegan a la vez una anulación y la notificación de un cobro aprobado.
+
+**ENTONCES** el pedido termina `ANULADO` con un solo reembolso, gane primero el pago o la anulación.
 
 ---
 

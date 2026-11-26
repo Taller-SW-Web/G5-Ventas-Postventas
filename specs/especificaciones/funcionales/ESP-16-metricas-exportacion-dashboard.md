@@ -12,13 +12,13 @@ Permitir que un usuario administrador consulte indicadores consolidados de Venta
 
 ## 2. Alcance contractual
 
-`specs/api-contract.md` define el endpoint de consulta de métricas, sus filtros y su respuesta. El contrato actual no define un endpoint de exportación, formato de archivo, nombre de archivo ni media type.
+`specs/api-contract.md` define el endpoint de consulta de métricas, sus filtros y su respuesta. El contrato no define un endpoint de exportación: la exportación de esta entrega es un **CSV generado en el navegador** con los filtros y valores visibles (§8, decisión 2026-11-04), sin ruta HTTP propia.
 
 Por esa razón:
 
 - Esta especificación documenta la consulta exactamente como está contratada.
 - La exportación se especifica como comportamiento funcional del dashboard.
-- No se inventa una ruta HTTP ni un formato de archivo para exportar.
+- No se inventa una ruta HTTP para exportar; el único formato de esta entrega es el CSV de §8.
 - Si la exportación requiere un nuevo endpoint de backend, este deberá incorporarse primero a `specs/api-contract.md` y después reflejarse aquí.
 
 Aunque F6 menciona vistas por vendedor y producto, el contrato vigente solo admite filtros por periodo y canal. Esas dimensiones no forman parte del endpoint actual hasta que sean añadidas formalmente al contrato.
@@ -107,6 +107,36 @@ El panel del Gestor debe:
 - Presentar estados de carga y errores claros sin sustituirlos por valores ficticios.
 - Permitir iniciar la exportación de los indicadores actualmente mostrados.
 
+### 7.1. Bases de cálculo de las tasas (definidas 2026-11-02)
+
+El mockup 01 (§6 y §10.3) pide definir la base de cada indicador sin asumir que todos usan el mismo conjunto de pedidos. Hay dos bases de conteo y **cada tasa usa una sola**, con el mismo periodo y canal en numerador y denominador:
+
+| Base | Fuente | Qué cuenta |
+|---|---|---|
+| Cohorte del periodo | `api-ventas.md` 1.14 (`pedidosTotal`, `pedidosAnulados`, `pedidosEntregados`) | Pedidos de venta **creados** entre `desde` y `hasta`, con su estado actual (sin los que siguen en `CREADO`). |
+| Hechos del periodo | 2.12 (`pedidos.*`, `postventa.devolucionesAprobadas`) | Pagos, anulaciones, entregas y aprobaciones **ocurridos** entre `desde` y `hasta`, por la fecha del hecho (ESP-15 §6). |
+
+| Indicador | Cálculo | Base |
+|---|---|---|
+| Tasa de anulación | `pedidosAnulados / pedidosTotal` | Cohorte (1.14) |
+| Distribución de pedidos y conteos de pedidos de Reportes | `pedidosTotal`, `pedidosEntregados`, `pedidosAnulados` (también por canal, con 1.14 filtrado por canal) | Cohorte (1.14) |
+| Tasa de devolución | `postventa.devolucionesAprobadas / pedidos.entregados` | Hechos (2.12) |
+
+- La tasa de devolución **no** usa la cohorte: las devoluciones se aprueban días o semanas después de la entrega, así que una aprobación del periodo casi nunca pertenece a un pedido creado en el mismo periodo. Mezclar ambas bases daba tasas sin sentido (denominador vacío o un numerador de otra cohorte).
+- Es una **razón de actividad**, no una tasa de cohorte: si en el periodo se aprueban devoluciones de pedidos entregados antes, puede superar el 100%. Se muestra tal cual, junto con sus dos cifras ("3 aprobadas / 2 entregas del periodo"); no se recorta.
+- Una tasa de devolución por cohorte (aprobadas de los pedidos entregados en el periodo) exigiría que 2.12 informe la fecha de entrega del pedido de cada devolución; no está en el contrato y queda como mejora a acordar.
+- Las fechas `desde`/`hasta` son días UTC en ambas fuentes (1.14 y 2.12), conforme a la convención del contrato.
+- "Reclamos abiertos" del Dashboard cuenta los reclamos no `ATENDIDO` de hoy, de todos los canales (2.10 no filtra por canal); no es `reclamosPendientesSLA` de 2.12, que se limita a los que vencen dentro del periodo.
+
+#### 7.1.1. Qué cuenta `pedidos` en 2.12 y en 1.14 (definición cerrada, 2026-11-04)
+
+- **1.14 (cohorte):** pedidos de venta creados en el periodo, con su estado actual, según las reglas vigentes de `api-ventas.md` 1.14. Es la **fuente de las pantallas**: conteos de pedidos, distribución por estado (Dashboard y Reportes), tasa de anulación y conteos exportados.
+- **2.12 (actividad):** hechos financieros y operativos del periodo por la fecha del hecho. `pedidos.total` conserva por compatibilidad el significado de **pedidos pagados en el periodo**, no de pedidos creados; `pedidos.anulados` y `pedidos.entregados` son anulaciones y entregas ocurridas en el periodo.
+- Los contadores de hechos de 2.12 **no forman una distribución de estados** y `anulados / total` de 2.12 **no debe usarse como tasa de anulación**: un pedido anulado antes de pagarse suma a `anulados` y nunca a `total`, y un pedido creado el 31/10 y pagado el 01/11 está en la cohorte de octubre (1.14) y en el `total` de noviembre (2.12).
+- Ejemplo comprobado en local el 2026-11-04, un día, canal Marketplace: P1 creado y pagado, P2 creado y anulado antes del cobro. 1.14 da `pedidosTotal` 2 y `pedidosAnulados` 1 (tasa 50 %); 2.12 da `total` 1 y `anulados` 1, que como "tasa" daría 100 %.
+- De 2.12 el frontend solo usa `pedidos.entregados` (base de la tasa de devolución, §7.1) y los indicadores de `postventa`.
+- `agregado_metricas.pedidos_anulados_sin_pago` existe en la base pero no se usa (ESP-15 §4.1); no alimenta ningún indicador.
+
 ## 8. Exportación del reporte
 
 La exportación debe cumplir las siguientes reglas funcionales:
@@ -117,7 +147,15 @@ La exportación debe cumplir las siguientes reglas funcionales:
 4. La exportación no debe alterar los filtros ni incorporar datos de otros periodos o canales.
 5. Si la consulta visible cambia antes de iniciar una nueva exportación, el reporte debe corresponder al nuevo conjunto de filtros.
 6. La exportación debe estar disponible únicamente para el mismo perfil administrativo autorizado a consultar el dashboard.
-7. El formato y el mecanismo técnico de descarga permanecen pendientes de definición contractual; no se asume CSV, XLSX, PDF ni una ruta HTTP específica.
+7. Formato de esta entrega (decisión 2026-11-04): un **CSV generado en el navegador** a partir de los filtros y valores visibles. No hay endpoint de exportación ni otros formatos (XLSX, PDF).
+
+**Formato del CSV (implementado en `reportes.ts`, `csvReporte`):**
+
+- Se genera en el navegador con la misma consulta que está en pantalla; no llama al backend ni recalcula nada.
+- UTF-8 con BOM, separador `;` y fin de línea CRLF, para que Excel en español lo abra con columnas y tildes.
+- Encabezado: `Periodo`, `Desde`, `Hasta`, `Canal` y `Última actualización`; luego una fila en blanco y la tabla `Grupo;Indicador;Valor` con los 7 indicadores en el orden de la pantalla.
+- Mismos valores y decimales que la pantalla: conteos enteros (los de pedidos son la cohorte de 1.14, §7.1), monto reembolsado y CSAT con 2 decimales sin separador de miles, y `Sin encuestas` cuando no hay CSAT.
+- Nombre del archivo: `reporte-ventas-postventa_<desde>_<hasta>_<canal>.csv`.
 
 ## 9. Rendimiento y disponibilidad
 

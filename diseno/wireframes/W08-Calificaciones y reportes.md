@@ -187,7 +187,7 @@ W08 debe mantener una lectura rápida aun cuando concentre diferentes tipos de i
 
 Los filtros deben afectar únicamente la información correspondiente a la selección realizada y la exportación debe conservar esos mismos criterios
 
-En la implementación actual, los únicos criterios de consulta habilitados son el periodo y el canal. La exportación permanece pendiente de una ruta y formato definidos en `specs/api-contract.md`; por lo tanto, no debe presentarse como una operación disponible mientras ese contrato no exista.
+En la implementación actual, los únicos criterios de consulta habilitados son el periodo y el canal. La exportación de esta entrega es un CSV generado en el navegador con los filtros y valores visibles (ESP-16 §8, decisión 2026-11-04); no hay endpoint de exportación ni otros formatos.
 
 Los componentes visuales deben mantener coherencia con las demás pantallas del módulo y conservar el enfoque de baja fidelidad definido para el Hito 1
 

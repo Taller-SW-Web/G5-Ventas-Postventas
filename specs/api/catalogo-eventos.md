@@ -44,7 +44,7 @@ Todos los eventos comparten esta forma (ver ESP-04, sección 8.1):
 
 | Evento | Disparador | Consumidores | ¿Incluye `motivo`? |
 |---|---|---|---|
-| `pedido.pagado` | Transición `CREADO → PAGADO` | M2 (agregados), F6 | No |
+| `pedido.pagado` | Transición `CREADO → PAGADO`. Un cobro que la pasarela confirma con el pedido ya `ANULADO` (`api-ventas.md` 1.2) **no** lo publica: el pedido no cambia de estado y su devolución viaja como reembolso (2.6), no como evento | M2 (agregados), F6 | No |
 | `pedido.anulado` | Transición `→ ANULADO` (por `PAGO_NO_COMPLETADO` o por F2) | Productos y Ofertas — F (reposición de stock), F4 (si hubo pago), F6; **F3** si trae `datos.devolucionId` (reabre la devolución a `EN_EVALUACION`, `api-ventas.md` 1.11) | Sí, obligatorio — permite a F4 y a Productos saber si hubo pago que reembolsar |
 | `pedido.entregado` | Transición `→ ENTREGADO` (confirmado por Despacho) | F5 (encuesta CSAT), F6 (agregados); **F3** si trae `datos.devolucionId` (cierra el lado logístico del cambio, `api-ventas.md` 1.11) | No |
 

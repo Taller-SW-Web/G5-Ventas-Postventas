@@ -28,6 +28,12 @@ Se definen los contratos de API directamente en especificaciones Markdown (`api-
 **Negativas / trade-offs:**
 - No hay Swagger UI ni generación automática de mocks o clientes a partir de un esquema máquina-legible, mientras no se implemente el backend.
 
+## Actualización (2026-11-04)
+
+Para el Hito 4 se agrega el diseño navegable en Swagger: un archivo OpenAPI 3.1 por servicio (`static/openapi/ventas.yaml` y `static/openapi/postventa.yaml`), servido en `/swagger-ui.html` sin cuenta ni servicio externo. Es la vista oficial para exponer y probar la API. Los Markdown se mantienen con el detalle y el historial de decisiones.
+
+Para evitar la divergencia que motivó este ADR, `ContratoOpenApiTest` falla en CI si las rutas o filtros del YAML dejan de coincidir con los controllers. Al crear el YAML, las respuestas reales de las 33 operaciones se compararon con el diseño. Esa comparación encontró errores en los Markdown, que se corrigieron: manda lo que hace el código.
+
 ## Revisión futura
 
 Esta decisión debe revisarse cuando el equipo inicie la implementación del backend. Si en ese momento se necesita Swagger UI, mocks automáticos o validación de contratos en CI, el YAML debe generarse **a partir de** estos Markdown (o reemplazarlos formalmente como nueva fuente de verdad) — nunca mantenerse en paralelo sin una jerarquía definida.
