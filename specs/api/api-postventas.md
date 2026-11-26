@@ -867,6 +867,7 @@
 
 -   `datos.vendedorId` y `datos.items` solo vienen en `pedido.pagado` (se usan para `agregado_ventas`); en `pedido.anulado` y `pedido.entregado` pueden omitirse. `datos.motivo` es obligatorio solo en `pedido.anulado`.
 -   `datos.devolucionId` solo viene cuando el pedido es una orden de reemplazo de un `CAMBIO` (`pedido.tipo: REEMPLAZO`, `api-ventas.md` 1.11, acuerdo con Productos issue G6 #100) — identifica la devolución de M2 que originó el reemplazo. `EventoPedidoService` usa `pedido.anulado` con este campo para reabrir la devolución a `EN_EVALUACION` (`DevolucionService.reemplazoAnulado`) y `pedido.entregado` para cerrar su lado logístico (`reemplazoEntregado`). Nunca viene en una venta normal.
+-   `datos.cambioTienda` solo viene en `pedido.entregado` de un cambio de prenda en tienda (`RETAIL` con `metodoPago: CREDITO_CAMBIO`, `api-ventas.md` 1.1, acuerdo G4 + G6 del 2026-11-26): `{ "pedidoOrigenId": "PED-AAAA-NNNNN", "itemsDevueltos": [{ "sku", "cantidad" }] }`. `EventoPedidoService` reintegra esas unidades en Productos (`POST /api/v1/inventario/reintegros`, `order_id` = pedido origen, `source_ref` = pedido nuevo, `operation_id` fijo por pedido nuevo). Si Productos no responde, el evento falla con `503` y M1 lo reintenta; el `operation_id` evita reintegrar dos veces.
 -   `tipo`: `pedido.pagado | pedido.anulado | pedido.entregado`.
 -   `idEvento`: UUID generado por M1. Si M1 reintenta, envía el mismo
     valor.

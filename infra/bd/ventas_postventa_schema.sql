@@ -93,6 +93,8 @@ create table ventas.pedido (
     tipo                  varchar(20)   not null default 'VENTA',  -- VENTA o REEMPLAZO (F3, api-ventas.md 1.11, acuerdo G6 #100)
     id_pedido_origen      bigint references ventas.pedido(id),    -- solo REEMPLAZO: pedido original que se cambia
     devolucion_id         varchar(30),                             -- solo REEMPLAZO: devolución de M2 (DEV-AAAA-NNNN)
+    cambio_pedido_origen  varchar(20),                             -- solo RETAIL con CREDITO_CAMBIO: pedido de la prenda devuelta
+    cambio_items_devueltos varchar(1000),                          -- solo RETAIL con CREDITO_CAMBIO: "SKU:cantidad,..."
     fecha_estimada_entrega timestamptz,                            -- la fija Despacho con DESPACHO_REPROGRAMADO (api-ventas.md 1.5)
     constraint ck_pedido_canal check (canal in ('MARKETPLACE','CHATBOT','RETAIL')),
     constraint ck_pedido_estado check (estado in
@@ -133,10 +135,12 @@ create table ventas.pago (
     monto_efectivo  numeric(12,2),   -- solo RETAIL con metodo MIXTO
     monto_tarjeta   numeric(12,2),   -- solo RETAIL con metodo MIXTO
     fecha_venta     timestamptz,     -- solo RETAIL: fecha real de una venta sin conexión, hasta 72h atrás
+    monto_credito_cambio numeric(12,2), -- solo RETAIL con CREDITO_CAMBIO: parte cubierta por la prenda devuelta
     constraint ck_pago_monto  check (monto >= 0),
     constraint ck_pago_estado check (estado in ('PENDIENTE','CONFIRMADO','RECHAZADO')),
     constraint ck_pago_montos_mixto check (monto_efectivo is null or monto_efectivo >= 0),
-    constraint ck_pago_montos_mixto2 check (monto_tarjeta is null or monto_tarjeta >= 0)
+    constraint ck_pago_montos_mixto2 check (monto_tarjeta is null or monto_tarjeta >= 0),
+    constraint ck_pago_credito_cambio check (monto_credito_cambio is null or monto_credito_cambio > 0)
 );
 
 create table ventas.historial_estado (

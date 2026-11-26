@@ -1,6 +1,6 @@
 # Contrato de API (OpenAPI / REST) — Microservicio M1: Ventas y Pedidos
 
-**Versión:** 1.9.0
+**Versión:** 1.12.0
 
 **Fecha:** Octubre 2026
 
@@ -14,6 +14,7 @@
 
 | Versión | Fecha | Cambio |
 |---|---|---|
+| 1.12.0 | 2026-11-26 | Acuerdo con Retail (G4) y Productos (G6), reemplaza R9: los pedidos `RETAIL` (también los registrados sin conexión) reservan y confirman stock en Productos como los demás canales; siguen naciendo `PAGADO`/`ENTREGADO`. 1.1: nuevo método `CREDITO_CAMBIO` para el cambio de prenda en tienda, con `montoCreditoCambio`, `pedidoOrigenId` e `itemsDevueltos`; Postventa reintegra la prenda devuelta (evento `pedido.entregado` con `datos.cambioTienda`). Nuevo 1.4c: búsqueda por DNI/RUC o código para `modulo-retail` con el scope `ventas:pedidos:buscar-documento`. |
 | 1.11.0 | 2026-11-20 | 1.3: Retail (`modulo-retail`) puede consultar con su scope `ventas:pedidos:consultar`, pero solo sus pedidos (canal `RETAIL` o con retiro en tienda); los demás responden `404 PEDIDO_NO_ENCONTRADO` (aclaración pedida por G7). |
 | 1.10.0 | 2026-11-05 | Nuevos 1.15 (bandeja pickup) y 1.16 (confirmación entrega pickup) con scopes ventas:pedidos:consultar y ventas:pedidos:estado para Retail (acuerdo G4). 1.1: campo opcional comprobanteReferencia en pago.
 | 1.9.0 | 2026-11-04 | 1.2: un cobro `APROBADO` de un pedido que ya está `ANULADO` se reconoce con `200`: el pedido sigue `ANULADO`, el pago queda `CONFIRMADO` y M1 guarda en la misma transacción la solicitud de reembolso a M2 (antes respondía `409` y solo quedaba en el log). Repetir una `transaccionId` con otro resultado, monto o moneda responde `409 NOTIFICACION_INCOMPATIBLE`; otro cobro sobre un pago ya confirmado, `409 PAGO_YA_CONFIRMADO`. 1.3: campo aditivo `pago.estado`. |
@@ -56,6 +57,7 @@ Según el acuerdo A10 con Seguridad (G7) hay dos tipos de token:
 | `ventas:pedidos:estado` | `POST /api/v1/integraciones/despachos/eventos` (1.5 — reemplaza el `PATCH .../estado` y `POST .../eventos-logistica` anteriores) | Despacho (E) — reusamos este scope ya concedido a `modulo-despacho`, decisión nuestra (2026-10-13); no se pide el `despachos:eventos:recibir` que propuso G2, ver `integraciones/ACUERDO_G2_DESPACHO.md` |
 | `ventas:pagos:webhook` | `POST /api/v1/pedidos/{id}/pagos/notificacion` (1.2) | Simulador de pasarela y Chatbot |
 | `ventas:pedidos:consultar` | `GET /api/v1/pedidos/{id}` (1.3) y `GET /api/v1/pedidos/pickup` (1.15). `modulo-retail` en 1.3 solo ve sus pedidos | `modulo-retail` (1.15 y sus pedidos en 1.3); `modulo-postventa` (F3 valida `ENTREGADO`; F5 valida `ENTREGADO` para CSAT) — **registrado** (Seguridad, PR #60, verificado 2026-10-21), ver `integraciones/ACUERDO_G7_SEGURIDAD.md` |
+| `ventas:pedidos:buscar-documento` | `GET /api/v1/pedidos?buscar=` (1.4c), solo pedidos de tienda | `modulo-retail` (G4) — acordado 2026-11-26, G4 lo pidió a Seguridad |
 | `ventas:pedidos:reemplazar` | `POST /api/v1/pedidos/reemplazos` (1.11) | `modulo-postventa` (F3, orden de reemplazo de un `CAMBIO`) — **propuesto 2026-10-16, pendiente de que Seguridad lo registre**, ver `integraciones/ACUERDO_G7_SEGURIDAD.md` |
 
 | Rol (token de usuario) | Endpoints |
@@ -75,6 +77,7 @@ Según el acuerdo A10 con Seguridad (G7) hay dos tipos de token:
 | 1.2 | `POST /api/v1/pedidos/{pedidoId}/pagos/notificacion` | F1 Notificación de pago | scope `ventas:pagos:webhook` |
 | 1.3 | `GET /api/v1/pedidos/{pedidoId}` | F1 Consultar pedido | rol `CLIENTE` (solo los suyos) o `ADMIN_VENTAS`, o scope `ventas:pedidos:consultar` |
 | 1.4 | `GET /api/v1/pedidos` | F1 Bandeja del Gestor | rol `ADMIN_VENTAS` |
+| 1.4c | `GET /api/v1/pedidos?buscar=` | F1 Búsqueda por documento de Retail | scope `ventas:pedidos:buscar-documento` |
 | 1.4b | `GET /api/v1/pedidos/me` | F1 Mis pedidos | rol `CLIENTE` |
 | 1.5 | `POST /api/v1/integraciones/despachos/eventos` | F1 Webhook de Despacho | scope `ventas:pedidos:estado` |
 | 1.7 | `POST /api/v1/pedidos/{pedidoId}/anulaciones` | F2 Solicitar anulación | scope `ventas:pedidos:anular` o rol `ADMIN_VENTAS` |
@@ -99,7 +102,7 @@ Estado inicial según el canal:
 |---|---|---|
 | `MARKETPLACE` | `CREADO` | Reserva stock en Productos (F) y pide el cobro al simulador de pasarela. El resultado llega por 1.2 |
 | `CHATBOT` | `CREADO` | Reserva stock en Productos (F). El chatbot cobra y avisa el resultado por 1.2 |
-| `RETAIL` | `PAGADO` y, en la misma operación, `ENTREGADO` (actor `CLIENTE`, motivo `ENTREGA_INMEDIATA_EN_TIENDA`) | No reserva stock ni usa 1.2: la venta ya se cobró en el POS (acuerdo G4) |
+| `RETAIL` | `PAGADO` y, en la misma operación, `ENTREGADO` (actor `CLIENTE`, motivo `ENTREGA_INMEDIATA_EN_TIENDA`) | Reserva stock en Productos y, al llegar la reserva, confirma el consumo enseguida (acuerdo G4 + G6, 2026-11-26, reemplaza R9). No usa 1.2: la venta ya se cobró en el POS. Si Productos no admite la reserva responde `503 PRODUCTOS_NO_DISPONIBLE` y el POS reintenta con la misma `Idempotency-Key`. Si Productos rechaza el stock después, el pedido no se anula (el cliente ya se llevó el producto): queda registrado para revisarlo con Retail y Productos |
 
 ### Headers
   - `Authorization: Bearer <token_de_servicio_del_canal>` (scope `ventas:pedidos:crear`)
@@ -181,10 +184,13 @@ Los campos tipoDocumento y numeroDocumento son estrictamente obligatorios.
 | Campo | Obligatorio | Regla |
 |---|---|---|
 | `envio.tiendaId` | Sí | Código de la tienda donde se hizo la venta. El resto de `envio` se omite |
-| `pago.metodoPago` | Sí | `EFECTIVO`, `TARJETA_POS` o `MIXTO` |
-| `pago.referenciaOperacion` | Con `TARJETA_POS` o `MIXTO` | Número de voucher del POS |
+| `pago.metodoPago` | Sí | `EFECTIVO`, `TARJETA_POS`, `MIXTO` o `CREDITO_CAMBIO` (cambio de prenda) |
+| `pago.referenciaOperacion` | Con `TARJETA_POS` o `MIXTO`, y con `CREDITO_CAMBIO` si `montoTarjeta` > 0 | Número de voucher del POS |
 | `pago.comprobanteReferencia` | No | Correlativo de la boleta o factura térmica de mostrador (B001/F001) emitida por Retail (metadato informativo) |
-| `pago.montoEfectivo` y `pago.montoTarjeta` | Con `MIXTO` | Deben sumar `pago.total` |
+| `pago.montoEfectivo` y `pago.montoTarjeta` | Con `MIXTO` | Deben sumar `pago.total`. Con `CREDITO_CAMBIO` son la diferencia que paga el cliente (opcionales) |
+| `pago.montoCreditoCambio` | Con `CREDITO_CAMBIO` | Mayor que 0. `montoCreditoCambio + montoEfectivo + montoTarjeta = total` |
+| `pago.pedidoOrigenId` | Con `CREDITO_CAMBIO` | Pedido de la prenda devuelta (`PED-AAAA-NNNNN`). Tiene que existir y estar `ENTREGADO` |
+| `pago.itemsDevueltos` | Con `CREDITO_CAMBIO` | Lista `[{ "sku", "cantidad" }]` de las prendas devueltas. Cada `sku` debe ser del pedido origen, sin pasar las unidades compradas |
 | `pago.fechaVenta` | No | Solo para ventas registradas sin conexión. UTC, no futura y como máximo 72 horas antes. Si no se envía, se usa la hora de registro |
 
 ```json
@@ -201,6 +207,32 @@ Los campos tipoDocumento y numeroDocumento son estrictamente obligatorios.
   }
 }
 ```
+
+#### Cambio de prenda en tienda (`CREDITO_CAMBIO`, acuerdo G4 2026-11-26)
+
+El cambio se registra como una venta `RETAIL` nueva con la prenda que se lleva el cliente, también cuando es de igual valor (todo con crédito). Así la prenda nueva reserva y consume stock por el flujo de Ventas. Retail no llama a Productos ni a Postventa: al pasar el pedido a `ENTREGADO`, M1 publica `pedido.entregado` con `datos.cambioTienda` (pedido origen e ítems devueltos) y Postventa (M2) reintegra la prenda devuelta en Productos, con un `operation_id` fijo por pedido para no reintegrar dos veces.
+
+```json
+{
+  "canal": "RETAIL",
+  "contacto": { "clienteId": "11111111-1111-1111-1111-111111111111", "nombreCompleto": "Ana Díaz", "tipoDocumento": "DNI", "numeroDocumento": "40123456", "email": "ana@example.com" },
+  "items": [ { "productoId": "PROD-9", "sku": "SKU-9", "cantidad": 1, "precioUnitario": 129.90 } ],
+  "envio": { "tiendaId": "TIENDA-MIRAFLORES" },
+  "pago": {
+    "metodoPago": "CREDITO_CAMBIO", "moneda": "PEN",
+    "subtotal": 129.90, "descuentoCupon": 0, "costoEnvio": 0, "total": 129.90,
+    "montoCreditoCambio": 100.00, "montoTarjeta": 29.90, "referenciaOperacion": "VOU-901",
+    "pedidoOrigenId": "PED-2026-00076",
+    "itemsDevueltos": [ { "sku": "SKU-7", "cantidad": 1 } ]
+  }
+}
+```
+
+| HTTP | Código | Cuándo |
+|---|---|---|
+| `422` | `PEDIDO_ORIGEN_NO_ENCONTRADO` | `pedidoOrigenId` no existe |
+| `422` | `PEDIDO_ORIGEN_NO_ENTREGADO` | El pedido origen no está `ENTREGADO` |
+| `422` | `ITEM_DEVUELTO_INVALIDO` | Un `sku` devuelto no es del pedido origen o se devuelven más unidades de las compradas |
 
 ### Reglas de montos
 
@@ -243,7 +275,7 @@ Otros códigos `400` de 1.1:
 | `CABECERA_FALTANTE` | Falta `Idempotency-Key` o no es UUID v4 |
 | `DATOS_INVALIDOS` | Campo obligatorio ausente o con formato inválido (incluye `envio` incompleto, sin `telefono` ni `email`, y las reglas de Retail). `detalles` indica el campo |
 | `FORMATO_INVALIDO` | JSON mal formado o valor fuera de catálogo (por ejemplo, un `canal` desconocido) |
-| `MONTOS_INCONSISTENTES` | `subtotal` o `total` no cuadran, o en `MIXTO` los montos no suman `total` |
+| `MONTOS_INCONSISTENTES` | `subtotal` o `total` no cuadran, o en `MIXTO` / `CREDITO_CAMBIO` los montos no suman `total` |
 | `FECHA_VENTA_FUERA_DE_RANGO` | Retail: `fechaVenta` futura o con más de 72 horas |
 
 #### `409 Conflict`
@@ -458,6 +490,23 @@ tamano (opcional, default: 10, de 1 a 50)
 | `400` | `FORMATO_INVALIDO` | Un filtro con valor fuera de catálogo (`estado`, `canal`, `orden`) o una fecha mal escrita |
 | `401` | `TOKEN_INVALIDO` | Token ausente o inválido |
 | `403` | `ACCESO_DENEGADO` | El token no tiene el rol `ADMIN_VENTAS` |
+### 1.4c Búsqueda por documento de Retail (acuerdo G4, 2026-11-26)
+
+- **Endpoint:** `GET /api/v1/pedidos?buscar={documento o código}` (misma ruta que 1.4)
+- **Headers:** `Authorization: Bearer <token de servicio de modulo-retail>` con scope `ventas:pedidos:buscar-documento`
+- **Alcance:** solo pedidos de tienda: canal `RETAIL` o con retiro en tienda (`RECOJO_TIENDA` / `TIENDA`), la misma regla que 1.3 con `modulo-retail`.
+
+Query params: `buscar` (**obligatorio**: número de documento exacto, DNI o RUC, o un código `PED-AAAA-NNNNN`), y los opcionales `estado`, `desde`, `hasta`, `orden`, `pagina` y `tamano` con las mismas reglas que 1.4. `clienteId` y `canal` no aplican.
+
+Respuesta `200`: el mismo formato que 1.4 (`clienteId` en `null`). Cada elemento trae `pedidoId`, `canal`, `estado`, `total`, `moneda`, `fechaCreacion` y `nombreCliente`; el detalle completo se pide con 1.3.
+
+| HTTP | Código | Cuándo |
+|---|---|---|
+| `400` | `PARAMETRO_INVALIDO` | Falta `buscar`, o `desde` es posterior a `hasta` |
+| `400` | `PAGINACION_INVALIDA` | `pagina` negativa o `tamano` fuera de 1 a 50 |
+| `401` | `TOKEN_INVALIDO` | Token ausente o inválido |
+| `403` | `ACCESO_DENEGADO` | El token no tiene el scope `ventas:pedidos:buscar-documento` |
+
 ### 1.4b Listar Mis Pedidos (acuerdo H-03)
 - **Endpoint:** `GET /api/v1/pedidos/me`
 Descripción: Devuelve los pedidos del cliente autenticado. La identidad sale del claim `sub` del token; no se acepta `clienteId` en la URL.
